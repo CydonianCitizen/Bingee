@@ -22,7 +22,8 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingScreen
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingUiState
 import com.cydoniancitizen.bingee.feature.search.SearchContent
-import com.cydoniancitizen.bingee.feature.search.SearchShellState
+import com.cydoniancitizen.bingee.feature.search.SearchCredentialAvailability
+import com.cydoniancitizen.bingee.feature.search.SearchUiState
 import com.cydoniancitizen.bingee.feature.settings.SettingsContent
 import com.cydoniancitizen.bingee.feature.settings.SettingsUiState
 import java.util.concurrent.atomic.AtomicBoolean
@@ -199,7 +200,16 @@ class CredentialFlowsTest {
         composeRule.setContent {
             BingeeTheme {
                 SearchContent(
-                    state = SearchShellState.CONFIGURATION_REQUIRED,
+                    state =
+                    SearchUiState(
+                        credentialAvailability = SearchCredentialAvailability.REQUIRED
+                    ),
+                    onQueryChanged = {},
+                    onClearQuery = {},
+                    onCategoryChanged = {},
+                    onRetryInitial = {},
+                    onLoadNextPage = {},
+                    onRetryNextPage = {},
                     onOpenSettings = { opened.set(true) }
                 )
             }

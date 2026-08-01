@@ -4,7 +4,7 @@ Bingee is a package-structured modular monolith in one Android application modul
 
 ## Dependency direction
 
-```text
+~~~text
 app + feature + core UI
             |
             v
@@ -12,61 +12,90 @@ domain repository contracts
             |
             v
 core model + core result
-```
+~~~
 
 TMDB credential configuration follows a narrow path:
 
-```text
+~~~text
 onboarding/settings ViewModel -> TmdbCredentialRepository
                                   |-> local validator
                                   |-> encrypted no-backup store -> Android Keystore
-                                  `-> validation client -> GET /3/authentication
-```
+                                  '-> validation client -> GET /3/authentication
+~~~
 
-- `core/model` and `core/result` are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.
-- `domain/repository` exposes only domain models, `AppResult`, suspending one-shot operations, and `Flow` for observable local state.
-- `feature` owns screen UI. Composables receive immutable state and callbacks; they do not access repositories, Retrofit, OkHttp, Room, or provider DTOs.
-- `core/ui` maps structured errors to safe resources. User-facing text and retry actions remain UI concerns.
-- `app` owns the application shell. `core/navigation` owns route and top-level destination definitions.
-- Future `data` packages may implement repository contracts. Provider clients, DTOs, mappers, and error translation remain isolated by provider.
-- `data/credential` owns encrypted credential persistence and coordination. Raw credential text is transient input and never part of public screen state.
-- `data/tmdb/auth` owns the only implemented TMDB endpoint. Retrofit responses and authorization details remain inside the data layer.
+TMDB search reuses the same protected store without exposing a token above the data layer:
 
-Provider IDs use `ExternalMediaRef(source, externalId)`. A raw ID is never a global identity. No local database ID exists until persistence needs one.
+~~~text
+SearchScreen -> SearchViewModel -> MediaRepository
+                                      |
+                                      v
+                              DefaultMediaRepository
+                                      |
+                                      v
+                          TmdbSearchClient -> encrypted credential store
+                                      |
+                                      v
+                     TmdbSearchService -> /3/search/movie or /3/search/tv
+~~~
+
+- core/model and core/result are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.
+- domain/repository exposes only domain models, AppResult, suspending one-shot operations, and Flow for observable local state.
+- feature owns screen UI. Composables receive immutable state and callbacks; they do not access repositories, Retrofit, OkHttp, Room, or provider DTOs.
+- core/ui maps structured errors to safe resources. User-facing text and retry actions remain UI concerns.
+- app owns the application shell. core/navigation owns route and top-level destination definitions.
+- data packages implement repository contracts. Provider clients, separate movie/TV DTOs, mappers, and error translation remain isolated by provider.
+- data/credential owns encrypted credential persistence and coordination. Raw credential text is transient input and never part of public screen state.
+- data/tmdb/auth owns credential validation. data/tmdb/search owns the two implemented search endpoints, DTOs, mapping, poster URL resolution, and authorization attachment. Retrofit responses and authorization details remain inside the data layer.
+
+Provider IDs use ExternalMediaRef(source, externalId). A raw ID is never a global identity. No local database ID exists until persistence needs one.
 
 ## ViewModel and screen state
 
-- Each screen defines an immutable, screen-specific `UiState`; no universal generic state wrapper is used.
-- A ViewModel keeps `MutableStateFlow` private and exposes `StateFlow` through `asStateFlow()`.
+- Each screen defines an immutable, screen-specific UiState; no universal generic state wrapper is used.
+- A ViewModel keeps MutableStateFlow private and exposes StateFlow through asStateFlow().
 - UI events enter through explicit methods or typed intents.
-- `viewModelScope` owns long-running work. Inject a dispatcher only where deterministic tests need control.
+- viewModelScope owns long-running work. Inject a dispatcher only where deterministic tests need control.
 - Persistent screen state is separate from one-off effects only when a real effect exists.
-- State contains structured `AppError`, never raw exceptions or infrastructure messages.
+- State contains structured AppError, never raw exceptions or infrastructure messages.
 - Empty shell screens do not receive ViewModels until they own state or behavior.
 
-`src/debug` contains `ArchitectureSampleViewModel`, its screen-specific state, deterministic fakes, and previews demonstrating repository to ViewModel to UI-state flow. None is referenced by production navigation.
+Production Search state distinguishes credential availability, idle/loading/empty/error, loaded pages, next-page loading/error, and pagination end. Existing results remain visible while another page loads or fails. Debug Search previews render the major states from fixed fixtures; none is referenced by production navigation.
 
 ## Fake strategy
 
-Debug fakes live in `app/src/debug`; debug-variant JVM tests in `app/src/test` reuse them. Release compilation excludes this source set. Fixtures use fixed IDs, titles, dates, and immediate results, with configurable failures and no real sleeps. No fixture reads current time, so no clock is currently needed; any future time-dependent fake must accept a `Clock`.
+Debug fakes live in app/src/debug; debug-variant JVM tests in app/src/test reuse them. Release compilation excludes this source set. Fixtures use fixed IDs, titles, dates, and immediate results, with configurable failures and no real sleeps. No fixture reads current time, so no clock is currently needed; any future time-dependent fake must accept a Clock.
+
+## TMDB search
+
+- MediaSearchQuery trims only leading and trailing whitespace, requires one non-space character, preserves capitalization and internal spaces, and validates page 1–500.
+- The UI selects either Movies or TV Series; it never merges endpoint rankings.
+- Search waits 350 ms after query changes. New query/category/credential generations cancel active work, and generation checks suppress responses from obsolete requests.
+- The ViewModel owns simple progressive paging. It appends in provider order, deduplicates by ExternalMediaRef, retains results on page failure, and stops at provider end, page 500, or a page with no new usable rows. Paging 3 is intentionally absent.
+- Requests send language=en-US and include_adult=false. No genre, year, provider, region, or adult-content control exists.
+- Search queries, responses, and history are not persisted or logged. No offline media-result cache exists.
+- Movie and TV rows map to the same MediaSearchResult, while MediaDetails remains separate and unused by this feature.
+- Records lacking a positive provider ID are skipped. A missing localized title falls back to the original title; a row with neither is skipped. Optional poster, overview, and malformed/missing dates never reject an otherwise usable row.
+- Poster paths are validated and resolved inside the TMDB data package to https://image.tmdb.org/t/p/w342/.... UI receives a resolved optional URL, not a provider path. Coil loads constrained list images and owns memory/disk caching; missing/invalid/failed images use the local accessible placeholder.
+- Unauthorized search responses become safe AppError.Unauthorized, preserve the encrypted credential, and offer Settings. Search does not mutate credential status behind the credential repository.
 
 ## Navigation
 
-`TopLevelDestination` is the only source of top-level routes, order, labels, and icons. `BingeeNavHost` owns the route-to-screen graph; reusable composables never receive a `NavController`. Argument-bearing destinations must add their route definition in `core/navigation` rather than spreading raw strings. Typed routes remain deferred until arguments make them simpler than centralized strings.
+TopLevelDestination is the only source of top-level routes, order, labels, and icons. BingeeNavHost owns the route-to-screen graph; reusable composables never receive a NavController. Argument-bearing destinations must add their route definition in core/navigation rather than spreading raw strings. Typed routes remain deferred until arguments make them simpler than centralized strings.
 
-`AppRoute.ONBOARDING` is the sole non-top-level route. Startup reads local credential status and the non-sensitive first-run preference before constructing the graph. It starts at onboarding only for a first run without a usable stored credential; offline continuation and successful configuration both replace onboarding with Home. Removing a credential later does not force navigation away from the shell.
+AppRoute.ONBOARDING is the sole non-top-level route. Startup reads local credential status and the non-sensitive first-run preference before constructing the graph. It starts at onboarding only for a first run without a usable stored credential; offline continuation and successful configuration both replace onboarding with Home. Removing a credential later does not force navigation away from the shell. Search introduces no details route.
 
 ## TMDB credential security
 
 - Only API Read Access Tokens are supported; v3 query keys and TMDB user sessions are not.
 - Local syntax validation and remote authorization are separate.
-- Accepted tokens are encrypted with an Android Keystore AES-256-GCM key and stored in `noBackupFilesDir`.
+- Accepted tokens are encrypted with an Android Keystore AES-256-GCM key and stored in noBackupFilesDir.
 - Credential status is observable, but no status or ViewModel state carries raw token text or a token-derived mask.
 - Startup trusts a successfully validated stored token until explicit replacement, removal, or retry. It performs no automatic network revalidation.
 - Temporary remote failures preserve existing encrypted data. Rejected replacement candidates are never saved.
-- The general OkHttp client has no logging interceptor. Future authenticated services must attach authorization inside the data/network boundary.
+- The general OkHttp client has no logging interceptor.
+- TMDB search attaches authorization only inside TmdbSearchClient. Coil reuses the application OkHttpClient for public poster URLs and receives no credential header.
 - The credential is outside ordinary DataStore settings and outside all current or future Bingee export models.
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0009. Model fields, media repository signatures, and the debug presentation fixture remain intentionally provisional until media and database milestones exercise them. Local IDs, watch progress, typed argument routes, and extra media repositories are deferred.
+Accepted decisions are recorded in ADRs 0001–0010. Local IDs, watch progress, typed argument routes, and extra media repositories remain deferred.

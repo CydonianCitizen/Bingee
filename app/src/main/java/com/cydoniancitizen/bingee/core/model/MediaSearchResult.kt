@@ -7,6 +7,7 @@ data class MediaSearchResult(
     val mediaType: MediaType,
     val title: String,
     val originalTitle: String? = null,
+    val posterUrl: String? = null,
     val releaseDate: LocalDate? = null,
     val overview: String? = null
 ) {

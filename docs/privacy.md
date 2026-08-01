@@ -10,7 +10,9 @@ The token is not stored in ordinary preferences, Room, navigation arguments, sav
 
 ## Current network behavior
 
-Milestone 2 calls only TMDB's `GET /3/authentication` endpoint when the user explicitly validates or retries a credential. Bingee does not validate on every startup and performs no background credential checks. Media search and other metadata requests are not implemented yet.
+Bingee calls TMDB's `GET /3/authentication` endpoint when the user explicitly validates or retries a credential. Search uses separate `GET /3/search/movie` and `GET /3/search/tv` requests after a 350 ms debounce. Bingee does not validate on every startup and performs no background credential checks.
+
+Search query text is held only in current screen memory. Bingee does not log it, persist search history, or cache result pages in long-lived storage. Search responses contain public TMDB metadata only. Poster images are loaded from TMDB's documented image CDN at list size `w342`; Coil owns transient memory and disk caching.
 
 ## TMDB attribution
 

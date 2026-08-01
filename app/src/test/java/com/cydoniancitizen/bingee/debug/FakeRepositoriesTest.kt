@@ -1,6 +1,8 @@
 package com.cydoniancitizen.bingee.debug
 
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
+import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -16,17 +18,19 @@ class FakeRepositoriesTest {
     fun mediaRepositoryReturnsFixedSuccessWithoutDelay() = runTest {
         val repository = FakeMediaRepository()
 
-        val result = repository.search("fixed")
+        val query = MediaSearchQuery("fixed", MediaSearchCategory.MOVIES)
+        val result = repository.search(query)
 
-        assertEquals(AppResult.Success(FakeMediaData.searchResults), result)
-        assertEquals(listOf("fixed"), repository.searchQueries)
+        assertEquals(AppResult.Success(FakeMediaData.firstPage), result)
+        assertEquals(listOf(query), repository.searchQueries)
     }
 
     @Test
     fun mediaRepositoryReturnsConfiguredFailureWithoutDelay() = runTest {
         val repository = FakeMediaRepository.failing(AppError.NetworkUnavailable)
 
-        val result = repository.search("fixed")
+        val result =
+            repository.search(MediaSearchQuery("fixed", MediaSearchCategory.MOVIES))
 
         assertEquals(AppResult.Failure(AppError.NetworkUnavailable), result)
     }

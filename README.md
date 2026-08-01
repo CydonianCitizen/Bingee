@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and currently at **Milestone 2 — Settings and TMDB Credential Configuration**. The app contains a local-first Compose shell, provider-independent domain foundations, first-run TMDB configuration, secure credential management in Settings, and explicit offline continuation. Media search, library storage, background work, notifications, and import/export are planned but not implemented.
+The project is unreleased and currently at **Milestone 3 — TMDB Search Vertical Slice**. The app contains a local-first Compose shell, provider-independent domain foundations, first-run TMDB configuration, secure credential management in Settings, and remote movie and TV-series search. Library storage, title details, background work, notifications, and import/export are planned but not implemented.
 
 Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
@@ -15,6 +15,7 @@ Remote metadata will use a user-supplied TMDB API Read Access Token. It is optio
 - Hilt dependency injection
 - Room for local persistence
 - Retrofit and OkHttp for provider access
+- Coil for constrained poster loading and caching
 - WorkManager for deferrable background refresh
 - Coroutines and Flow as features are added
 - JVM unit tests, with focused Android instrumentation tests where they add value
@@ -60,7 +61,7 @@ Open the repository in Android Studio, choose an emulator or connected device, a
 ./gradlew installDebug
 ```
 
-On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, and Settings. Search remains an honest placeholder until Milestone 3.
+On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, and Settings. Search offers explicit Movies and TV Series categories, debounces input, and loads additional TMDB pages through an accessible button. Search results are remote-only: queries and result pages are not persisted, and result rows do not navigate to an unfinished details screen.
 
 ## TMDB configuration and privacy
 
@@ -68,7 +69,7 @@ Bingee supports one TMDB credential format: the API Read Access Token available 
 
 The accepted token is encrypted with AES-256-GCM using key material held by Android Keystore. Ciphertext is stored in `noBackupFilesDir`, separate from ordinary Preferences DataStore settings and excluded from cloud backup and device transfer. The token is never included in Bingee data exports. Startup trusts a previously validated stored token and does not perform automatic remote validation.
 
-Bingee has no account or proprietary backend. Without a usable TMDB credential, the application shell and future local data remain available while remote metadata features stay disabled. See [privacy notes](docs/privacy.md) and [ADR 0009](docs/adr/0009-tmdb-credential-configuration.md).
+Bingee has no account or proprietary backend. Without a usable TMDB credential, the application shell and future local data remain available while remote metadata features stay disabled. Search reads the credential only inside the protected data/network boundary; query text is not logged or stored. See [privacy notes](docs/privacy.md), [ADR 0009](docs/adr/0009-tmdb-credential-configuration.md), and [ADR 0010](docs/adr/0010-tmdb-search.md).
 
 This product uses the TMDB API but is not endorsed or certified by TMDB. The official TMDB attribution logo is shown in Settings/About.
 
@@ -80,15 +81,16 @@ Bingee starts as a single Gradle application module and a lightweight modular mo
 app/src/main/java/com/cydoniancitizen/bingee/
   app/        application shell
   core/       domain models, results, navigation, and shared UI
-  data/       secure credential storage, ordinary settings, and narrow TMDB auth networking
+  data/       secure credential storage, settings, and isolated TMDB auth/search networking
   domain/     repository contracts
-  feature/    onboarding, settings, search shell, and feature UI
+  feature/    onboarding, settings, production search, and feature UI
 
 app/src/debug/java/com/cydoniancitizen/bingee/
-  debug/      deterministic fakes, sample ViewModel, and previews
+  debug/      deterministic repository fixtures
+  feature/    deterministic Search state previews
 ```
 
-Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. Infrastructure implementations will remain behind repository contracts when later milestones add them.
+Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB movie and TV DTOs, mappers, and endpoint calls remain inside the provider data package. Search supports no title details, library action, offline result cache, persistent history, or Jikan behavior.
 
 See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 

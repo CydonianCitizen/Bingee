@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.di
 
 import com.cydoniancitizen.bingee.data.tmdb.auth.TmdbAuthenticationService
+import com.cydoniancitizen.bingee.data.tmdb.search.TmdbSearchService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,4 +30,8 @@ internal object TmdbNetworkModule {
     @Singleton
     fun provideTmdbAuthenticationService(retrofit: Retrofit): TmdbAuthenticationService =
         retrofit.create(TmdbAuthenticationService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideTmdbSearchService(retrofit: Retrofit): TmdbSearchService = retrofit.create(TmdbSearchService::class.java)
 }
