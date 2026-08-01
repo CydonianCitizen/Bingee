@@ -484,3 +484,12 @@ Ordine di lettura consigliato:
 5. README e documentazione della feature interessata.
 
 In caso di conflitto, `AGENTS.md` definisce i vincoli operativi; il piano definisce l'ordine di consegna; gli ADR definiscono le decisioni architetturali approvate più recenti.
+
+---
+
+## 21. Audit e manutenzione con Ponytail
+
+- Usare Ponytail per gli audit di architettura e qualità.
+- Usarlo per individuare codice eccessivo, morto, ridondante o obsoleto.
+- Eseguire un passaggio Ponytail di manutenzione prima di dichiarare completa ogni milestone.
+- Verificare e classificare ogni rilievo rispetto a scope, piano e lavoro utente: non applicare raccomandazioni alla cieca.

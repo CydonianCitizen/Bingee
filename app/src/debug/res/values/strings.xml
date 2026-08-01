@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="debug_architecture_sample">Architecture sample</string>
+    <string name="debug_architecture_sample_body">Load deterministic data to inspect the state convention.</string>
+    <string name="debug_loading_sample">Loading sample</string>
+    <string name="debug_sample_error_title">Unable to load sample</string>
+    <string name="debug_retry">Retry</string>
+</resources>

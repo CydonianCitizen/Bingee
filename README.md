@@ -4,9 +4,9 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and currently at **Milestone 0 — Repository Bootstrap**. The app contains only a minimal Compose shell with Home, Search, and Settings placeholders. Media search, library storage, TMDB access, background work, notifications, and import/export are planned but not implemented.
+The project is unreleased and currently at **Milestone 2 — Settings and TMDB Credential Configuration**. The app contains a local-first Compose shell, provider-independent domain foundations, first-run TMDB configuration, secure credential management in Settings, and explicit offline continuation. Media search, library storage, background work, notifications, and import/export are planned but not implemented.
 
-No API key is required at this milestone.
+Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
 ## Planned stack
 
@@ -60,7 +60,17 @@ Open the repository in Android Studio, choose an emulator or connected device, a
 ./gradlew installDebug
 ```
 
-The initial destination is Home. Bottom navigation exposes Home, Search, and Settings.
+On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, and Settings. Search remains an honest placeholder until Milestone 3.
+
+## TMDB configuration and privacy
+
+Bingee supports one TMDB credential format: the API Read Access Token available from the API section of a TMDB account. The app trims surrounding whitespace, checks Bearer-token structure locally, and validates the candidate with TMDB's `GET /3/authentication` endpoint. Only a remotely accepted candidate is saved.
+
+The accepted token is encrypted with AES-256-GCM using key material held by Android Keystore. Ciphertext is stored in `noBackupFilesDir`, separate from ordinary Preferences DataStore settings and excluded from cloud backup and device transfer. The token is never included in Bingee data exports. Startup trusts a previously validated stored token and does not perform automatic remote validation.
+
+Bingee has no account or proprietary backend. Without a usable TMDB credential, the application shell and future local data remain available while remote metadata features stay disabled. See [privacy notes](docs/privacy.md) and [ADR 0009](docs/adr/0009-tmdb-credential-configuration.md).
+
+This product uses the TMDB API but is not endorsed or certified by TMDB. The official TMDB attribution logo is shown in Settings/About.
 
 ## Architecture
 
@@ -68,16 +78,19 @@ Bingee starts as a single Gradle application module and a lightweight modular mo
 
 ```text
 app/src/main/java/com/cydoniancitizen/bingee/
-  core/       shared design-system and future infrastructure code
-  data/       future source-specific and persistence implementations
-  domain/     future business models and use cases
-  feature/    feature UI
-  ui/         application shell and top-level navigation
+  app/        application shell
+  core/       domain models, results, navigation, and shared UI
+  data/       secure credential storage, ordinary settings, and narrow TMDB auth networking
+  domain/     repository contracts
+  feature/    onboarding, settings, search shell, and feature UI
+
+app/src/debug/java/com/cydoniancitizen/bingee/
+  debug/      deterministic fakes, sample ViewModel, and previews
 ```
 
-UI code will not access Retrofit services or Room DAOs directly. Provider DTOs, domain models, persistence models, and UI models will remain separate as their milestones arrive.
+Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. Infrastructure implementations will remain behind repository contracts when later milestones add them.
 
-See [architecture decisions](docs/adr/) for durable project choices.
+See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 
 ## Versioning
 

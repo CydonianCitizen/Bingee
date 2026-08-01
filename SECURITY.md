@@ -22,3 +22,5 @@ Remove personal data, production credentials, and unrelated secrets from reports
 ## Secrets
 
 API keys, access tokens, signing keys, keystores, passwords, local SDK paths, and real user data must never be committed. Revoke and replace any exposed credential; deleting it from a later commit is not sufficient.
+
+TMDB credential reports must never include the raw token, Authorization header, encrypted credential file, decrypted values, or screenshots with a revealed field. Report only the safe credential state, HTTP category, affected revision, and reproduction steps using a clearly fake value where possible.
