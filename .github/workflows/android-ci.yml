@@ -38,3 +38,6 @@ jobs:
 
       - name: Format, test, lint, and build
         run: ./gradlew spotlessCheck test lint assembleDebug --stacktrace
+
+      - name: Verify committed Room schema
+        run: git diff --exit-code -- app/schemas

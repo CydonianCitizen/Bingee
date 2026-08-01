@@ -1,5 +1,19 @@
 package com.cydoniancitizen.bingee.core.model
 
 import java.time.Instant
+import java.time.LocalDate
 
-data class LibraryEntry(val mediaRef: ExternalMediaRef, val mediaType: MediaType, val addedAt: Instant)
+data class LibraryEntry(
+    val mediaRef: ExternalMediaRef,
+    val mediaType: MediaType,
+    val title: String,
+    val originalTitle: String? = null,
+    val posterUrl: String? = null,
+    val releaseDate: LocalDate? = null,
+    val overview: String? = null,
+    val addedAt: Instant
+) {
+    init {
+        require(title.isNotBlank()) { "Library title must not be blank" }
+    }
+}

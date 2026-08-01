@@ -10,6 +10,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaRepository
 import com.cydoniancitizen.bingee.testutil.FakeCredentialRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
@@ -38,6 +39,7 @@ class SearchViewModelTest {
         val missing =
             SearchViewModel(
                 missingRepository,
+                FakeLibraryRepository(),
                 FakeCredentialRepository(TmdbCredentialStatus.NotConfigured)
             )
         runCurrent()
@@ -48,6 +50,7 @@ class SearchViewModelTest {
         val valid =
             SearchViewModel(
                 validRepository,
+                FakeLibraryRepository(),
                 FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
         runCurrent()
@@ -305,7 +308,7 @@ class SearchViewModelTest {
                 gate.await()
                 AppResult.Success(page(query.query, 1, 1))
             }
-        val viewModel = SearchViewModel(repository, credentialRepository)
+        val viewModel = SearchViewModel(repository, FakeLibraryRepository(), credentialRepository)
         runCurrent()
         viewModel.onQueryChanged("fixed")
         advanceTimeBy(SearchViewModel.SEARCH_DEBOUNCE_MILLIS)
@@ -321,10 +324,54 @@ class SearchViewModelTest {
         assertFalse(viewModel.uiState.value.toString().contains("credential_not_secret"))
     }
 
+    @Test
+    fun libraryMembershipIsObservedAndToggleAddsThenRemovesLocally() = runTest(mainDispatcherRule.dispatcher) {
+        val libraryRepository = FakeLibraryRepository()
+        val viewModel =
+            SearchViewModel(
+                RecordingMediaRepository(),
+                libraryRepository,
+                FakeCredentialRepository(TmdbCredentialStatus.Valid)
+            )
+        val item = result("42")
+        runCurrent()
+
+        viewModel.toggleLibrary(item)
+        runCurrent()
+        assertTrue(item.externalRef in viewModel.uiState.value.libraryMembership)
+        assertTrue(viewModel.uiState.value.pendingLibraryActions.isEmpty())
+
+        viewModel.toggleLibrary(item)
+        runCurrent()
+        assertFalse(item.externalRef in viewModel.uiState.value.libraryMembership)
+    }
+
+    @Test
+    fun failedLibraryActionKeepsMembershipAndExposesStructuredError() = runTest(mainDispatcherRule.dispatcher) {
+        val libraryRepository =
+            FakeLibraryRepository(writeFailure = AppError.LocalStorageFailure)
+        val viewModel =
+            SearchViewModel(
+                RecordingMediaRepository(),
+                libraryRepository,
+                FakeCredentialRepository(TmdbCredentialStatus.Valid)
+            )
+        val item = result("42")
+        runCurrent()
+
+        viewModel.toggleLibrary(item)
+        runCurrent()
+
+        assertFalse(item.externalRef in viewModel.uiState.value.libraryMembership)
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.libraryError)
+        assertTrue(viewModel.uiState.value.pendingLibraryActions.isEmpty())
+    }
+
     private fun validViewModel(repository: MediaRepository): SearchViewModel {
         val viewModel =
             SearchViewModel(
                 repository,
+                FakeLibraryRepository(),
                 FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
         return viewModel

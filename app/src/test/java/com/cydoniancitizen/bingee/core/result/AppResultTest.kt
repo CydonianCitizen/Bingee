@@ -34,6 +34,7 @@ class AppResultTest {
         assertFalse(AppError.InvalidInput.isRetryable)
         assertFalse(AppError.CorruptedData.isRetryable)
         assertFalse(AppError.UnsupportedData.isRetryable)
+        assertFalse(AppError.LocalStorageFailure.isRetryable)
         assertFalse(AppError.Unknown.isRetryable)
     }
 }

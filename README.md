@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and currently at **Milestone 3 — TMDB Search Vertical Slice**. The app contains a local-first Compose shell, provider-independent domain foundations, first-run TMDB configuration, secure credential management in Settings, and remote movie and TV-series search. Library storage, title details, background work, notifications, and import/export are planned but not implemented.
+The project is unreleased and currently at **Milestone 4 — Room Database and Local Library**. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, and a persistent offline library. Title details, progress, background work, notifications, and import/export are planned but not implemented.
 
 Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
@@ -61,7 +61,7 @@ Open the repository in Android Studio, choose an emulator or connected device, a
 ./gradlew installDebug
 ```
 
-On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, and Settings. Search offers explicit Movies and TV Series categories, debounces input, and loads additional TMDB pages through an accessible button. Search results are remote-only: queries and result pages are not persisted, and result rows do not navigate to an unfinished details screen.
+On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, Library, and Settings. Search offers explicit Movies and TV Series categories, debounces input, loads additional TMDB pages, and adds or removes results from the local library. Queries and remote result pages are not persisted, and rows do not navigate to an unfinished details screen. Library reads only Room, filters All/Movies/TV Series, and stays usable after restart without network or a TMDB credential.
 
 ## TMDB configuration and privacy
 
@@ -81,16 +81,16 @@ Bingee starts as a single Gradle application module and a lightweight modular mo
 app/src/main/java/com/cydoniancitizen/bingee/
   app/        application shell
   core/       domain models, results, navigation, and shared UI
-  data/       secure credential storage, settings, and isolated TMDB auth/search networking
+  data/       Room library persistence, secure credential storage, settings, and isolated TMDB networking
   domain/     repository contracts
-  feature/    onboarding, settings, production search, and feature UI
+  feature/    onboarding, settings, search, local library, and feature UI
 
 app/src/debug/java/com/cydoniancitizen/bingee/
   debug/      deterministic repository fixtures
   feature/    deterministic Search state previews
 ```
 
-Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB movie and TV DTOs, mappers, and endpoint calls remain inside the provider data package. Search supports no title details, library action, offline result cache, persistent history, or Jikan behavior.
+Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB DTOs remain inside the provider package; Room entities, relations, converters, and DAO remain inside the library data package. Search and Library support no title details, watch state, rating, media-detail navigation, or Jikan behavior.
 
 See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 

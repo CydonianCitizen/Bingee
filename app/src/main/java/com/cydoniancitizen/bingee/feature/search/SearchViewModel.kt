@@ -3,11 +3,13 @@ package com.cydoniancitizen.bingee.feature.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
 import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaRepository
 import com.cydoniancitizen.bingee.domain.repository.TmdbCredentialRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,12 +60,16 @@ internal data class SearchUiState(
     val query: String = "",
     val category: MediaSearchCategory = MediaSearchCategory.MOVIES,
     val credentialAvailability: SearchCredentialAvailability = SearchCredentialAvailability.CHECKING,
-    val content: SearchContentState = SearchContentState.Idle
+    val content: SearchContentState = SearchContentState.Idle,
+    val libraryMembership: Set<ExternalMediaRef> = emptySet(),
+    val pendingLibraryActions: Set<ExternalMediaRef> = emptySet(),
+    val libraryError: AppError? = null
 )
 
 @HiltViewModel
 internal class SearchViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val libraryRepository: LibraryRepository,
     credentialRepository: TmdbCredentialRepository
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SearchUiState())
@@ -76,6 +82,16 @@ internal class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             credentialRepository.status.collectLatest(::onCredentialStatus)
+        }
+        viewModelScope.launch {
+            libraryRepository.observeMembershipRefs().collectLatest { result ->
+                mutableUiState.update { state ->
+                    when (result) {
+                        is AppResult.Success -> state.copy(libraryMembership = result.value)
+                        is AppResult.Failure -> state.copy(libraryError = result.error)
+                    }
+                }
+            }
         }
     }
 
@@ -123,6 +139,54 @@ internal class SearchViewModel @Inject constructor(
         val results = mutableUiState.value.content as? SearchContentState.Results ?: return
         val failed = results.nextPage as? NextPageState.Error ?: return
         loadPage(failed.failedPage)
+    }
+
+    fun toggleLibrary(result: MediaSearchResult) {
+        val ref = result.externalRef
+        val snapshot = mutableUiState.value
+        if (ref in snapshot.pendingLibraryActions) return
+        val remove = ref in snapshot.libraryMembership
+        mutableUiState.update {
+            it.copy(
+                pendingLibraryActions = it.pendingLibraryActions + ref,
+                libraryError = null
+            )
+        }
+        viewModelScope.launch {
+            val outcome =
+                if (remove) {
+                    libraryRepository.remove(ref)
+                } else {
+                    when (val added = libraryRepository.add(result)) {
+                        is AppResult.Success -> AppResult.Success(Unit)
+                        is AppResult.Failure -> added
+                    }
+                }
+            mutableUiState.update { state ->
+                when (outcome) {
+                    is AppResult.Success ->
+                        state.copy(
+                            libraryMembership =
+                            if (remove) {
+                                state.libraryMembership - ref
+                            } else {
+                                state.libraryMembership + ref
+                            },
+                            pendingLibraryActions = state.pendingLibraryActions - ref
+                        )
+
+                    is AppResult.Failure ->
+                        state.copy(
+                            pendingLibraryActions = state.pendingLibraryActions - ref,
+                            libraryError = outcome.error
+                        )
+                }
+            }
+        }
+    }
+
+    fun clearLibraryError() {
+        mutableUiState.update { it.copy(libraryError = null) }
     }
 
     private fun onCredentialStatus(status: TmdbCredentialStatus) {

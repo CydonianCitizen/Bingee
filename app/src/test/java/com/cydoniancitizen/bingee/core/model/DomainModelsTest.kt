@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.core.model
 
+import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -27,6 +28,16 @@ class DomainModelsTest {
     fun mediaTypeRepresentsStructureOnly() {
         assertEquals(listOf(MediaType.MOVIE, MediaType.SERIES), MediaType.entries)
         assertTrue(MediaType.entries.none { it.name.contains("ANIME") })
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun libraryEntryRejectsBlankTitle() {
+        LibraryEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "42"),
+            mediaType = MediaType.MOVIE,
+            title = "   ",
+            addedAt = Instant.EPOCH
+        )
     }
 
     @Test

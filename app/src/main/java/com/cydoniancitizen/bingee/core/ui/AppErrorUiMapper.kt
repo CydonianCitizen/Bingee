@@ -18,6 +18,7 @@ fun AppError.toUiError(): UiError = UiError(
         AppError.InvalidInput -> R.string.error_invalid_input
         AppError.CorruptedData -> R.string.error_corrupted_data
         AppError.UnsupportedData -> R.string.error_unsupported_data
+        AppError.LocalStorageFailure -> R.string.error_local_storage
         AppError.Unknown -> R.string.error_unknown
     },
     canRetry = isRetryable

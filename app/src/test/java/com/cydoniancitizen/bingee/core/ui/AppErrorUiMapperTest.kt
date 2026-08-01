@@ -21,6 +21,7 @@ class AppErrorUiMapperTest {
                 AppError.InvalidInput to R.string.error_invalid_input,
                 AppError.CorruptedData to R.string.error_corrupted_data,
                 AppError.UnsupportedData to R.string.error_unsupported_data,
+                AppError.LocalStorageFailure to R.string.error_local_storage,
                 AppError.Unknown to R.string.error_unknown
             )
 

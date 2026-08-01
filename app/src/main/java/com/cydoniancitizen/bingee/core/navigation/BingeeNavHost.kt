@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
+import com.cydoniancitizen.bingee.feature.library.LibraryScreen
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingRoute
 import com.cydoniancitizen.bingee.feature.search.SearchScreen
 import com.cydoniancitizen.bingee.feature.settings.SettingsScreen
@@ -34,6 +35,9 @@ fun BingeeNavHost(
         }
         composable(TopLevelDestination.SEARCH.route) {
             SearchScreen(onOpenSettings = onOpenSettings)
+        }
+        composable(TopLevelDestination.LIBRARY.route) {
+            LibraryScreen()
         }
         composable(TopLevelDestination.SETTINGS.route) {
             SettingsScreen()

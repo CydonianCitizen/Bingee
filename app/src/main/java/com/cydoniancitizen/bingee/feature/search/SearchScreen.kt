@@ -1,15 +1,12 @@
 package com.cydoniancitizen.bingee.feature.search
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -27,26 +24,24 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.EmptyState
 import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
+import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.result.AppError
@@ -67,6 +62,8 @@ internal fun SearchScreen(
         onRetryInitial = viewModel::retryInitialSearch,
         onLoadNextPage = viewModel::loadNextPage,
         onRetryNextPage = viewModel::retryNextPage,
+        onToggleLibrary = viewModel::toggleLibrary,
+        onDismissLibraryError = viewModel::clearLibraryError,
         onOpenSettings = onOpenSettings,
         modifier = modifier
     )
@@ -81,6 +78,8 @@ internal fun SearchContent(
     onRetryInitial: () -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
+    onToggleLibrary: (MediaSearchResult) -> Unit = {},
+    onDismissLibraryError: () -> Unit = {},
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -108,8 +107,14 @@ internal fun SearchContent(
                     onClearQuery = onClearQuery,
                     onCategoryChanged = onCategoryChanged
                 )
+                state.libraryError?.let { error ->
+                    LibraryActionError(error, onDismissLibraryError)
+                }
                 SearchBody(
                     content = state.content,
+                    libraryMembership = state.libraryMembership,
+                    pendingLibraryActions = state.pendingLibraryActions,
+                    onToggleLibrary = onToggleLibrary,
                     onRetryInitial = onRetryInitial,
                     onLoadNextPage = onLoadNextPage,
                     onRetryNextPage = onRetryNextPage,
@@ -117,6 +122,25 @@ internal fun SearchContent(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LibraryActionError(error: AppError, onDismiss: () -> Unit) {
+    val uiError = error.toUiError()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+    ) {
+        Text(
+            text = stringResource(uiError.messageRes),
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.error
+        )
+        TextButton(onClick = onDismiss) {
+            Text(stringResource(R.string.action_dismiss))
         }
     }
 }
@@ -193,6 +217,9 @@ private fun SearchControls(
 @Composable
 private fun SearchBody(
     content: SearchContentState,
+    libraryMembership: Set<ExternalMediaRef>,
+    pendingLibraryActions: Set<ExternalMediaRef>,
+    onToggleLibrary: (MediaSearchResult) -> Unit,
     onRetryInitial: () -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
@@ -226,6 +253,9 @@ private fun SearchBody(
             is SearchContentState.Results ->
                 SearchResults(
                     content = content,
+                    libraryMembership = libraryMembership,
+                    pendingLibraryActions = pendingLibraryActions,
+                    onToggleLibrary = onToggleLibrary,
                     onLoadNextPage = onLoadNextPage,
                     onRetryNextPage = onRetryNextPage,
                     onOpenSettings = onOpenSettings
@@ -258,6 +288,9 @@ private fun InitialSearchError(error: AppError, onRetry: () -> Unit, onOpenSetti
 @Composable
 private fun SearchResults(
     content: SearchContentState.Results,
+    libraryMembership: Set<ExternalMediaRef>,
+    pendingLibraryActions: Set<ExternalMediaRef>,
+    onToggleLibrary: (MediaSearchResult) -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
     onOpenSettings: () -> Unit
@@ -270,7 +303,12 @@ private fun SearchResults(
             items = content.items,
             key = { "${it.externalRef.source}:${it.externalRef.externalId}" }
         ) { result ->
-            SearchResultItem(result)
+            SearchResultItem(
+                result = result,
+                isInLibrary = result.externalRef in libraryMembership,
+                isLibraryActionPending = result.externalRef in pendingLibraryActions,
+                onToggleLibrary = { onToggleLibrary(result) }
+            )
         }
         item {
             when (val next = content.nextPage) {
@@ -328,13 +366,19 @@ private fun SearchResults(
 }
 
 @Composable
-internal fun SearchResultItem(result: MediaSearchResult, modifier: Modifier = Modifier) {
+internal fun SearchResultItem(
+    result: MediaSearchResult,
+    isInLibrary: Boolean,
+    isLibraryActionPending: Boolean,
+    onToggleLibrary: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
             horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
         ) {
-            SearchPoster(result)
+            MediaPoster(title = result.title, posterUrl = result.posterUrl)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
@@ -365,36 +409,22 @@ internal fun SearchResultItem(result: MediaSearchResult, modifier: Modifier = Mo
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                Button(
+                    onClick = onToggleLibrary,
+                    enabled = !isLibraryActionPending
+                ) {
+                    Text(
+                        stringResource(
+                            when {
+                                isLibraryActionPending -> R.string.library_action_updating
+                                isInLibrary -> R.string.library_action_remove
+                                else -> R.string.library_action_add
+                            }
+                        )
+                    )
+                }
             }
         }
         HorizontalDivider()
-    }
-}
-
-@Composable
-private fun SearchPoster(result: MediaSearchResult) {
-    val posterModifier =
-        Modifier
-            .width(96.dp)
-            .height(144.dp)
-            .clip(MaterialTheme.shapes.medium)
-    val placeholder = painterResource(R.drawable.poster_placeholder)
-    if (result.posterUrl == null) {
-        Image(
-            painter = placeholder,
-            contentDescription = stringResource(R.string.search_no_poster, result.title),
-            contentScale = ContentScale.Crop,
-            modifier = posterModifier
-        )
-    } else {
-        AsyncImage(
-            model = result.posterUrl,
-            contentDescription = stringResource(R.string.search_poster_description, result.title),
-            placeholder = placeholder,
-            error = placeholder,
-            fallback = placeholder,
-            contentScale = ContentScale.Crop,
-            modifier = posterModifier
-        )
     }
 }

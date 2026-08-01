@@ -39,6 +39,10 @@ sealed interface AppError {
         override val isRetryable = false
     }
 
+    data object LocalStorageFailure : AppError {
+        override val isRetryable = false
+    }
+
     data object Unknown : AppError {
         override val isRetryable = false
     }

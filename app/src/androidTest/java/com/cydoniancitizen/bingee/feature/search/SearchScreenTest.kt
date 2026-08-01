@@ -154,6 +154,24 @@ class SearchScreenTest {
         assertTrue(loaded.get())
     }
 
+    @Test
+    fun libraryActionReflectsObservedMembershipAndUsesExplicitCallback() {
+        val toggled = AtomicReference<MediaSearchResult?>(null)
+        val state = resultsState(NextPageState.End)
+        val item = (state.content as SearchContentState.Results).items.single()
+        setSearch(state = state, onToggleLibrary = toggled::set)
+
+        composeRule.onNodeWithText("Add to library").performClick()
+
+        assertEquals(item, toggled.get())
+
+        setSearch(
+            state = state.copy(libraryMembership = setOf(item.externalRef)),
+            onToggleLibrary = toggled::set
+        )
+        composeRule.onNodeWithText("Remove from library").assertIsDisplayed()
+    }
+
     private fun resultsState(nextPage: NextPageState) = SearchUiState(
         query = "fixed",
         credentialAvailability = SearchCredentialAvailability.AVAILABLE,
@@ -185,6 +203,7 @@ class SearchScreenTest {
         onRetryInitial: () -> Unit = {},
         onLoadNextPage: () -> Unit = {},
         onRetryNextPage: () -> Unit = {},
+        onToggleLibrary: (MediaSearchResult) -> Unit = {},
         onOpenSettings: () -> Unit = {}
     ) {
         composeRule.setContent {
@@ -197,6 +216,7 @@ class SearchScreenTest {
                     onRetryInitial = onRetryInitial,
                     onLoadNextPage = onLoadNextPage,
                     onRetryNextPage = onRetryNextPage,
+                    onToggleLibrary = onToggleLibrary,
                     onOpenSettings = onOpenSettings
                 )
             }

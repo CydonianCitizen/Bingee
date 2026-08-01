@@ -3,14 +3,13 @@ package com.cydoniancitizen.bingee.debug
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
 import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
+import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
-import java.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FakeRepositoriesTest {
@@ -38,18 +37,19 @@ class FakeRepositoriesTest {
     @Test
     fun libraryRepositoryEmitsDeterministicAddAndRemove() = runTest {
         val repository = FakeLibraryRepository()
-        val entry =
-            LibraryEntry(
-                mediaRef = FakeMediaData.movieRef,
+        val searchResult =
+            MediaSearchResult(
+                externalRef = FakeMediaData.movieRef,
                 mediaType = MediaType.MOVIE,
-                addedAt = Instant.parse("2026-01-02T03:04:05Z")
+                title = "Fixed movie"
             )
 
-        assertEquals(AppResult.Success(Unit), repository.add(entry))
-        assertEquals(listOf(entry), repository.observeEntries().first())
-        assertEquals(entry, repository.observeEntry(entry.mediaRef).first())
+        val added = repository.add(searchResult) as AppResult.Success
+        val entry = added.value
+        assertEquals(AppResult.Success(listOf(entry)), repository.observeEntries().first())
+        assertEquals(AppResult.Success(entry), repository.observeEntry(entry.mediaRef).first())
 
         assertEquals(AppResult.Success(Unit), repository.remove(entry.mediaRef))
-        assertTrue(repository.observeEntries().first().isEmpty())
+        assertEquals(AppResult.Success(emptyList<LibraryEntry>()), repository.observeEntries().first())
     }
 }

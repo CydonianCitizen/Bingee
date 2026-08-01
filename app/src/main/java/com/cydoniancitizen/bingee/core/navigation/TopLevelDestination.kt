@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.core.navigation
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -18,6 +19,11 @@ enum class TopLevelDestination(val route: String, @param:StringRes val labelRes:
         route = "search",
         labelRes = R.string.nav_search,
         icon = Icons.Default.Search
+    ),
+    LIBRARY(
+        route = "library",
+        labelRes = R.string.nav_library,
+        icon = Icons.AutoMirrored.Filled.List
     ),
     SETTINGS(
         route = "settings",

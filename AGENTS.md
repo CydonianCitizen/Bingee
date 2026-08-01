@@ -237,6 +237,7 @@ Regole:
 - Scritture multi-tabella racchiuse in transazioni.
 - Date e timestamp archiviati in formati non ambigui.
 - Query osservabili tramite `Flow` per lo stato usato dalla UI.
+- Ogni modifica futura allo schema richiede incremento versione, migrazione non distruttiva, schema esportato aggiornato e test di migrazione.
 
 ### Entità concettuali attese
 
