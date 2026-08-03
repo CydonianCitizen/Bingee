@@ -12,11 +12,13 @@ import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 @Singleton
@@ -31,7 +33,10 @@ internal class DefaultLibraryRepository @Inject constructor(
             } else {
                 libraryDao.observeLibraryItems(mediaType)
             }
-        return source.asPersistenceResult { rows -> rows.map { it.toDomain() } }
+        return combine(source, libraryDao.observeLibraryProgress(LocalDate.now(clock))) { rows, progress ->
+            val byMedia = progress.associateBy { it.localMediaId }
+            rows.map { it.toDomain(progressRow = byMedia[it.media.localMediaId]) }
+        }.asPersistenceResult { it }
     }
 
     override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> = libraryDao

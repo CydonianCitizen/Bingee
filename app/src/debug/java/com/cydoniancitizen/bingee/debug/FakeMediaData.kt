@@ -2,6 +2,9 @@ package com.cydoniancitizen.bingee.debug
 
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
+import com.cydoniancitizen.bingee.core.model.CachedSeason
+import com.cydoniancitizen.bingee.core.model.Episode
+import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.MediaDetails
@@ -10,6 +13,9 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
+import com.cydoniancitizen.bingee.core.model.Season
+import com.cydoniancitizen.bingee.core.model.SeasonProgress
+import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -53,6 +59,101 @@ object FakeMediaData {
         seriesDetails,
         fixedNow.minusSeconds(25 * 60 * 60),
         CacheFreshness.STALE
+    )
+
+    private val specialsRef = ExternalMediaRef(MediaSource.TMDB, "390")
+    private val firstSeasonRef = ExternalMediaRef(MediaSource.TMDB, "391")
+    private val secondSeasonRef = ExternalMediaRef(MediaSource.TMDB, "392")
+
+    val previewSeasons = listOf(
+        cachedSeason(
+            ref = specialsRef,
+            number = 0,
+            name = "Specials",
+            episodes = listOf(tracked(specialsRef, 0, 1, "A separately tracked special", null))
+        ),
+        cachedSeason(
+            ref = firstSeasonRef,
+            number = 1,
+            name = "Season 1",
+            episodes = listOf(
+                tracked(
+                    firstSeasonRef,
+                    1,
+                    1,
+                    "A watched episode with a deliberately long fixed title for font scaling",
+                    LocalDate.of(2026, 7, 1),
+                    EpisodeWatchState.Watched(fixedNow.minusSeconds(3600))
+                ),
+                tracked(firstSeasonRef, 1, 2, "Unknown air date", null),
+                tracked(
+                    firstSeasonRef,
+                    1,
+                    3,
+                    "Future episode",
+                    LocalDate.of(2026, 9, 1),
+                    EpisodeWatchState.Unavailable
+                )
+            ),
+            fetchedAt = fixedNow.minusSeconds(25 * 60 * 60)
+        ),
+        cachedSeason(
+            ref = secondSeasonRef,
+            number = 2,
+            name = "Season 2",
+            episodes = listOf(
+                tracked(
+                    secondSeasonRef,
+                    2,
+                    1,
+                    "Complete episode",
+                    LocalDate.of(2026, 1, 1),
+                    EpisodeWatchState.Watched(fixedNow.minusSeconds(7200))
+                )
+            )
+        )
+    )
+
+    private fun cachedSeason(
+        ref: ExternalMediaRef,
+        number: Int,
+        name: String,
+        episodes: List<TrackedEpisode>,
+        fetchedAt: Instant = fixedNow
+    ): CachedSeason {
+        val trackable = episodes.filterNot { it.watchState == EpisodeWatchState.Unavailable }
+        val watched = trackable.count { it.watchState is EpisodeWatchState.Watched }
+        return CachedSeason(
+            season = Season(seriesRef, ref, number, name, episodeCount = episodes.size),
+            metadataUpdatedAt = fixedNow,
+            episodesFetchedAt = fetchedAt,
+            episodes = episodes,
+            progress = SeasonProgress(watched, trackable.size, trackable.isNotEmpty() && watched == trackable.size),
+            episodeCacheFreshness = if (fetchedAt == fixedNow) CacheFreshness.FRESH else CacheFreshness.STALE
+        )
+    }
+
+    private fun tracked(
+        seasonRef: ExternalMediaRef,
+        seasonNumber: Int,
+        episodeNumber: Int,
+        title: String,
+        airDate: LocalDate?,
+        state: EpisodeWatchState = EpisodeWatchState.Unwatched
+    ) = TrackedEpisode(
+        Episode(
+            seriesRef,
+            seasonRef,
+            ExternalMediaRef(
+                MediaSource.TMDB,
+                "5" + seasonNumber + "0" + episodeNumber
+            ),
+            seasonNumber,
+            episodeNumber,
+            title,
+            airDate = airDate
+        ),
+        state
     )
 
     val searchResults =

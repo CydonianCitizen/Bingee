@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and currently at **Milestone 5 — Cache-First Media Details**. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, a persistent offline library, and Room-backed title details with stale-while-revalidate behavior. Progress, background work, notifications, and import/export are planned but not implemented.
+The project is unreleased and currently at **Milestone 6 — Seasons, Episodes, and Watch Progress**. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, a persistent offline library, Room-backed title details, incrementally cached TV seasons and episodes, and local movie/episode watch progress. Ratings, background work, notifications, and import/export are not implemented.
 
 Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
@@ -61,7 +61,7 @@ Open the repository in Android Studio, choose an emulator or connected device, a
 ./gradlew installDebug
 ```
 
-On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, Library, and Settings. Search offers explicit Movies and TV Series categories, debounces input, loads additional TMDB pages, and adds or removes results from the local library. Search and Library rows open title details using provider-qualified identity. Cached textual details render from Room before any optional refresh and remain readable offline or after credential removal. Library reads only Room, filters All/Movies/TV Series, and stays usable after restart without network or a TMDB credential.
+On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, Library, and Settings. Search offers explicit Movies and TV Series categories, debounces input, loads additional TMDB pages, and adds or removes results from the local library. Search and Library rows open title details using provider-qualified identity. Cached textual details, loaded seasons, episodes, and watch progress render from Room and remain usable offline or after credential removal. Episode and movie progress is editable without network or Library membership. Remote episode metadata loads one season at a time when expanded. Library reads only Room and may show locally derived progress.
 
 ## TMDB configuration and privacy
 
@@ -90,7 +90,7 @@ app/src/debug/java/com/cydoniancitizen/bingee/
   feature/    deterministic Search and Details state previews
 ```
 
-Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB movie- and TV-detail DTOs remain separate inside the provider package; Room entities, relations, converters, and DAOs remain inside the data layer. Details contain no season/episode list, watch state, rating, cast, credits, recommendations, background refresh, cache pruning, or Jikan behavior.
+Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB movie-, TV-, and season-detail DTOs remain separate inside the provider package; Room entities, relations, converters, and DAOs remain inside the data layer. Provider metadata tables do not contain personal watch state. The UI has no rating, episode-detail, cast, credits, recommendations, release calendar, background refresh, cache pruning, or Jikan behavior.
 
 See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 

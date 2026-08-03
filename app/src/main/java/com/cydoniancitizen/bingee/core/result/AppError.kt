@@ -43,6 +43,14 @@ sealed interface AppError {
         override val isRetryable = false
     }
 
+    data object NotTrackable : AppError {
+        override val isRetryable = false
+    }
+
+    data object MediaTypeMismatch : AppError {
+        override val isRetryable = false
+    }
+
     data object Unknown : AppError {
         override val isRetryable = false
     }

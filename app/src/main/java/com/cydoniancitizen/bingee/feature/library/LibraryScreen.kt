@@ -36,7 +36,9 @@ import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.ui.toUiError
 
 @Composable
@@ -195,6 +197,24 @@ private fun LibraryItem(entry: LibraryEntry, isRemoving: Boolean, onRemove: () -
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
+                Text(
+                    text = when (val progress = entry.progress) {
+                        LibraryProgress.Unavailable -> stringResource(R.string.library_progress_unavailable)
+                        is LibraryProgress.Movie -> stringResource(
+                            if (progress.state is MovieWatchState.Watched) {
+                                R.string.library_progress_watched
+                            } else {
+                                R.string.library_progress_unwatched
+                            }
+                        )
+                        is LibraryProgress.Series -> stringResource(
+                            R.string.library_progress_episodes,
+                            progress.progress.watchedEpisodes,
+                            progress.progress.trackableEpisodes
+                        )
+                    },
+                    style = MaterialTheme.typography.labelLarge
+                )
                 entry.overview?.let {
                     Text(
                         text = it,

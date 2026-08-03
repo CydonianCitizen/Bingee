@@ -6,12 +6,16 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
+import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
+import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -99,6 +103,82 @@ class DefaultLibraryRepositoryTest {
         assertEquals(
             AppResult.Failure(AppError.CorruptedData),
             repository.observeEntries().first()
+        )
+    }
+
+    @Test
+    fun movieAndSeriesProgressFlowLocallyWithoutChangingMembershipBehavior() = runBlocking {
+        val movie = mediaResult()
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Series"
+        )
+        repository.add(movie)
+        repository.add(series)
+
+        val initial = (repository.observeEntries().first() as AppResult.Success).value
+        assertTrue(initial.first { it.mediaRef == series.externalRef }.progress is LibraryProgress.Unavailable)
+
+        database.seriesDao().storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            SeasonEntity(
+                localMediaId = 0,
+                source = MediaSource.TMDB,
+                externalId = "11",
+                seasonNumber = 1,
+                name = "Season 1",
+                overview = null,
+                posterUrl = null,
+                airDate = null,
+                episodeCount = 1,
+                metadataUpdatedAt = now,
+                episodesFetchedAt = null
+            ),
+            listOf(
+                EpisodeEntity(
+                    localSeasonId = 0,
+                    source = MediaSource.TMDB,
+                    externalId = "101",
+                    episodeNumber = 1,
+                    title = "Episode",
+                    overview = null,
+                    airDate = null,
+                    runtimeMinutes = null,
+                    stillUrl = null,
+                    metadataUpdatedAt = now
+                )
+            ),
+            now
+        )
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "101",
+            LocalDate.of(2026, 8, 1),
+            now
+        )
+        database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
+
+        val updated = (repository.observeEntries().first() as AppResult.Success).value
+        assertEquals(
+            LibraryProgress.Movie(MovieWatchState.Watched(now)),
+            updated.first { it.mediaRef == movie.externalRef }.progress
+        )
+        val seriesProgress =
+            (updated.first { it.mediaRef == series.externalRef }.progress as LibraryProgress.Series).progress
+        assertEquals(1, seriesProgress.watchedEpisodes)
+        assertTrue(seriesProgress.isComplete)
+
+        repository.remove(series.externalRef)
+        assertFalse(
+            (repository.observeEntries().first() as AppResult.Success).value
+                .any { it.mediaRef == series.externalRef }
+        )
+        assertEquals(
+            now,
+            database.seriesDao().observeSeason(MediaSource.TMDB, "100", "11").first()!!
+                .episodes.first().progress?.watchedAt
         )
     }
 

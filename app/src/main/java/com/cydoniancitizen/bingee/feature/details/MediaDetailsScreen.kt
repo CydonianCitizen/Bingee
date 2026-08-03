@@ -63,7 +63,13 @@ internal fun MediaDetailsScreen(
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
         onToggleLibrary = viewModel::toggleLibrary,
+        onToggleMovieWatched = viewModel::toggleMovieWatched,
+        onToggleSeasonExpanded = viewModel::toggleSeasonExpanded,
+        onRetrySeason = viewModel::retrySeason,
+        onToggleEpisode = viewModel::toggleEpisode,
+        onToggleSeasonWatched = viewModel::toggleSeasonWatched,
         onDismissLibraryError = viewModel::dismissLibraryError,
+        onDismissProgressError = viewModel::dismissProgressError,
         onOpenSettings = onOpenSettings,
         modifier = modifier
     )
@@ -76,7 +82,13 @@ internal fun MediaDetailsContent(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onToggleLibrary: () -> Unit,
+    onToggleMovieWatched: () -> Unit = {},
+    onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
+    onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
+    onToggleEpisode: (com.cydoniancitizen.bingee.core.model.TrackedEpisode) -> Unit = {},
+    onToggleSeasonWatched: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
     onDismissLibraryError: () -> Unit,
+    onDismissProgressError: () -> Unit = {},
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -114,7 +126,16 @@ internal fun MediaDetailsContent(
                 isLibraryUpdating = state.libraryAction == DetailLibraryActionState.UPDATING,
                 libraryError = state.libraryError,
                 onToggleLibrary = onToggleLibrary,
+                movieProgress = state.movieProgress,
+                series = state.series,
+                progressError = state.progressError,
+                onToggleMovieWatched = onToggleMovieWatched,
+                onToggleSeasonExpanded = onToggleSeasonExpanded,
+                onRetrySeason = onRetrySeason,
+                onToggleEpisode = onToggleEpisode,
+                onToggleSeasonWatched = onToggleSeasonWatched,
                 onDismissLibraryError = onDismissLibraryError,
+                onDismissProgressError = onDismissProgressError,
                 onOpenSettings = onOpenSettings
             )
         }
@@ -149,8 +170,17 @@ private fun DetailBody(
     isInLibrary: Boolean?,
     isLibraryUpdating: Boolean,
     libraryError: AppError?,
+    movieProgress: MovieProgressState,
+    series: SeriesDetailUiState,
+    progressError: AppError?,
     onToggleLibrary: () -> Unit,
+    onToggleMovieWatched: () -> Unit,
+    onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
+    onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
+    onToggleEpisode: (com.cydoniancitizen.bingee.core.model.TrackedEpisode) -> Unit,
+    onToggleSeasonWatched: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
     onDismissLibraryError: () -> Unit,
+    onDismissProgressError: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     Column(
@@ -223,6 +253,30 @@ private fun DetailBody(
                     }
                 }
             }
+            progressError?.let { error ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(error.toUiError().messageRes),
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = onDismissProgressError) {
+                        Text(stringResource(R.string.action_dismiss))
+                    }
+                }
+            }
+            if (details.mediaType == MediaType.MOVIE) {
+                MovieProgressSection(movieProgress, onToggleMovieWatched)
+            } else {
+                TvSeriesSection(
+                    state = series,
+                    onToggleExpanded = onToggleSeasonExpanded,
+                    onRetrySeason = onRetrySeason,
+                    onToggleEpisode = onToggleEpisode,
+                    onToggleSeason = onToggleSeasonWatched,
+                    onOpenSettings = onOpenSettings
+                )
+            }
             if (details.genres.isNotEmpty()) {
                 DetailField(R.string.detail_genres, details.genres.joinToString { it.name })
             }
@@ -231,12 +285,6 @@ private fun DetailBody(
             }
             details.episodeRuntime?.let {
                 DetailField(R.string.detail_episode_runtime, stringResource(R.string.detail_minutes, it.toMinutes()))
-            }
-            details.numberOfSeasons?.let {
-                DetailField(R.string.detail_seasons_count, it.toString())
-            }
-            details.numberOfEpisodes?.let {
-                DetailField(R.string.detail_episodes_count, it.toString())
             }
             details.originalLanguage?.let {
                 DetailField(R.string.detail_original_language, it)

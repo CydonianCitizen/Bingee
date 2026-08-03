@@ -1,22 +1,33 @@
 package com.cydoniancitizen.bingee.feature.details
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
+import com.cydoniancitizen.bingee.core.model.CachedSeason
+import com.cydoniancitizen.bingee.core.model.Episode
+import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
+import com.cydoniancitizen.bingee.core.model.Season
+import com.cydoniancitizen.bingee.core.model.SeasonProgress
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.result.AppError
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -26,19 +37,28 @@ class MediaDetailsScreenTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun movieDetailsRenderWithoutTrackingOrRatingControls() {
-        setDetails(content(movie()))
+    fun movieDetailsRenderWatchedActionWithoutRatingControls() {
+        val toggled = AtomicBoolean(false)
+        setDetails(
+            content(movie()).copy(
+                movieProgress = MovieProgressState.Ready(MovieWatchState.Unwatched)
+            ),
+            onToggleMovie = { toggled.set(true) }
+        )
 
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
         composeRule.onNodeWithText("Released").assertIsDisplayed()
         composeRule.onNodeWithText("120 min").assertIsDisplayed()
         composeRule.onNodeWithText("Drama, Thriller").assertIsDisplayed()
         composeRule.onNodeWithText("Rating").assertDoesNotExist()
-        composeRule.onNodeWithText("Mark watched").assertDoesNotExist()
+        composeRule.onNodeWithText("Mark watched").performScrollTo().performClick()
+        assertTrue(toggled.get())
     }
 
     @Test
-    fun tvDetailsShowOnlyHighLevelCounts() {
+    fun tvDetailsShowSeasonsSpecialsEpisodesAndDisableFutureEpisode() {
+        val regular = season(1, "Season 1", expanded = true)
+        val specials = season(0, "Specials", expanded = false)
         setDetails(
             content(
                 movie().copy(
@@ -49,13 +69,24 @@ class MediaDetailsScreenTest {
                     numberOfEpisodes = 24,
                     productionStatus = ProductionStatus.RETURNING_SERIES
                 )
+            ).copy(
+                series = SeriesDetailUiState(
+                    content = SeriesContentState.Ready(
+                        listOf(specials, regular),
+                        SeriesProgress(1, 2, 0, 1, false)
+                    ),
+                    expandedSeasons = setOf(regular.season.externalRef)
+                )
             )
         )
 
         composeRule.onNodeWithText("TV Series").assertIsDisplayed()
-        composeRule.onNodeWithText("Typical episode runtime").assertIsDisplayed()
-        composeRule.onNodeWithText("Number of seasons").assertIsDisplayed()
-        composeRule.onNodeWithText("24").assertIsDisplayed()
+        composeRule.onNodeWithText("Season 1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Specials").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Not aired yet").assertIsNotEnabled()
+        composeRule.onNodeWithText("Rating").assertDoesNotExist()
     }
 
     @Test
@@ -109,7 +140,8 @@ class MediaDetailsScreenTest {
         state: MediaDetailsUiState,
         onRetry: () -> Unit = {},
         onToggle: () -> Unit = {},
-        onOpenSettings: () -> Unit = {}
+        onOpenSettings: () -> Unit = {},
+        onToggleMovie: () -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
@@ -119,6 +151,7 @@ class MediaDetailsScreenTest {
                     onRefresh = {},
                     onRetry = onRetry,
                     onToggleLibrary = onToggle,
+                    onToggleMovieWatched = onToggleMovie,
                     onDismissLibraryError = {},
                     onOpenSettings = onOpenSettings
                 )
@@ -141,5 +174,47 @@ class MediaDetailsScreenTest {
         runtime = Duration.ofMinutes(120),
         productionStatus = ProductionStatus.RELEASED,
         genres = listOf(Genre("Drama"), Genre("Thriller"))
+    )
+
+    private fun season(number: Int, name: String, expanded: Boolean): CachedSeason {
+        val seriesRef = ExternalMediaRef(MediaSource.TMDB, "1399")
+        val seasonRef = ExternalMediaRef(MediaSource.TMDB, (900 + number).toString())
+        val episodes = if (!expanded) {
+            emptyList()
+        } else {
+            listOf(
+                tracked(seriesRef, seasonRef, number, 1, "Watched episode", EpisodeWatchState.Watched(Instant.EPOCH)),
+                tracked(seriesRef, seasonRef, number, 2, "Unwatched episode", EpisodeWatchState.Unwatched),
+                tracked(seriesRef, seasonRef, number, 3, "Future episode", EpisodeWatchState.Unavailable)
+            )
+        }
+        return CachedSeason(
+            season = Season(seriesRef, seasonRef, number, name = name, episodeCount = episodes.size),
+            metadataUpdatedAt = Instant.EPOCH,
+            episodesFetchedAt = if (expanded) Instant.EPOCH else null,
+            episodes = episodes,
+            progress = if (expanded) SeasonProgress(1, 2, false) else SeasonProgress.EMPTY,
+            episodeCacheFreshness = if (expanded) CacheFreshness.STALE else null
+        )
+    }
+
+    private fun tracked(
+        seriesRef: ExternalMediaRef,
+        seasonRef: ExternalMediaRef,
+        seasonNumber: Int,
+        number: Int,
+        title: String,
+        state: EpisodeWatchState
+    ) = TrackedEpisode(
+        Episode(
+            seriesRef,
+            seasonRef,
+            ExternalMediaRef(MediaSource.TMDB, (1000 + number).toString()),
+            seasonNumber,
+            number,
+            title,
+            airDate = if (state == EpisodeWatchState.Unavailable) LocalDate.of(2027, 1, 1) else null
+        ),
+        state
     )
 }

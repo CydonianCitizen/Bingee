@@ -3,6 +3,8 @@ package com.cydoniancitizen.bingee.feature.details
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.deriveSeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.debug.FakeMediaData
 
@@ -12,7 +14,8 @@ import com.cydoniancitizen.bingee.debug.FakeMediaData
 private fun MoviePreview() = PreviewState(
     MediaDetailsUiState(
         content = DetailContentState.Content(FakeMediaData.freshMovieDetails),
-        isInLibrary = false
+        isInLibrary = false,
+        movieProgress = MovieProgressState.Ready(MovieWatchState.Watched(FakeMediaData.fixedNow))
     )
 )
 
@@ -22,7 +25,17 @@ private fun TvRefreshingPreview() = PreviewState(
     MediaDetailsUiState(
         content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),
         refresh = DetailRefreshState.Refreshing,
-        isInLibrary = true
+        isInLibrary = true,
+        series = SeriesDetailUiState(
+            content = SeriesContentState.Ready(
+                FakeMediaData.previewSeasons,
+                deriveSeriesProgress(FakeMediaData.previewSeasons)
+            ),
+            expandedSeasons = FakeMediaData.previewSeasons.map { it.season.externalRef }.toSet(),
+            pendingEpisodes = setOf(
+                FakeMediaData.previewSeasons[1].episodes.first().episode.externalRef
+            )
+        )
     )
 )
 
@@ -32,7 +45,18 @@ private fun StaleErrorPreview() = PreviewState(
     MediaDetailsUiState(
         content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),
         refresh = DetailRefreshState.Error(AppError.NetworkUnavailable),
-        isInLibrary = true
+        isInLibrary = true,
+        series = SeriesDetailUiState(
+            content = SeriesContentState.Ready(
+                FakeMediaData.previewSeasons,
+                deriveSeriesProgress(FakeMediaData.previewSeasons)
+            ),
+            expandedSeasons = setOf(FakeMediaData.previewSeasons[1].season.externalRef),
+            seasonLoads = mapOf(
+                FakeMediaData.previewSeasons[1].season.externalRef to
+                    SeasonLoadState.Error(AppError.NetworkUnavailable)
+            )
+        )
     )
 )
 
@@ -58,7 +82,8 @@ private fun UpdatingLargeFontPreview() = PreviewState(
     MediaDetailsUiState(
         content = DetailContentState.Content(FakeMediaData.freshMovieDetails),
         isInLibrary = false,
-        libraryAction = DetailLibraryActionState.UPDATING
+        libraryAction = DetailLibraryActionState.UPDATING,
+        movieProgress = MovieProgressState.Ready(MovieWatchState.Unwatched, updating = true)
     )
 )
 

@@ -14,7 +14,10 @@ import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
+import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
+import com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -159,7 +162,8 @@ class DefaultMediaDetailsRepositoryTest {
         detailsDao = dao,
         client = remote,
         freshnessPolicy = CacheFreshnessPolicy(clock),
-        clock = clock
+        clock = clock,
+        seasonSummaryStore = FakeSeasonSummaryStore()
     )
 
     private fun details(ref: ExternalMediaRef, type: MediaType, title: String) = MediaDetails(
@@ -202,10 +206,24 @@ class DefaultMediaDetailsRepositoryTest {
     private class FakeRemote(private val result: suspend (ExternalMediaRef, MediaType) -> AppResult<MediaDetails>) :
         TmdbDetailsRemoteDataSource {
         val calls = mutableListOf<Pair<ExternalMediaRef, MediaType>>()
-        override suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<MediaDetails> {
+        override suspend fun load(
+            reference: ExternalMediaRef,
+            mediaType: MediaType
+        ): AppResult<TmdbMediaDetailsPayload> {
             calls += reference to mediaType
-            return result(reference, mediaType)
+            return when (val loaded = result(reference, mediaType)) {
+                is AppResult.Success -> AppResult.Success(TmdbMediaDetailsPayload(loaded.value))
+                is AppResult.Failure -> loaded
+            }
         }
+    }
+
+    private class FakeSeasonSummaryStore : SeasonSummaryStore {
+        override suspend fun upsertSeasonSummaries(
+            source: MediaSource,
+            seriesExternalId: String,
+            summaries: List<SeasonEntity>
+        ) = Unit
     }
 
     private class FakeDetailsDao(initial: CachedDetailsRelation? = null, private val failWrites: Boolean = false) :

@@ -3,6 +3,7 @@ package com.cydoniancitizen.bingee.di
 import com.cydoniancitizen.bingee.data.tmdb.auth.TmdbAuthenticationService
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsService
 import com.cydoniancitizen.bingee.data.tmdb.search.TmdbSearchService
+import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,4 +41,8 @@ internal object TmdbNetworkModule {
     @Singleton
     fun provideTmdbDetailsService(retrofit: Retrofit): TmdbDetailsService =
         retrofit.create(TmdbDetailsService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideTmdbSeasonService(retrofit: Retrofit): TmdbSeasonService = retrofit.create(TmdbSeasonService::class.java)
 }

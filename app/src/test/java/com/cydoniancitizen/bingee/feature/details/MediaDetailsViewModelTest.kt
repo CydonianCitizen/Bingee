@@ -3,17 +3,26 @@ package com.cydoniancitizen.bingee.feature.details
 import androidx.lifecycle.SavedStateHandle
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
+import com.cydoniancitizen.bingee.core.model.CachedSeason
+import com.cydoniancitizen.bingee.core.model.Episode
+import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.Season
+import com.cydoniancitizen.bingee.core.model.SeasonProgress
+import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
+import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
+import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -128,16 +137,94 @@ class MediaDetailsViewModelTest {
         assertTrue(viewModel.uiState.value.content is DetailContentState.Content)
     }
 
+    @Test
+    fun movieWatchToggleIsLocalAndEmitsUpdatedState() = runTest(mainDispatcherRule.dispatcher) {
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            args(),
+            FakeDetailsRepository(cached(CacheFreshness.FRESH)),
+            progress = progress
+        )
+        runCurrent()
+
+        assertEquals(
+            MovieProgressState.Ready(MovieWatchState.Unwatched),
+            viewModel.uiState.value.movieProgress
+        )
+        viewModel.toggleMovieWatched()
+        runCurrent()
+
+        assertTrue((viewModel.uiState.value.movieProgress as MovieProgressState.Ready).state is MovieWatchState.Watched)
+        assertEquals(listOf("movie-watched"), progress.actions)
+    }
+
+    @Test
+    fun seasonExpansionLoadsIncrementallyAndProgressActionsRemainIsolated() = runTest(mainDispatcherRule.dispatcher) {
+        val season = cachedSeason()
+        val series = FakeSeriesRepository(listOf(season))
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            args(mediaType = MediaType.SERIES),
+            FakeDetailsRepository(cachedSeries()),
+            series = series,
+            progress = progress
+        )
+        runCurrent()
+
+        val ready = viewModel.uiState.value.series.content as SeriesContentState.Ready
+        assertEquals(1, ready.seasons.size)
+        assertEquals(SeasonProgress(0, 1, false), ready.seasons.first().progress)
+
+        viewModel.toggleSeasonExpanded(season)
+        runCurrent()
+        assertEquals(listOf(Triple(ref, 1, false)), series.refreshes)
+        assertTrue(season.season.externalRef in viewModel.uiState.value.series.expandedSeasons)
+        viewModel.retrySeason(season)
+        runCurrent()
+        assertEquals(
+            listOf(Triple(ref, 1, false), Triple(ref, 1, true)),
+            series.refreshes
+        )
+
+        viewModel.toggleEpisode(season.episodes.first())
+        viewModel.toggleEpisode(season.episodes.last())
+        viewModel.toggleSeasonWatched(season)
+        runCurrent()
+        assertEquals(listOf("episode-watched", "season-watched"), progress.actions)
+    }
+
+    @Test
+    fun emptySeasonSummaryCacheBootstrapsOnceEvenWhenVersionTwoDetailsAreFresh() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val details = FakeDetailsRepository(cachedSeries())
+            viewModel(
+                args(mediaType = MediaType.SERIES),
+                details,
+                series = FakeSeriesRepository()
+            )
+            runCurrent()
+
+            assertEquals(listOf(true), details.refreshes.map { it.third })
+        }
+
     private fun viewModel(
         state: SavedStateHandle,
         details: FakeDetailsRepository,
-        library: FakeLibraryRepository = FakeLibraryRepository()
-    ) = MediaDetailsViewModel(state, details, library)
+        library: FakeLibraryRepository = FakeLibraryRepository(),
+        series: FakeSeriesRepository = FakeSeriesRepository(),
+        progress: FakeWatchProgressRepository = FakeWatchProgressRepository()
+    ) = MediaDetailsViewModel(
+        state,
+        details,
+        library,
+        series,
+        progress
+    )
 
-    private fun args(source: MediaSource = MediaSource.TMDB) = SavedStateHandle(
+    private fun args(source: MediaSource = MediaSource.TMDB, mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(
         mapOf(
             DetailRoute.SOURCE_ARG to source.name,
-            DetailRoute.MEDIA_TYPE_ARG to MediaType.MOVIE.name,
+            DetailRoute.MEDIA_TYPE_ARG to mediaType.name,
             DetailRoute.EXTERNAL_ID_ARG to "550"
         )
     )
@@ -147,6 +234,32 @@ class MediaDetailsViewModelTest {
         fetchedAt = Instant.parse("2026-08-03T10:00:00Z"),
         freshness = freshness
     )
+
+    private fun cachedSeries() = CachedMediaDetails(
+        details = MediaDetails(ref, MediaType.SERIES, "Cached series"),
+        fetchedAt = Instant.parse("2026-08-03T10:00:00Z"),
+        freshness = CacheFreshness.FRESH
+    )
+
+    private fun cachedSeason(): CachedSeason {
+        val seasonRef = ExternalMediaRef(MediaSource.TMDB, "11")
+        val trackable = TrackedEpisode(
+            Episode(ref, seasonRef, ExternalMediaRef(MediaSource.TMDB, "101"), 1, 1, "First"),
+            EpisodeWatchState.Unwatched
+        )
+        val future = TrackedEpisode(
+            Episode(ref, seasonRef, ExternalMediaRef(MediaSource.TMDB, "102"), 1, 2, "Future"),
+            EpisodeWatchState.Unavailable
+        )
+        return CachedSeason(
+            season = Season(ref, seasonRef, 1, name = "Season 1", episodeCount = 2),
+            metadataUpdatedAt = Instant.parse("2026-08-03T10:00:00Z"),
+            episodesFetchedAt = null,
+            episodes = listOf(trackable, future),
+            progress = SeasonProgress(0, 1, false),
+            episodeCacheFreshness = null
+        )
+    }
 
     private class FakeDetailsRepository(
         initial: CachedMediaDetails? = null,
@@ -197,6 +310,49 @@ class MediaDetailsViewModelTest {
                 title = "Cached movie",
                 addedAt = Instant.parse("2026-08-03T10:00:00Z")
             )
+        }
+    }
+
+    private class FakeSeriesRepository(initial: List<CachedSeason> = emptyList()) : SeriesRepository {
+        private val seasons = MutableStateFlow<AppResult<List<CachedSeason>>>(AppResult.Success(initial))
+        val refreshes = mutableListOf<Triple<ExternalMediaRef, Int, Boolean>>()
+        override fun observeSeasons(seriesRef: ExternalMediaRef): Flow<AppResult<List<CachedSeason>>> = seasons
+
+        override suspend fun refreshSeason(
+            seriesRef: ExternalMediaRef,
+            seasonNumber: Int,
+            force: Boolean
+        ): AppResult<Unit> {
+            refreshes += Triple(seriesRef, seasonNumber, force)
+            return AppResult.Success(Unit)
+        }
+    }
+
+    private class FakeWatchProgressRepository : WatchProgressRepository {
+        private val movie = MutableStateFlow<AppResult<MovieWatchState>>(
+            AppResult.Success(MovieWatchState.Unwatched)
+        )
+        val actions = mutableListOf<String>()
+        override fun observeMovie(reference: ExternalMediaRef): Flow<AppResult<MovieWatchState>> = movie
+
+        override suspend fun markEpisodeWatched(episodeRef: ExternalMediaRef) = success("episode-watched")
+        override suspend fun markEpisodeUnwatched(episodeRef: ExternalMediaRef) = success("episode-unwatched")
+        override suspend fun markSeasonWatched(seasonRef: ExternalMediaRef) = success("season-watched")
+        override suspend fun markSeasonUnwatched(seasonRef: ExternalMediaRef) = success("season-unwatched")
+        override suspend fun markMovieWatched(reference: ExternalMediaRef): AppResult<Unit> {
+            actions += "movie-watched"
+            movie.value = AppResult.Success(MovieWatchState.Watched(Instant.EPOCH))
+            return AppResult.Success(Unit)
+        }
+        override suspend fun markMovieUnwatched(reference: ExternalMediaRef): AppResult<Unit> {
+            actions += "movie-unwatched"
+            movie.value = AppResult.Success(MovieWatchState.Unwatched)
+            return AppResult.Success(Unit)
+        }
+
+        private fun success(action: String): AppResult<Unit> {
+            actions += action
+            return AppResult.Success(Unit)
         }
     }
 }

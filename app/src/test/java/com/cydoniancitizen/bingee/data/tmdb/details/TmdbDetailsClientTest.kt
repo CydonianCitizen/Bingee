@@ -69,7 +69,7 @@ class TmdbDetailsClientTest {
         val request = server.takeRequest()
 
         assertEquals("/3/tv/1399", request.requestUrl?.encodedPath)
-        assertEquals(MediaType.SERIES, (result as AppResult.Success).value.mediaType)
+        assertEquals(MediaType.SERIES, (result as AppResult.Success).value.details.mediaType)
     }
 
     @Test

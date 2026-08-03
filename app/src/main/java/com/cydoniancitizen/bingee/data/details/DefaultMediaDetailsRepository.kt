@@ -10,6 +10,8 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
+import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
+import com.cydoniancitizen.bingee.data.series.toEntity
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import java.time.Clock
@@ -27,6 +29,7 @@ import kotlinx.coroutines.sync.withLock
 @Singleton
 internal class DefaultMediaDetailsRepository @Inject constructor(
     private val detailsDao: DetailsDao,
+    private val seasonSummaryStore: SeasonSummaryStore,
     private val client: TmdbDetailsRemoteDataSource,
     private val freshnessPolicy: CacheFreshnessPolicy,
     private val clock: Clock
@@ -106,7 +109,8 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
 
         val remote = client.load(reference, mediaType)
         if (remote is AppResult.Failure) return remote
-        val details = (remote as AppResult.Success).value
+        val payload = (remote as AppResult.Success).value
+        val details = payload.details
         if (details.externalRef != reference || details.mediaType != mediaType) {
             return AppResult.Failure(AppError.InvalidRemoteResponse)
         }
@@ -120,6 +124,13 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
                 details = write.details,
                 genres = write.genres
             )
+            if (mediaType == MediaType.SERIES) {
+                seasonSummaryStore.upsertSeasonSummaries(
+                    source = reference.source,
+                    seriesExternalId = reference.externalId,
+                    summaries = payload.seasons.map { it.toEntity(fetchedAt) }
+                )
+            }
             AppResult.Success(Unit)
         } catch (cancelled: CancellationException) {
             throw cancelled

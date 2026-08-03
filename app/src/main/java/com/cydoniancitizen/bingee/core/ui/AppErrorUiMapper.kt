@@ -19,6 +19,8 @@ fun AppError.toUiError(): UiError = UiError(
         AppError.CorruptedData -> R.string.error_corrupted_data
         AppError.UnsupportedData -> R.string.error_unsupported_data
         AppError.LocalStorageFailure -> R.string.error_local_storage
+        AppError.NotTrackable -> R.string.error_not_trackable
+        AppError.MediaTypeMismatch -> R.string.error_media_type_mismatch
         AppError.Unknown -> R.string.error_unknown
     },
     canRetry = isRetryable

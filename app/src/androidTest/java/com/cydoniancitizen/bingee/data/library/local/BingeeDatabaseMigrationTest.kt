@@ -67,6 +67,89 @@ class BingeeDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migrateTwoToThreePreservesVersionTwoDataAndCreatesEmptyProgressStructures() {
+        helper.createDatabase(V2_TO_V3_DB, 2).apply {
+            insertVersionTwoFixture()
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(V2_TO_V3_DB, 3, true, MIGRATION_2_3)
+
+        assertVersionTwoFixtureAndEmptyMilestoneSixTables(migrated)
+        migrated.close()
+    }
+
+    @Test
+    fun migrateOneThroughThreePreservesCanonicalRowsAndValidatesFinalSchema() {
+        helper.createDatabase(V1_TO_V3_DB, 1).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
+                    "overview, poster_url, release_date, created_at, metadata_updated_at) " +
+                    "VALUES(1, 'SERIES', 'Series', NULL, NULL, NULL, '2020-01-01', " +
+                    "'2026-08-01T10:00:00Z', '2026-08-01T10:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            V1_TO_V3_DB,
+            3,
+            true,
+            MIGRATION_1_2,
+            MIGRATION_2_3
+        )
+
+        assertEquals(1, migrated.count("media_entries"))
+        assertEquals(1, migrated.count("external_refs"))
+        assertEquals(1, migrated.count("library_entries"))
+        assertNewMilestoneSixTablesEmpty(migrated)
+        migrated.close()
+    }
+
+    private fun androidx.sqlite.db.SupportSQLiteDatabase.insertVersionTwoFixture() {
+        execSQL(
+            "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
+                "overview, poster_url, release_date, created_at, metadata_updated_at) " +
+                "VALUES(1, 'SERIES', 'Series', NULL, 'Overview', NULL, '2020-01-01', " +
+                "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
+        )
+        execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
+        execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
+        execSQL(
+            "INSERT INTO media_details(local_media_id, backdrop_url, production_status, " +
+                "original_language, runtime_minutes, episode_runtime_minutes, number_of_seasons, " +
+                "number_of_episodes, details_fetched_at) VALUES(1, NULL, 'ENDED', 'en', NULL, 50, 2, 10, " +
+                "'2026-08-03T10:00:00Z')"
+        )
+        execSQL("INSERT INTO media_genres(local_media_id, genre_order, name) VALUES(1, 0, 'Drama')")
+        execSQL("INSERT INTO media_genres(local_media_id, genre_order, name) VALUES(1, 1, 'Mystery')")
+    }
+
+    private fun assertVersionTwoFixtureAndEmptyMilestoneSixTables(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+        assertEquals(1, database.count("media_entries"))
+        assertEquals(1, database.count("external_refs"))
+        assertEquals(1, database.count("library_entries"))
+        assertEquals(1, database.count("media_details"))
+        assertEquals(2, database.count("media_genres"))
+        database.query("SELECT name FROM media_genres ORDER BY genre_order").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("Drama", cursor.getString(0))
+            cursor.moveToNext()
+            assertEquals("Mystery", cursor.getString(0))
+        }
+        assertNewMilestoneSixTablesEmpty(database)
+    }
+
+    private fun assertNewMilestoneSixTablesEmpty(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+        assertEquals(0, database.count("seasons"))
+        assertEquals(0, database.count("episodes"))
+        assertEquals(0, database.count("episode_watch_progress"))
+        assertEquals(0, database.count("movie_watch_progress"))
+    }
+
     private fun androidx.sqlite.db.SupportSQLiteDatabase.count(table: String): Int =
         query("SELECT COUNT(*) FROM $table").use { cursor ->
             cursor.moveToFirst()
@@ -75,5 +158,7 @@ class BingeeDatabaseMigrationTest {
 
     private companion object {
         const val TEST_DB = "bingee-migration-1-2"
+        const val V2_TO_V3_DB = "bingee-migration-2-3"
+        const val V1_TO_V3_DB = "bingee-migration-1-3"
     }
 }

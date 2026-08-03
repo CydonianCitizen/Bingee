@@ -5,6 +5,7 @@ internal object TmdbImageUrlResolver {
     private const val LIST_POSTER_SIZE = "w342"
     private const val DETAIL_POSTER_SIZE = "w500"
     private const val DETAIL_BACKDROP_SIZE = "w780"
+    private const val EPISODE_STILL_SIZE = "w300"
     private val supportedPath = Regex("/[A-Za-z0-9._-]+\\.(?:jpg|jpeg|png|webp)", RegexOption.IGNORE_CASE)
 
     fun listPoster(path: String?): String? = resolve(path, LIST_POSTER_SIZE)
@@ -12,6 +13,8 @@ internal object TmdbImageUrlResolver {
     fun detailPoster(path: String?): String? = resolve(path, DETAIL_POSTER_SIZE)
 
     fun detailBackdrop(path: String?): String? = resolve(path, DETAIL_BACKDROP_SIZE)
+
+    fun episodeStill(path: String?): String? = resolve(path, EPISODE_STILL_SIZE)
 
     private fun resolve(path: String?, size: String): String? {
         val normalized = path?.trim()?.takeIf(supportedPath::matches) ?: return null

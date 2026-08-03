@@ -9,10 +9,21 @@ import androidx.room.Update
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal abstract class LibraryDao {
+    internal data class LibraryProgressRow(
+        @androidx.room.ColumnInfo(name = "local_media_id") val localMediaId: Long,
+        @androidx.room.ColumnInfo(name = "media_type") val mediaType: MediaType,
+        @androidx.room.ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
+        @androidx.room.ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
+        @androidx.room.ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
+        @androidx.room.ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
+        @androidx.room.ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int
+    )
+
     @Transaction
     @Query(
         """
@@ -58,6 +69,64 @@ internal abstract class LibraryDao {
         """
     )
     abstract fun observeMembershipRefs(): Flow<List<ExternalRefEntity>>
+
+    @Query(
+        """
+        SELECT media_entries.local_media_id,
+               media_entries.media_type,
+               movie_watch_progress.watched_at AS movie_watched_at,
+               (
+                   SELECT COUNT(*)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+               ) AS watched_episodes,
+               (
+                   SELECT COUNT(*)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+               ) AS trackable_episodes,
+               (
+                   SELECT COUNT(*)
+                   FROM seasons
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND EXISTS (
+                         SELECT 1 FROM episodes
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1 FROM episodes
+                         LEFT JOIN episode_watch_progress USING(local_episode_id)
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                           AND episode_watch_progress.local_episode_id IS NULL
+                     )
+               ) AS completed_seasons,
+               (
+                   SELECT COUNT(*)
+                   FROM seasons
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND EXISTS (
+                         SELECT 1 FROM episodes
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     )
+               ) AS trackable_seasons
+        FROM media_entries
+        INNER JOIN library_entries USING(local_media_id)
+        LEFT JOIN movie_watch_progress USING(local_media_id)
+        """
+    )
+    abstract fun observeLibraryProgress(today: LocalDate): Flow<List<LibraryProgressRow>>
 
     @Query(
         """

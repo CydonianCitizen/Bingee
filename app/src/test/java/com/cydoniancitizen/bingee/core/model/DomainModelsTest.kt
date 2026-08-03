@@ -47,6 +47,7 @@ class DomainModelsTest {
         val specials =
             Season(
                 seriesRef = seriesRef,
+                externalRef = ExternalMediaRef(MediaSource.TMDB, "900"),
                 seasonNumber = 0,
                 name = "Specials"
             )

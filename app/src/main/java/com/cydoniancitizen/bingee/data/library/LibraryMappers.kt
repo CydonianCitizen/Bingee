@@ -2,8 +2,13 @@ package com.cydoniancitizen.bingee.data.library
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
+import com.cydoniancitizen.bingee.data.library.local.LibraryDao
 import com.cydoniancitizen.bingee.data.library.local.LibraryItemWithRefs
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import java.time.Instant
@@ -19,7 +24,10 @@ internal fun MediaSearchResult.toMediaEntity(now: Instant): MediaEntity = MediaE
     metadataUpdatedAt = now
 )
 
-internal fun LibraryItemWithRefs.toDomain(preferredRef: ExternalMediaRef? = null): LibraryEntry {
+internal fun LibraryItemWithRefs.toDomain(
+    preferredRef: ExternalMediaRef? = null,
+    progressRow: LibraryDao.LibraryProgressRow? = null
+): LibraryEntry {
     val refs = externalRefs.map(ExternalRefEntity::toDomain)
     require(refs.isNotEmpty()) { "Persisted library item has no external reference" }
     val selectedRef =
@@ -33,7 +41,25 @@ internal fun LibraryItemWithRefs.toDomain(preferredRef: ExternalMediaRef? = null
         posterUrl = media.posterUrl,
         releaseDate = media.releaseDate,
         overview = media.overview,
-        addedAt = addedAt
+        addedAt = addedAt,
+        progress = progressRow.toDomainProgress(media.mediaType)
+    )
+}
+
+private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType): LibraryProgress = when {
+    this == null -> LibraryProgress.Unavailable
+    mediaType == MediaType.MOVIE -> LibraryProgress.Movie(
+        movieWatchedAt?.let(MovieWatchState::Watched) ?: MovieWatchState.Unwatched
+    )
+    trackableEpisodes == 0 -> LibraryProgress.Unavailable
+    else -> LibraryProgress.Series(
+        SeriesProgress(
+            watchedEpisodes = watchedEpisodes,
+            trackableEpisodes = trackableEpisodes,
+            completedSeasons = completedSeasons,
+            trackableSeasons = trackableSeasons,
+            isComplete = watchedEpisodes == trackableEpisodes
+        )
     )
 }
 

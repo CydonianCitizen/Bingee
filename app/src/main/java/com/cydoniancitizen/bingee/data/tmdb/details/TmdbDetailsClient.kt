@@ -5,21 +5,25 @@ import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
 import com.cydoniancitizen.bingee.data.tmdb.executeTmdbRequest
+import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonSummaryMapper
 import javax.inject.Inject
 
+internal data class TmdbMediaDetailsPayload(val details: MediaDetails, val seasons: List<Season> = emptyList())
+
 internal interface TmdbDetailsRemoteDataSource {
-    suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<MediaDetails>
+    suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<TmdbMediaDetailsPayload>
 }
 
 internal class TmdbDetailsClient @Inject constructor(
     private val credentialStore: TmdbCredentialStore,
     private val service: TmdbDetailsService
 ) : TmdbDetailsRemoteDataSource {
-    override suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<MediaDetails> {
+    override suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<TmdbMediaDetailsPayload> {
         if (reference.source != MediaSource.TMDB) return AppResult.Failure(AppError.UnsupportedData)
         val providerId = reference.externalId.trim().toLongOrNull()?.takeIf { it > 0 }
             ?: return AppResult.Failure(AppError.InvalidInput)
@@ -33,13 +37,19 @@ internal class TmdbDetailsClient @Inject constructor(
                 request = {
                     service.movieDetails(authorization, providerId, MediaSearchQuery.DEFAULT_LANGUAGE)
                 },
-                transform = { requireNotNull(TmdbMovieDetailsMapper.map(it)) }
+                transform = { TmdbMediaDetailsPayload(requireNotNull(TmdbMovieDetailsMapper.map(it))) }
             )
             MediaType.SERIES -> executeTmdbRequest(
                 request = {
                     service.tvDetails(authorization, providerId, MediaSearchQuery.DEFAULT_LANGUAGE)
                 },
-                transform = { requireNotNull(TmdbTvDetailsMapper.map(it)) }
+                transform = {
+                    val details = requireNotNull(TmdbTvDetailsMapper.map(it))
+                    TmdbMediaDetailsPayload(
+                        details = details,
+                        seasons = TmdbSeasonSummaryMapper.mapAll(details.externalRef, it.seasons)
+                    )
+                }
             )
         }
     }
