@@ -7,14 +7,19 @@ import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.Genre
+import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSearchPage
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.model.SeasonProgress
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import java.time.Duration
 import java.time.Instant
@@ -198,4 +203,31 @@ object FakeMediaData {
             totalPages = 2,
             totalResults = 3
         )
+
+    val libraryEntries = listOf(
+        LibraryEntry(
+            mediaRef = movieRef,
+            mediaType = MediaType.MOVIE,
+            title = movieDetails.title,
+            originalTitle = movieDetails.originalTitle,
+            addedAt = fixedNow,
+            progress = LibraryProgress.Movie(MovieWatchState.Unwatched),
+            personalRating = PersonalRating(10)
+        ),
+        LibraryEntry(
+            mediaRef = seriesRef,
+            mediaType = MediaType.SERIES,
+            title = seriesDetails.title,
+            addedAt = fixedNow.minusSeconds(3600),
+            progress = LibraryProgress.Series(SeriesProgress(4, 10, 1, 3, false)),
+            personalRating = PersonalRating(1)
+        ),
+        LibraryEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "404"),
+            mediaType = MediaType.SERIES,
+            title = "Series With Progress Unavailable",
+            addedAt = fixedNow.minusSeconds(7200),
+            progress = LibraryProgress.Unavailable
+        )
+    )
 }

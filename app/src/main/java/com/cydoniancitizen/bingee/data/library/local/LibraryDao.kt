@@ -30,22 +30,23 @@ internal abstract class LibraryDao {
         SELECT media_entries.*, library_entries.added_at AS membership_added_at
         FROM media_entries
         INNER JOIN library_entries USING(local_media_id)
-        ORDER BY library_entries.added_at DESC, media_entries.title COLLATE NOCASE ASC
+        WHERE (:mediaType IS NULL OR media_entries.media_type = :mediaType)
+          AND (
+              LOWER(media_entries.title) LIKE :searchPattern ESCAPE '\'
+              OR LOWER(COALESCE(media_entries.original_title, '')) LIKE :searchPattern ESCAPE '\'
+          )
+        ORDER BY library_entries.added_at DESC,
+                 LOWER(media_entries.title) ASC,
+                 media_entries.local_media_id ASC
         """
     )
-    abstract fun observeLibraryItems(): Flow<List<LibraryItemWithRefs>>
+    abstract fun observeLibraryItems(
+        mediaType: MediaType? = null,
+        searchPattern: String = "%"
+    ): Flow<List<LibraryItemWithRefs>>
 
-    @Transaction
-    @Query(
-        """
-        SELECT media_entries.*, library_entries.added_at AS membership_added_at
-        FROM media_entries
-        INNER JOIN library_entries USING(local_media_id)
-        WHERE media_entries.media_type = :mediaType
-        ORDER BY library_entries.added_at DESC, media_entries.title COLLATE NOCASE ASC
-        """
-    )
-    abstract fun observeLibraryItems(mediaType: MediaType): Flow<List<LibraryItemWithRefs>>
+    @Query("SELECT COUNT(*) FROM library_entries")
+    abstract fun observeLibraryEntryCount(): Flow<Int>
 
     @Transaction
     @Query(

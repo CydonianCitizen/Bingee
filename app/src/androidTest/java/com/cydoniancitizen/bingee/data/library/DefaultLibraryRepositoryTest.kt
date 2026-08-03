@@ -6,11 +6,14 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
+import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
@@ -43,6 +46,7 @@ class DefaultLibraryRepositoryTest {
         repository =
             DefaultLibraryRepository(
                 database.libraryDao(),
+                database.ratingDao(),
                 Clock.fixed(now, ZoneOffset.UTC)
             )
     }
@@ -64,10 +68,13 @@ class DefaultLibraryRepositoryTest {
         assertEquals(now, entry.addedAt)
         assertEquals(AppResult.Success(true), repository.isInLibrary(result.externalRef))
         assertEquals(AppResult.Success(setOf(result.externalRef)), repository.observeMembershipRefs().first())
-        assertEquals(AppResult.Success(listOf(entry)), repository.observeEntries(MediaType.MOVIE).first())
+        assertEquals(
+            AppResult.Success(listOf(entry)),
+            repository.observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.MOVIES)).first()
+        )
         assertEquals(
             AppResult.Success(emptyList<LibraryEntry>()),
-            repository.observeEntries(MediaType.SERIES).first()
+            repository.observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.TV_SERIES)).first()
         )
     }
 
@@ -179,6 +186,26 @@ class DefaultLibraryRepositoryTest {
             now,
             database.seriesDao().observeSeason(MediaSource.TMDB, "100", "11").first()!!
                 .episodes.first().progress?.watchedAt
+        )
+    }
+
+    @Test
+    fun ratingSurvivesRemovalAndReAddAndAppearsInLibraryProjection() = runBlocking {
+        val result = mediaResult()
+        repository.add(result)
+        database.ratingDao().setRating(MediaSource.TMDB, "42", 9, now)
+
+        assertEquals(
+            PersonalRating(9),
+            (repository.observeEntries().first() as AppResult.Success).value.single().personalRating
+        )
+        repository.remove(result.externalRef)
+        assertEquals(0, (repository.observeEntries().first() as AppResult.Success).value.size)
+        repository.add(result.externalRef)
+
+        assertEquals(
+            PersonalRating(9),
+            (repository.observeEntries().first() as AppResult.Success).value.single().personalRating
         )
     }
 

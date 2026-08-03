@@ -2,8 +2,10 @@ package com.cydoniancitizen.bingee.debug
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.organizeLibraryEntries
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
@@ -19,9 +21,11 @@ class FakeLibraryRepository(
 ) : LibraryRepository {
     private val entries = MutableStateFlow(initialEntries)
 
-    override fun observeEntries(mediaType: MediaType?): Flow<AppResult<List<LibraryEntry>>> = entries.map { current ->
-        AppResult.Success(current.filter { mediaType == null || it.mediaType == mediaType })
+    override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> = entries.map { current ->
+        AppResult.Success(organizeLibraryEntries(current, query))
     }
+
+    override fun observeEntryCount(): Flow<AppResult<Int>> = entries.map { AppResult.Success(it.size) }
 
     override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
         entries.map { current -> AppResult.Success(current.firstOrNull { it.mediaRef == ref }) }

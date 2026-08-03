@@ -81,8 +81,8 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
-    fun migrateOneThroughThreePreservesCanonicalRowsAndValidatesFinalSchema() {
-        helper.createDatabase(V1_TO_V3_DB, 1).apply {
+    fun migrateOneThroughFourPreservesCanonicalRowsAndValidatesFinalSchema() {
+        helper.createDatabase(V1_TO_V4_DB, 1).apply {
             execSQL(
                 "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
                     "overview, poster_url, release_date, created_at, metadata_updated_at) " +
@@ -91,21 +91,92 @@ class BingeeDatabaseMigrationTest {
             )
             execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
             execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
+                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
+                    "(2, 'MOVIE', 'Movie', NULL, NULL, NULL, '2021-01-01', " +
+                    "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '303')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T11:00:00Z')")
             close()
         }
 
         val migrated = helper.runMigrationsAndValidate(
-            V1_TO_V3_DB,
-            3,
+            V1_TO_V4_DB,
+            4,
             true,
             MIGRATION_1_2,
-            MIGRATION_2_3
+            MIGRATION_2_3,
+            MIGRATION_3_4
         )
 
-        assertEquals(1, migrated.count("media_entries"))
-        assertEquals(1, migrated.count("external_refs"))
-        assertEquals(1, migrated.count("library_entries"))
+        assertEquals(2, migrated.count("media_entries"))
+        assertEquals(2, migrated.count("external_refs"))
+        assertEquals(2, migrated.count("library_entries"))
         assertNewMilestoneSixTablesEmpty(migrated)
+        assertEquals(0, migrated.count("media_ratings"))
+        migrated.close()
+    }
+
+    @Test
+    fun migrateThreeToFourPreservesAllVersionThreeDataAndCreatesEmptyRatings() {
+        helper.createDatabase(V3_TO_V4_DB, 3).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
+                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
+                    "(1, 'SERIES', 'Series', 'Original', 'Overview', NULL, '2020-01-01', " +
+                    "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
+                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
+                    "(2, 'MOVIE', 'Movie', NULL, NULL, NULL, '2021-01-01', " +
+                    "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '303')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T11:00:00Z')")
+            execSQL(
+                "INSERT INTO media_details(local_media_id, backdrop_url, production_status, original_language, " +
+                    "runtime_minutes, episode_runtime_minutes, number_of_seasons, number_of_episodes, " +
+                    "details_fetched_at) " +
+                    "VALUES(1, NULL, 'ENDED', 'en', NULL, 50, 1, 1, '2026-08-03T10:00:00Z')"
+            )
+            execSQL("INSERT INTO media_genres(local_media_id, genre_order, name) VALUES(1, 0, 'Drama')")
+            execSQL(
+                "INSERT INTO seasons(local_season_id, local_media_id, source, external_id, season_number, name, " +
+                    "overview, poster_url, air_date, episode_count, metadata_updated_at, episodes_fetched_at) " +
+                    "VALUES(11, 1, 'TMDB', '11', 1, 'Season 1', NULL, NULL, NULL, 1, " +
+                    "'2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z')"
+            )
+            execSQL(
+                "INSERT INTO episodes(local_episode_id, local_season_id, source, external_id, episode_number, title, " +
+                    "overview, air_date, runtime_minutes, still_url, metadata_updated_at) " +
+                    "VALUES(101, 11, 'TMDB', '101', 1, 'Episode', NULL, NULL, 50, NULL, '2026-08-03T10:00:00Z')"
+            )
+            execSQL(
+                "INSERT INTO episode_watch_progress(local_episode_id, watched_at) VALUES(101, '2026-08-03T11:00:00Z')"
+            )
+            execSQL("INSERT INTO movie_watch_progress(local_media_id, watched_at) VALUES(2, '2026-08-03T11:00:00Z')")
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(V3_TO_V4_DB, 4, true, MIGRATION_3_4)
+
+        listOf("media_entries", "external_refs", "library_entries").forEach {
+            assertEquals(2, migrated.count(it))
+        }
+        listOf(
+            "media_details",
+            "media_genres",
+            "seasons",
+            "episodes",
+            "episode_watch_progress"
+        ).forEach { assertEquals(1, migrated.count(it)) }
+        assertEquals(1, migrated.count("movie_watch_progress"))
+        assertEquals(0, migrated.count("media_ratings"))
         migrated.close()
     }
 
@@ -159,6 +230,7 @@ class BingeeDatabaseMigrationTest {
     private companion object {
         const val TEST_DB = "bingee-migration-1-2"
         const val V2_TO_V3_DB = "bingee-migration-2-3"
-        const val V1_TO_V3_DB = "bingee-migration-1-3"
+        const val V1_TO_V4_DB = "bingee-migration-1-4"
+        const val V3_TO_V4_DB = "bingee-migration-3-4"
     }
 }

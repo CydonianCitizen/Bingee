@@ -115,3 +115,20 @@ internal val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+internal val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS media_ratings (
+                local_media_id INTEGER NOT NULL,
+                rating_value INTEGER NOT NULL,
+                rated_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(local_media_id),
+                FOREIGN KEY(local_media_id) REFERENCES media_entries(local_media_id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+    }
+}

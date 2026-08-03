@@ -47,7 +47,7 @@ SearchScreen/LibraryScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v3)
+                           LibraryDao -> Room bingee.db (v4)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -69,6 +69,8 @@ MediaDetailsViewModel -> SeriesRepository -> SeriesDao -> seasons + episodes
 MediaDetailsViewModel -> WatchProgressRepository -> WatchProgressDao
                                                    |-> episode_watch_progress
                                                    '-> movie_watch_progress
+
+MediaDetailsViewModel -> RatingRepository -> RatingDao -> media_ratings
 ~~~
 
 - core/model and core/result are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.
@@ -93,19 +95,22 @@ Provider IDs use ExternalMediaRef(source, externalId). A raw ID is never a globa
 - State contains structured AppError, never raw exceptions or infrastructure messages.
 - Empty shell screens do not receive ViewModels until they own state or behavior.
 
-Production Search state distinguishes credential availability, idle/loading/empty/error, loaded pages, next-page loading/error, pagination end, observed local membership, and pending local actions. Existing results remain visible while another page loads or fails. Library state distinguishes loading/empty/error/entries, structural filter, pending removals, and derived local progress. Details use sealed title, movie-progress, series-content, and per-season load substates. Per-episode and per-season pending sets avoid unrelated blocking. Cached content remains visible during refresh and after refresh failure. Debug previews render fixed states; none is referenced by production navigation.
+Production Search state distinguishes credential availability, idle/loading/empty/error, loaded pages, next-page loading/error, pagination end, observed local membership, and pending local actions. Existing results remain visible while another page loads or fails. Library state owns an in-memory query, media/state filters, sort, result count, empty/no-match distinction, pending removals, ratings, and derived progress. One `flatMapLatest` observation responds to query changes; a separate count Flow distinguishes an empty Library from filtered-out results. Details use sealed title, rating, movie-progress, series-content, and per-season load substates. Per-episode and per-season pending sets avoid unrelated blocking. Cached content remains visible during refresh and after refresh failure. Debug previews render fixed states; none is referenced by production navigation.
 
 ## Local library
 
-- Room database `bingee.db` is version 3; schema versions 1, 2, and 3 are generated through KSP into `app/schemas/` and version controlled.
+- Room database `bingee.db` is version 4; schema versions 1 through 4 are generated through KSP into `app/schemas/` and version controlled.
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
-- `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction.
+- `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
 - Source/type enums use names, dates use ISO `LocalDate`, and timestamps use UTC `Instant`; malformed values fail safely rather than changing meaning.
 - Version 2 adds one-to-one `media_details` and ordered `media_genres`. Details store only normalized fields and a successful fetch timestamp; no provider DTO/body is stored. Migration 1-to-2 only creates these empty structures, preserving every v1 row and timestamp.
 - Version 3 adds normalized season and episode metadata plus dedicated episode/movie progress rows. Migration 2-to-3 preserves v2 metadata, details, genres, references, membership, and timestamps while creating empty new structures.
+- Version 4 adds one title-level `media_ratings` row per canonical media item. Migration 3-to-4 preserves all v3 data and creates no fabricated ratings. Rating values are validated as integers 1–10 before every DAO write; first/change/identical timestamp behavior follows ADR 0014.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp. No redundant completion, count, fraction, or watched Boolean is persisted.
-- No TMDB token, search query, provider DTO/body, rating, release event, notification, or background-work record is persisted.
+- No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, release event, notification, or background-work record is persisted.
+- Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
+- `media_ratings` is independent of Library membership and watch progress. Removing/re-adding a title, refreshing metadata, changing progress, or removing credentials retains the rating.
 - Every later schema revision requires a version increment, non-destructive migration, new schema export, and migration tests. Destructive fallback is prohibited.
 
 ## Fake strategy
@@ -170,4 +175,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0013. Ratings, background refresh, cache pruning, provider-removal reconciliation, and extra providers remain deferred.
+Accepted decisions are recorded in ADRs 0001–0014. Episode/season ratings, written reviews, custom lists, background refresh, cache pruning, provider-removal reconciliation, and extra providers remain deferred.

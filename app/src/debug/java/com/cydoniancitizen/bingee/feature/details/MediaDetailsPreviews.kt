@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.deriveSeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.debug.FakeMediaData
@@ -15,6 +16,7 @@ private fun MoviePreview() = PreviewState(
     MediaDetailsUiState(
         content = DetailContentState.Content(FakeMediaData.freshMovieDetails),
         isInLibrary = false,
+        rating = DetailRatingState.Ready(PersonalRating(10), selectedValue = 10),
         movieProgress = MovieProgressState.Ready(MovieWatchState.Watched(FakeMediaData.fixedNow))
     )
 )
@@ -83,6 +85,12 @@ private fun UpdatingLargeFontPreview() = PreviewState(
         content = DetailContentState.Content(FakeMediaData.freshMovieDetails),
         isInLibrary = false,
         libraryAction = DetailLibraryActionState.UPDATING,
+        rating = DetailRatingState.Ready(
+            rating = PersonalRating(1),
+            selectedValue = 1,
+            updating = true,
+            error = AppError.LocalStorageFailure
+        ),
         movieProgress = MovieProgressState.Ready(MovieWatchState.Unwatched, updating = true)
     )
 )

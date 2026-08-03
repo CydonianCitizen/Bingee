@@ -19,6 +19,7 @@ import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.model.SeasonProgress
@@ -37,7 +38,7 @@ class MediaDetailsScreenTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun movieDetailsRenderWatchedActionWithoutRatingControls() {
+    fun movieDetailsRenderWatchedActionAndTitleRatingControls() {
         val toggled = AtomicBoolean(false)
         setDetails(
             content(movie()).copy(
@@ -50,7 +51,7 @@ class MediaDetailsScreenTest {
         composeRule.onNodeWithText("Released").assertIsDisplayed()
         composeRule.onNodeWithText("120 min").assertIsDisplayed()
         composeRule.onNodeWithText("Drama, Thriller").assertIsDisplayed()
-        composeRule.onNodeWithText("Rating").assertDoesNotExist()
+        composeRule.onNodeWithText("Personal rating").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Mark watched").performScrollTo().performClick()
         assertTrue(toggled.get())
     }
@@ -86,7 +87,27 @@ class MediaDetailsScreenTest {
         composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Not aired yet").assertIsNotEnabled()
-        composeRule.onNodeWithText("Rating").assertDoesNotExist()
+        composeRule.onNodeWithText("Rate episode").assertDoesNotExist()
+        composeRule.onNodeWithText("Rate season").assertDoesNotExist()
+    }
+
+    @Test
+    fun ratingControlShowsCurrentValueAndExposesSaveAndRemoveActions() {
+        val saved = AtomicBoolean(false)
+        val removed = AtomicBoolean(false)
+        setDetails(
+            content(movie()).copy(
+                rating = DetailRatingState.Ready(PersonalRating(10), selectedValue = 10)
+            ),
+            onSaveRating = { saved.set(true) },
+            onRemoveRating = { removed.set(true) }
+        )
+
+        composeRule.onNodeWithText("10 out of 10").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Save rating").performScrollTo().performClick()
+        composeRule.onNodeWithText("Remove personal rating").performScrollTo().performClick()
+        assertTrue(saved.get())
+        assertTrue(removed.get())
     }
 
     @Test
@@ -141,7 +162,9 @@ class MediaDetailsScreenTest {
         onRetry: () -> Unit = {},
         onToggle: () -> Unit = {},
         onOpenSettings: () -> Unit = {},
-        onToggleMovie: () -> Unit = {}
+        onToggleMovie: () -> Unit = {},
+        onSaveRating: () -> Unit = {},
+        onRemoveRating: () -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
@@ -152,6 +175,8 @@ class MediaDetailsScreenTest {
                     onRetry = onRetry,
                     onToggleLibrary = onToggle,
                     onToggleMovieWatched = onToggleMovie,
+                    onSaveRating = onSaveRating,
+                    onRemoveRating = onRemoveRating,
                     onDismissLibraryError = {},
                     onOpenSettings = onOpenSettings
                 )

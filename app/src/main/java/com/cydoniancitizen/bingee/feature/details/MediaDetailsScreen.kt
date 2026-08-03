@@ -68,6 +68,10 @@ internal fun MediaDetailsScreen(
         onRetrySeason = viewModel::retrySeason,
         onToggleEpisode = viewModel::toggleEpisode,
         onToggleSeasonWatched = viewModel::toggleSeasonWatched,
+        onSelectRating = viewModel::selectRating,
+        onSaveRating = viewModel::setRating,
+        onRemoveRating = viewModel::removeRating,
+        onDismissRatingError = viewModel::dismissRatingError,
         onDismissLibraryError = viewModel::dismissLibraryError,
         onDismissProgressError = viewModel::dismissProgressError,
         onOpenSettings = onOpenSettings,
@@ -87,6 +91,10 @@ internal fun MediaDetailsContent(
     onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
     onToggleEpisode: (com.cydoniancitizen.bingee.core.model.TrackedEpisode) -> Unit = {},
     onToggleSeasonWatched: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
+    onSelectRating: (Int) -> Unit = {},
+    onSaveRating: () -> Unit = {},
+    onRemoveRating: () -> Unit = {},
+    onDismissRatingError: () -> Unit = {},
     onDismissLibraryError: () -> Unit,
     onDismissProgressError: () -> Unit = {},
     onOpenSettings: () -> Unit,
@@ -129,11 +137,16 @@ internal fun MediaDetailsContent(
                 movieProgress = state.movieProgress,
                 series = state.series,
                 progressError = state.progressError,
+                rating = state.rating,
                 onToggleMovieWatched = onToggleMovieWatched,
                 onToggleSeasonExpanded = onToggleSeasonExpanded,
                 onRetrySeason = onRetrySeason,
                 onToggleEpisode = onToggleEpisode,
                 onToggleSeasonWatched = onToggleSeasonWatched,
+                onSelectRating = onSelectRating,
+                onSaveRating = onSaveRating,
+                onRemoveRating = onRemoveRating,
+                onDismissRatingError = onDismissRatingError,
                 onDismissLibraryError = onDismissLibraryError,
                 onDismissProgressError = onDismissProgressError,
                 onOpenSettings = onOpenSettings
@@ -173,12 +186,17 @@ private fun DetailBody(
     movieProgress: MovieProgressState,
     series: SeriesDetailUiState,
     progressError: AppError?,
+    rating: DetailRatingState,
     onToggleLibrary: () -> Unit,
     onToggleMovieWatched: () -> Unit,
     onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
     onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
     onToggleEpisode: (com.cydoniancitizen.bingee.core.model.TrackedEpisode) -> Unit,
     onToggleSeasonWatched: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
+    onSelectRating: (Int) -> Unit,
+    onSaveRating: () -> Unit,
+    onRemoveRating: () -> Unit,
+    onDismissRatingError: () -> Unit,
     onDismissLibraryError: () -> Unit,
     onDismissProgressError: () -> Unit,
     onOpenSettings: () -> Unit
@@ -265,6 +283,13 @@ private fun DetailBody(
                     }
                 }
             }
+            RatingSection(
+                state = rating,
+                onSelect = onSelectRating,
+                onSave = onSaveRating,
+                onRemove = onRemoveRating,
+                onDismissError = onDismissRatingError
+            )
             if (details.mediaType == MediaType.MOVIE) {
                 MovieProgressSection(movieProgress, onToggleMovieWatched)
             } else {

@@ -11,6 +11,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.model.deriveSeriesProgress
@@ -20,6 +21,7 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
+import com.cydoniancitizen.bingee.domain.repository.RatingRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -71,6 +73,19 @@ internal sealed interface SeasonLoadState {
     data class Error(val error: AppError) : SeasonLoadState
 }
 
+internal sealed interface DetailRatingState {
+    data object Loading : DetailRatingState
+
+    data class Ready(
+        val rating: PersonalRating?,
+        val selectedValue: Int = rating?.value ?: 5,
+        val updating: Boolean = false,
+        val error: AppError? = null
+    ) : DetailRatingState
+
+    data class Error(val error: AppError) : DetailRatingState
+}
+
 internal data class SeriesDetailUiState(
     val content: SeriesContentState = SeriesContentState.NotApplicable,
     val expandedSeasons: Set<ExternalMediaRef> = emptySet(),
@@ -87,7 +102,8 @@ internal data class MediaDetailsUiState(
     val libraryError: AppError? = null,
     val movieProgress: MovieProgressState = MovieProgressState.NotApplicable,
     val series: SeriesDetailUiState = SeriesDetailUiState(),
-    val progressError: AppError? = null
+    val progressError: AppError? = null,
+    val rating: DetailRatingState = DetailRatingState.Loading
 )
 
 @HiltViewModel
@@ -96,7 +112,8 @@ internal class MediaDetailsViewModel @Inject constructor(
     private val detailsRepository: MediaDetailsRepository,
     private val libraryRepository: LibraryRepository,
     private val seriesRepository: SeriesRepository,
-    private val progressRepository: WatchProgressRepository
+    private val progressRepository: WatchProgressRepository,
+    private val ratingRepository: RatingRepository
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MediaDetailsUiState())
     val uiState: StateFlow<MediaDetailsUiState> = mutableUiState.asStateFlow()
@@ -123,6 +140,7 @@ internal class MediaDetailsViewModel @Inject constructor(
             else -> {
                 observeDetails(args)
                 observeMembership(args)
+                observeRating(args.reference)
                 if (args.mediaType == MediaType.MOVIE) {
                     mutableUiState.update { it.copy(movieProgress = MovieProgressState.Loading) }
                     observeMovieProgress(args.reference)
@@ -272,6 +290,33 @@ internal class MediaDetailsViewModel @Inject constructor(
         mutableUiState.update { it.copy(progressError = null) }
     }
 
+    fun selectRating(value: Int) {
+        if (value !in PersonalRating.MIN_VALUE..PersonalRating.MAX_VALUE) {
+            mutableUiState.update { state ->
+                val current = state.rating as? DetailRatingState.Ready ?: return@update state
+                state.copy(rating = current.copy(error = AppError.InvalidInput))
+            }
+            return
+        }
+        mutableUiState.update { state ->
+            val current = state.rating as? DetailRatingState.Ready ?: return@update state
+            state.copy(rating = current.copy(selectedValue = value, error = null))
+        }
+    }
+
+    fun setRating() = updateRating { args, current ->
+        ratingRepository.setRating(args.reference, PersonalRating(current.selectedValue))
+    }
+
+    fun removeRating() = updateRating { args, _ -> ratingRepository.removeRating(args.reference) }
+
+    fun dismissRatingError() {
+        mutableUiState.update { state ->
+            val current = state.rating as? DetailRatingState.Ready ?: return@update state
+            state.copy(rating = current.copy(error = null))
+        }
+    }
+
     private fun observeDetails(args: DetailRouteArgs) {
         viewModelScope.launch {
             detailsRepository.observeDetails(args.reference).collectLatest { result ->
@@ -335,6 +380,47 @@ internal class MediaDetailsViewModel @Inject constructor(
                         is AppResult.Failure -> it.copy(movieProgress = MovieProgressState.Error(result.error))
                     }
                 }
+            }
+        }
+    }
+
+    private fun observeRating(reference: ExternalMediaRef) {
+        viewModelScope.launch {
+            ratingRepository.observeRating(reference).collectLatest { result ->
+                mutableUiState.update { state ->
+                    when (result) {
+                        is AppResult.Success -> {
+                            val previous = state.rating as? DetailRatingState.Ready
+                            state.copy(
+                                rating = DetailRatingState.Ready(
+                                    rating = result.value,
+                                    selectedValue = result.value?.value ?: previous?.selectedValue ?: 5,
+                                    updating = previous?.updating == true
+                                )
+                            )
+                        }
+                        is AppResult.Failure -> state.copy(rating = DetailRatingState.Error(result.error))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateRating(operation: suspend (DetailRouteArgs, DetailRatingState.Ready) -> AppResult<Unit>) {
+        val args = routeArgs ?: return
+        val current = mutableUiState.value.rating as? DetailRatingState.Ready ?: return
+        if (current.updating) return
+        mutableUiState.update { it.copy(rating = current.copy(updating = true, error = null)) }
+        viewModelScope.launch {
+            val result = operation(args, current)
+            mutableUiState.update { state ->
+                val observed = state.rating as? DetailRatingState.Ready ?: return@update state
+                state.copy(
+                    rating = observed.copy(
+                        updating = false,
+                        error = (result as? AppResult.Failure)?.error
+                    )
+                )
             }
         }
     }

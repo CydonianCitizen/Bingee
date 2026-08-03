@@ -6,11 +6,13 @@ import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
 import com.cydoniancitizen.bingee.data.library.local.LibraryItemWithRefs
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaRatingEntity
 import java.time.Instant
 
 internal fun MediaSearchResult.toMediaEntity(now: Instant): MediaEntity = MediaEntity(
@@ -26,7 +28,8 @@ internal fun MediaSearchResult.toMediaEntity(now: Instant): MediaEntity = MediaE
 
 internal fun LibraryItemWithRefs.toDomain(
     preferredRef: ExternalMediaRef? = null,
-    progressRow: LibraryDao.LibraryProgressRow? = null
+    progressRow: LibraryDao.LibraryProgressRow? = null,
+    rating: MediaRatingEntity? = null
 ): LibraryEntry {
     val refs = externalRefs.map(ExternalRefEntity::toDomain)
     require(refs.isNotEmpty()) { "Persisted library item has no external reference" }
@@ -42,7 +45,8 @@ internal fun LibraryItemWithRefs.toDomain(
         releaseDate = media.releaseDate,
         overview = media.overview,
         addedAt = addedAt,
-        progress = progressRow.toDomainProgress(media.mediaType)
+        progress = progressRow.toDomainProgress(media.mediaType),
+        personalRating = rating?.let { PersonalRating(it.ratingValue) }
     )
 }
 

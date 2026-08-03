@@ -4,30 +4,30 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
-import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
+import com.cydoniancitizen.bingee.core.model.LibraryQuery
+import com.cydoniancitizen.bingee.core.model.LibrarySort
+import com.cydoniancitizen.bingee.core.model.LibraryStateFilter
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-internal enum class LibraryFilter(val mediaType: MediaType?) {
-    ALL(null),
-    MOVIES(MediaType.MOVIE),
-    TV_SERIES(MediaType.SERIES)
-}
 
 internal sealed interface LibraryContentState {
     data object Loading : LibraryContentState
 
     data object Empty : LibraryContentState
+
+    data object NoResults : LibraryContentState
 
     data class Error(val error: AppError) : LibraryContentState
 
@@ -35,30 +35,49 @@ internal sealed interface LibraryContentState {
 }
 
 internal data class LibraryUiState(
-    val filter: LibraryFilter = LibraryFilter.ALL,
+    val query: LibraryQuery = LibraryQuery(),
     val content: LibraryContentState = LibraryContentState.Loading,
+    val resultCount: Int = 0,
+    val totalEntryCount: Int? = null,
     val pendingRemovals: Set<ExternalMediaRef> = emptySet(),
     val actionError: AppError? = null
 )
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 internal class LibraryViewModel @Inject constructor(private val libraryRepository: LibraryRepository) : ViewModel() {
     private val mutableUiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = mutableUiState.asStateFlow()
-    private var observationJob: Job? = null
+    private val query = MutableStateFlow(LibraryQuery())
+    private val retryTrigger = MutableStateFlow(0)
 
     init {
         observeEntries()
+        observeEntryCount()
     }
 
-    fun onFilterChanged(filter: LibraryFilter) {
-        if (filter == mutableUiState.value.filter) return
-        mutableUiState.update { it.copy(filter = filter) }
-        observeEntries()
+    fun onSearchQueryChanged(value: String) = updateQuery { copy(searchQuery = value) }
+
+    fun clearSearch() = updateQuery { copy(searchQuery = "") }
+
+    fun onMediaFilterChanged(filter: LibraryMediaFilter) = updateQuery {
+        val nextState = if (
+            filter == LibraryMediaFilter.MOVIES &&
+            stateFilter in setOf(LibraryStateFilter.IN_PROGRESS, LibraryStateFilter.PROGRESS_UNAVAILABLE)
+        ) {
+            LibraryStateFilter.ALL
+        } else {
+            stateFilter
+        }
+        copy(mediaFilter = filter, stateFilter = nextState)
     }
+
+    fun onStateFilterChanged(filter: LibraryStateFilter) = updateQuery { copy(stateFilter = filter) }
+
+    fun onSortChanged(sort: LibrarySort) = updateQuery { copy(sort = sort) }
 
     fun retry() {
-        observeEntries()
+        retryTrigger.value += 1
     }
 
     fun remove(entry: LibraryEntry) {
@@ -71,20 +90,7 @@ internal class LibraryViewModel @Inject constructor(private val libraryRepositor
             when (val result = libraryRepository.remove(ref)) {
                 is AppResult.Success ->
                     mutableUiState.update { state ->
-                        val content = state.content
-                        val nextContent =
-                            if (content is LibraryContentState.Entries) {
-                                val remaining = content.items.filterNot { it.mediaRef == ref }
-                                if (remaining.isEmpty()) {
-                                    LibraryContentState.Empty
-                                } else {
-                                    LibraryContentState.Entries(remaining)
-                                }
-                            } else {
-                                content
-                            }
                         state.copy(
-                            content = nextContent,
                             pendingRemovals = state.pendingRemovals - ref
                         )
                     }
@@ -105,28 +111,54 @@ internal class LibraryViewModel @Inject constructor(private val libraryRepositor
     }
 
     private fun observeEntries() {
-        observationJob?.cancel()
-        mutableUiState.update { it.copy(content = LibraryContentState.Loading) }
-        val mediaType = mutableUiState.value.filter.mediaType
-        observationJob =
-            viewModelScope.launch {
-                libraryRepository.observeEntries(mediaType).collectLatest { result ->
+        viewModelScope.launch {
+            combine(query, retryTrigger) { currentQuery, _ -> currentQuery }
+                .flatMapLatest(libraryRepository::observeEntries)
+                .collectLatest { result ->
                     mutableUiState.update { state ->
                         state.copy(
                             content =
                             when (result) {
-                                is AppResult.Success ->
-                                    if (result.value.isEmpty()) {
-                                        LibraryContentState.Empty
-                                    } else {
-                                        LibraryContentState.Entries(result.value)
-                                    }
+                                is AppResult.Success -> result.value.toContent(state.totalEntryCount)
 
                                 is AppResult.Failure -> LibraryContentState.Error(result.error)
+                            },
+                            resultCount = (result as? AppResult.Success)?.value?.size ?: state.resultCount
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun observeEntryCount() {
+        viewModelScope.launch {
+            libraryRepository.observeEntryCount().collectLatest { result ->
+                if (result is AppResult.Success) {
+                    mutableUiState.update { state ->
+                        state.copy(
+                            totalEntryCount = result.value,
+                            content = when {
+                                result.value == 0 -> LibraryContentState.Empty
+                                state.content == LibraryContentState.Empty -> LibraryContentState.NoResults
+                                else -> state.content
                             }
                         )
                     }
                 }
             }
+        }
     }
+
+    private fun updateQuery(transform: LibraryQuery.() -> LibraryQuery) {
+        val updated = query.value.transform()
+        if (updated == query.value) return
+        query.value = updated
+        mutableUiState.update { it.copy(query = updated, content = LibraryContentState.Loading) }
+    }
+}
+
+private fun List<LibraryEntry>.toContent(totalEntryCount: Int?): LibraryContentState = when {
+    isNotEmpty() -> LibraryContentState.Entries(this)
+    totalEntryCount == 0 -> LibraryContentState.Empty
+    else -> LibraryContentState.NoResults
 }

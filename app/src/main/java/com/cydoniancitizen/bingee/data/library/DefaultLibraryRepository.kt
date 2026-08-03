@@ -3,12 +3,15 @@ package com.cydoniancitizen.bingee.data.library
 import android.database.sqlite.SQLiteException
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
-import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.applyLibraryStateAndSort
+import com.cydoniancitizen.bingee.core.model.normalizeLibrarySearch
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
+import com.cydoniancitizen.bingee.data.library.local.RatingDao
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Clock
 import java.time.Instant
@@ -24,20 +27,34 @@ import kotlinx.coroutines.flow.map
 @Singleton
 internal class DefaultLibraryRepository @Inject constructor(
     private val libraryDao: LibraryDao,
+    private val ratingDao: RatingDao,
     private val clock: Clock
 ) : LibraryRepository {
-    override fun observeEntries(mediaType: MediaType?): Flow<AppResult<List<LibraryEntry>>> {
-        val source =
-            if (mediaType == null) {
-                libraryDao.observeLibraryItems()
-            } else {
-                libraryDao.observeLibraryItems(mediaType)
+    override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> {
+        val items = libraryDao.observeLibraryItems(
+            query.mediaFilter.mediaType,
+            query.searchQuery.toSqlLikePattern()
+        )
+        return combine(
+            items,
+            libraryDao.observeLibraryProgress(LocalDate.now(clock)),
+            ratingDao.observeActiveLibraryRatings()
+        ) { rows, progress, ratings ->
+            val progressByMedia = progress.associateBy { it.localMediaId }
+            val ratingsByMedia = ratings.associateBy { it.localMediaId }
+            val entries = rows.map { row ->
+                val localMediaId = row.media.localMediaId
+                row.toDomain(
+                    progressRow = progressByMedia[localMediaId],
+                    rating = ratingsByMedia[localMediaId]
+                )
             }
-        return combine(source, libraryDao.observeLibraryProgress(LocalDate.now(clock))) { rows, progress ->
-            val byMedia = progress.associateBy { it.localMediaId }
-            rows.map { it.toDomain(progressRow = byMedia[it.media.localMediaId]) }
+            applyLibraryStateAndSort(entries, query)
         }.asPersistenceResult { it }
     }
+
+    override fun observeEntryCount(): Flow<AppResult<Int>> =
+        libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
 
     override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> = libraryDao
         .observeLibraryItem(ref.source, ref.normalizedExternalId())
@@ -116,6 +133,18 @@ internal class DefaultLibraryRepository @Inject constructor(
         withNormalizedExternalId(ref) { externalId ->
             persistenceRead { libraryDao.isInLibrary(ref.source, externalId) }
         }
+}
+
+internal fun String.toSqlLikePattern(): String {
+    val normalized = normalizeLibrarySearch(this)
+    if (normalized.isEmpty()) return "%"
+    val escaped = buildString(normalized.length) {
+        normalized.forEach { character ->
+            if (character == '\\' || character == '%' || character == '_') append('\\')
+            append(character)
+        }
+    }
+    return "%$escaped%"
 }
 
 private data class PreparedLibraryAdd(val ref: ExternalMediaRef, val media: MediaEntity, val addedAt: Instant)

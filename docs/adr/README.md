@@ -22,3 +22,4 @@ ADRs capture durable decisions that affect Bingee''s architecture or contributio
 - 0011: Room v1 and provider-aware local library persistence
 - 0012: cache-first TMDB details and Room v2
 - 0013: Room v3 seasons, episodes, and local watch progress
+- 0014: Room v4 title ratings and local Library organization

@@ -12,9 +12,12 @@ data class LibraryEntry(
     val releaseDate: LocalDate? = null,
     val overview: String? = null,
     val addedAt: Instant,
-    val progress: LibraryProgress = LibraryProgress.Unavailable
+    val progress: LibraryProgress = LibraryProgress.Unavailable,
+    val personalRating: PersonalRating? = null
 ) {
     init {
         require(title.isNotBlank()) { "Library title must not be blank" }
     }
+
+    val libraryState: LibraryState get() = progress.deriveLibraryState()
 }

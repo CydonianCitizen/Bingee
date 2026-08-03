@@ -8,11 +8,13 @@ import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.model.SeasonProgress
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
@@ -21,6 +23,7 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
+import com.cydoniancitizen.bingee.domain.repository.RatingRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
@@ -207,18 +210,77 @@ class MediaDetailsViewModelTest {
             assertEquals(listOf(true), details.refreshes.map { it.third })
         }
 
+    @Test
+    fun ratingSetUpdateIdenticalAndRemoveRemainIndependent() = runTest(mainDispatcherRule.dispatcher) {
+        val rating = FakeRatingRepository()
+        val library = FakeLibraryRepository(member = false)
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            args(),
+            FakeDetailsRepository(cached(CacheFreshness.FRESH)),
+            library,
+            progress = progress,
+            rating = rating
+        )
+        runCurrent()
+
+        viewModel.selectRating(1)
+        viewModel.setRating()
+        runCurrent()
+        assertEquals(PersonalRating(1), (viewModel.uiState.value.rating as DetailRatingState.Ready).rating)
+        viewModel.selectRating(10)
+        viewModel.setRating()
+        runCurrent()
+        viewModel.setRating()
+        runCurrent()
+        viewModel.removeRating()
+        runCurrent()
+
+        assertEquals(listOf("set:1", "set:10", "set:10", "remove"), rating.actions)
+        assertEquals(null, (viewModel.uiState.value.rating as DetailRatingState.Ready).rating)
+        assertEquals(false, viewModel.uiState.value.isInLibrary)
+        assertTrue(progress.actions.isEmpty())
+    }
+
+    @Test
+    fun invalidOrFailedRatingKeepsDetailContent() = runTest(mainDispatcherRule.dispatcher) {
+        val rating = FakeRatingRepository(failure = AppError.LocalStorageFailure)
+        val viewModel = viewModel(
+            args(),
+            FakeDetailsRepository(cached(CacheFreshness.FRESH)),
+            rating = rating
+        )
+        runCurrent()
+        viewModel.selectRating(0)
+        assertEquals(
+            AppError.InvalidInput,
+            (viewModel.uiState.value.rating as DetailRatingState.Ready).error
+        )
+        viewModel.selectRating(5)
+        viewModel.setRating()
+        runCurrent()
+
+        assertEquals(
+            AppError.LocalStorageFailure,
+            (viewModel.uiState.value.rating as DetailRatingState.Ready).error
+        )
+        assertTrue(viewModel.uiState.value.content is DetailContentState.Content)
+    }
+
     private fun viewModel(
         state: SavedStateHandle,
         details: FakeDetailsRepository,
         library: FakeLibraryRepository = FakeLibraryRepository(),
         series: FakeSeriesRepository = FakeSeriesRepository(),
-        progress: FakeWatchProgressRepository = FakeWatchProgressRepository()
+        progress: FakeWatchProgressRepository = FakeWatchProgressRepository(),
+        rating: FakeRatingRepository = FakeRatingRepository()
     ) = MediaDetailsViewModel(
         state,
         details,
         library,
         series,
-        progress
+        progress,
+        rating
     )
 
     private fun args(source: MediaSource = MediaSource.TMDB, mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(
@@ -282,8 +344,19 @@ class MediaDetailsViewModelTest {
         LibraryRepository {
         private val entry = MutableStateFlow(if (member) libraryEntry() else null)
         val actions = mutableListOf<String>()
-        override fun observeEntries(mediaType: MediaType?): Flow<AppResult<List<LibraryEntry>>> =
+        override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             entry.map { AppResult.Success(listOfNotNull(it)) }
+        override fun observeEntryCount(): Flow<AppResult<Int>> = entry.map {
+            AppResult.Success(
+                if (it ==
+                    null
+                ) {
+                    0
+                } else {
+                    1
+                }
+            )
+        }
         override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
             entry.map { AppResult.Success(it) }
         override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
@@ -352,6 +425,28 @@ class MediaDetailsViewModelTest {
 
         private fun success(action: String): AppResult<Unit> {
             actions += action
+            return AppResult.Success(Unit)
+        }
+    }
+
+    private class FakeRatingRepository(initial: PersonalRating? = null, private val failure: AppError? = null) :
+        RatingRepository {
+        private val rating = MutableStateFlow<AppResult<PersonalRating?>>(AppResult.Success(initial))
+        val actions = mutableListOf<String>()
+
+        override fun observeRating(reference: ExternalMediaRef): Flow<AppResult<PersonalRating?>> = rating
+
+        override suspend fun setRating(reference: ExternalMediaRef, rating: PersonalRating): AppResult<Unit> {
+            actions += "set:${rating.value}"
+            failure?.let { return AppResult.Failure(it) }
+            this.rating.value = AppResult.Success(rating)
+            return AppResult.Success(Unit)
+        }
+
+        override suspend fun removeRating(reference: ExternalMediaRef): AppResult<Unit> {
+            actions += "remove"
+            failure?.let { return AppResult.Failure(it) }
+            rating.value = AppResult.Success(null)
             return AppResult.Success(Unit)
         }
     }

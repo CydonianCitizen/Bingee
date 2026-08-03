@@ -1,15 +1,21 @@
 package com.cydoniancitizen.bingee.feature.library
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -18,45 +24,54 @@ import org.junit.Rule
 import org.junit.Test
 
 class LibraryScreenTest {
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun emptyLibraryExplainsOfflineLocalWorkflow() {
+    fun emptyAndNoMatchingStatesAreDistinct() {
         setLibrary(LibraryUiState(content = LibraryContentState.Empty))
-
         composeRule.onNodeWithText("Your library is empty").assertIsDisplayed()
-        composeRule
-            .onNodeWithText("Add movies or TV series from Search. Saved items remain available offline.")
-            .assertIsDisplayed()
+
+        setLibrary(LibraryUiState(content = LibraryContentState.NoResults, totalEntryCount = 1))
+        composeRule.onNodeWithText("No matching titles").assertIsDisplayed()
     }
 
     @Test
-    fun filtersAndRemoveAreExplicitActionsWithoutDetailNavigation() {
-        val selectedFilter = AtomicReference<LibraryFilter?>(null)
-        val removed = AtomicReference<LibraryEntry?>(null)
+    fun searchMediaFilterRatingAndRemoveAreAccessible() {
+        val search = AtomicReference("")
+        val media = AtomicReference<LibraryMediaFilter>()
+        val removed = AtomicReference<LibraryEntry>()
         val entry = entry()
         setLibrary(
-            state = LibraryUiState(content = LibraryContentState.Entries(listOf(entry))),
-            onFilterChanged = selectedFilter::set,
+            state = LibraryUiState(
+                content = LibraryContentState.Entries(listOf(entry)),
+                resultCount = 1,
+                totalEntryCount = 1
+            ),
+            onSearch = search::set,
+            onMedia = media::set,
             onRemove = removed::set
         )
 
-        composeRule.onNodeWithText("Arrival").assertIsDisplayed()
-        composeRule.onNodeWithText("Movie").assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).performTextInput("arrival")
         composeRule.onNodeWithText("Movies").performClick()
+        composeRule.onNodeWithText("Personal rating: 10 out of 10").assertIsDisplayed()
         composeRule.onNodeWithText("Remove from library").performClick()
 
-        assertEquals(LibraryFilter.MOVIES, selectedFilter.get())
+        assertEquals("arrival", search.get())
+        assertEquals(LibraryMediaFilter.MOVIES, media.get())
         assertEquals(entry, removed.get())
     }
 
     @Test
-    fun rowOpensDetailsButRemoveActionDoesNotNavigate() {
+    fun rowOpensDetailsButRemoveDoesNotNavigate() {
         val opened = AtomicBoolean(false)
         val removed = AtomicBoolean(false)
         setLibrary(
-            state = LibraryUiState(content = LibraryContentState.Entries(listOf(entry()))),
+            state = LibraryUiState(
+                content = LibraryContentState.Entries(listOf(entry())),
+                resultCount = 1,
+                totalEntryCount = 1
+            ),
             onRemove = { removed.set(true) },
             onOpenDetails = { _, _ -> opened.set(true) }
         )
@@ -71,7 +86,8 @@ class LibraryScreenTest {
 
     private fun setLibrary(
         state: LibraryUiState,
-        onFilterChanged: (LibraryFilter) -> Unit = {},
+        onSearch: (String) -> Unit = {},
+        onMedia: (LibraryMediaFilter) -> Unit = {},
         onRemove: (LibraryEntry) -> Unit = {},
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
     ) {
@@ -79,7 +95,11 @@ class LibraryScreenTest {
             BingeeTheme {
                 LibraryContent(
                     state = state,
-                    onFilterChanged = onFilterChanged,
+                    onSearchQueryChanged = onSearch,
+                    onClearSearch = {},
+                    onMediaFilterChanged = onMedia,
+                    onStateFilterChanged = {},
+                    onSortChanged = {},
                     onRetry = {},
                     onRemove = onRemove,
                     onOpenDetails = onOpenDetails,
@@ -94,6 +114,8 @@ class LibraryScreenTest {
         mediaType = MediaType.MOVIE,
         title = "Arrival",
         overview = "First contact.",
-        addedAt = Instant.parse("2026-08-01T10:00:00Z")
+        addedAt = Instant.parse("2026-08-01T10:00:00Z"),
+        progress = LibraryProgress.Movie(MovieWatchState.Unwatched),
+        personalRating = PersonalRating(10)
     )
 }
