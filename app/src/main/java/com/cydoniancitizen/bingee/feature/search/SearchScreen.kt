@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,12 +45,14 @@ import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.ui.toUiError
 
 @Composable
 internal fun SearchScreen(
     onOpenSettings: () -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
@@ -63,6 +66,7 @@ internal fun SearchScreen(
         onLoadNextPage = viewModel::loadNextPage,
         onRetryNextPage = viewModel::retryNextPage,
         onToggleLibrary = viewModel::toggleLibrary,
+        onOpenDetails = onOpenDetails,
         onDismissLibraryError = viewModel::clearLibraryError,
         onOpenSettings = onOpenSettings,
         modifier = modifier
@@ -79,6 +83,7 @@ internal fun SearchContent(
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
     onToggleLibrary: (MediaSearchResult) -> Unit = {},
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
     onDismissLibraryError: () -> Unit = {},
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
@@ -115,6 +120,7 @@ internal fun SearchContent(
                     libraryMembership = state.libraryMembership,
                     pendingLibraryActions = state.pendingLibraryActions,
                     onToggleLibrary = onToggleLibrary,
+                    onOpenDetails = onOpenDetails,
                     onRetryInitial = onRetryInitial,
                     onLoadNextPage = onLoadNextPage,
                     onRetryNextPage = onRetryNextPage,
@@ -220,6 +226,7 @@ private fun SearchBody(
     libraryMembership: Set<ExternalMediaRef>,
     pendingLibraryActions: Set<ExternalMediaRef>,
     onToggleLibrary: (MediaSearchResult) -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     onRetryInitial: () -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
@@ -256,6 +263,7 @@ private fun SearchBody(
                     libraryMembership = libraryMembership,
                     pendingLibraryActions = pendingLibraryActions,
                     onToggleLibrary = onToggleLibrary,
+                    onOpenDetails = onOpenDetails,
                     onLoadNextPage = onLoadNextPage,
                     onRetryNextPage = onRetryNextPage,
                     onOpenSettings = onOpenSettings
@@ -291,6 +299,7 @@ private fun SearchResults(
     libraryMembership: Set<ExternalMediaRef>,
     pendingLibraryActions: Set<ExternalMediaRef>,
     onToggleLibrary: (MediaSearchResult) -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
     onOpenSettings: () -> Unit
@@ -307,7 +316,8 @@ private fun SearchResults(
                 result = result,
                 isInLibrary = result.externalRef in libraryMembership,
                 isLibraryActionPending = result.externalRef in pendingLibraryActions,
-                onToggleLibrary = { onToggleLibrary(result) }
+                onToggleLibrary = { onToggleLibrary(result) },
+                onOpenDetails = { onOpenDetails(result.externalRef, result.mediaType) }
             )
         }
         item {
@@ -371,9 +381,16 @@ internal fun SearchResultItem(
     isInLibrary: Boolean,
     isLibraryActionPending: Boolean,
     onToggleLibrary: () -> Unit,
+    onOpenDetails: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    val openDetailsDescription = stringResource(R.string.open_details, result.title)
+    Card(
+        onClick = onOpenDetails,
+        modifier = modifier.fillMaxWidth().semantics {
+            contentDescription = openDetailsDescription
+        }
+    ) {
         Row(
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
             horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)

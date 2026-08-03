@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.feature.library
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
@@ -10,6 +11,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -49,10 +51,29 @@ class LibraryScreenTest {
         assertEquals(entry, removed.get())
     }
 
+    @Test
+    fun rowOpensDetailsButRemoveActionDoesNotNavigate() {
+        val opened = AtomicBoolean(false)
+        val removed = AtomicBoolean(false)
+        setLibrary(
+            state = LibraryUiState(content = LibraryContentState.Entries(listOf(entry()))),
+            onRemove = { removed.set(true) },
+            onOpenDetails = { _, _ -> opened.set(true) }
+        )
+
+        composeRule.onNodeWithContentDescription("Open details for Arrival").performClick()
+        assertEquals(true, opened.get())
+        opened.set(false)
+        composeRule.onNodeWithText("Remove from library").performClick()
+        assertEquals(true, removed.get())
+        assertEquals(false, opened.get())
+    }
+
     private fun setLibrary(
         state: LibraryUiState,
         onFilterChanged: (LibraryFilter) -> Unit = {},
-        onRemove: (LibraryEntry) -> Unit = {}
+        onRemove: (LibraryEntry) -> Unit = {},
+        onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
     ) {
         composeRule.setContent {
             BingeeTheme {
@@ -61,6 +82,7 @@ class LibraryScreenTest {
                     onFilterChanged = onFilterChanged,
                     onRetry = {},
                     onRemove = onRemove,
+                    onOpenDetails = onOpenDetails,
                     onDismissActionError = {}
                 )
             }

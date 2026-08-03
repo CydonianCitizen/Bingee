@@ -1,0 +1,46 @@
+package com.cydoniancitizen.bingee.data.tmdb.details
+
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaDetails
+import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
+import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
+import com.cydoniancitizen.bingee.data.tmdb.executeTmdbRequest
+import javax.inject.Inject
+
+internal interface TmdbDetailsRemoteDataSource {
+    suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<MediaDetails>
+}
+
+internal class TmdbDetailsClient @Inject constructor(
+    private val credentialStore: TmdbCredentialStore,
+    private val service: TmdbDetailsService
+) : TmdbDetailsRemoteDataSource {
+    override suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<MediaDetails> {
+        if (reference.source != MediaSource.TMDB) return AppResult.Failure(AppError.UnsupportedData)
+        val providerId = reference.externalId.trim().toLongOrNull()?.takeIf { it > 0 }
+            ?: return AppResult.Failure(AppError.InvalidInput)
+        val credential = when (val stored = credentialStore.read()) {
+            is AppResult.Success -> stored.value ?: return AppResult.Failure(AppError.Unauthorized)
+            is AppResult.Failure -> return stored
+        }
+        val authorization = "Bearer ${credential.reveal()}"
+        return when (mediaType) {
+            MediaType.MOVIE -> executeTmdbRequest(
+                request = {
+                    service.movieDetails(authorization, providerId, MediaSearchQuery.DEFAULT_LANGUAGE)
+                },
+                transform = { requireNotNull(TmdbMovieDetailsMapper.map(it)) }
+            )
+            MediaType.SERIES -> executeTmdbRequest(
+                request = {
+                    service.tvDetails(authorization, providerId, MediaSearchQuery.DEFAULT_LANGUAGE)
+                },
+                transform = { requireNotNull(TmdbTvDetailsMapper.map(it)) }
+            )
+        }
+    }
+}

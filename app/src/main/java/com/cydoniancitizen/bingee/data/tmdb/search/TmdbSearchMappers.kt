@@ -6,19 +6,9 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.tmdb.TmdbImageUrlResolver
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
-
-internal object TmdbPosterUrlResolver {
-    const val LIST_SIZE = "w342"
-    private const val BASE_URL = "https://image.tmdb.org/t/p/"
-    private val SUPPORTED_PATH = Regex("/[A-Za-z0-9._-]+\\.(?:jpg|jpeg|png|webp)", RegexOption.IGNORE_CASE)
-
-    fun resolve(path: String?): String? {
-        val normalized = path?.trim()?.takeIf(SUPPORTED_PATH::matches) ?: return null
-        return "$BASE_URL$LIST_SIZE$normalized"
-    }
-}
 
 internal object TmdbMovieSearchMapper {
     fun map(response: TmdbMovieSearchResponseDto, requestedPage: Int): MediaSearchPage = page(
@@ -37,7 +27,7 @@ internal object TmdbMovieSearchMapper {
             mediaType = MediaType.MOVIE,
             title = title,
             originalTitle = distinctOriginal(title, dto.originalTitle),
-            posterUrl = TmdbPosterUrlResolver.resolve(dto.posterPath),
+            posterUrl = TmdbImageUrlResolver.listPoster(dto.posterPath),
             releaseDate = parseDate(dto.releaseDate),
             overview = dto.overview.normalizedOptional()
         )
@@ -61,7 +51,7 @@ internal object TmdbTvSearchMapper {
             mediaType = MediaType.SERIES,
             title = title,
             originalTitle = distinctOriginal(title, dto.originalName),
-            posterUrl = TmdbPosterUrlResolver.resolve(dto.posterPath),
+            posterUrl = TmdbImageUrlResolver.listPoster(dto.posterPath),
             releaseDate = parseDate(dto.firstAirDate),
             overview = dto.overview.normalizedOptional()
         )

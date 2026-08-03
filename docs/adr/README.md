@@ -20,3 +20,4 @@ ADRs capture durable decisions that affect Bingee''s architecture or contributio
 - 0009: TMDB credential configuration
 - 0010: separate TMDB movie and TV search
 - 0011: Room v1 and provider-aware local library persistence
+- 0012: cache-first TMDB details and Room v2

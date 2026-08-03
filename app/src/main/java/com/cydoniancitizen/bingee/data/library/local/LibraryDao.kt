@@ -107,6 +107,17 @@ internal abstract class LibraryDao {
     protected abstract suspend fun getLibraryItem(localMediaId: Long): LibraryItemWithRefs?
 
     @Transaction
+    open suspend fun addExistingToLibrary(
+        source: MediaSource,
+        externalId: String,
+        addedAt: Instant
+    ): LibraryItemWithRefs? {
+        val existing = getMediaByExternalRef(source, externalId) ?: return null
+        insertMembership(LibraryMembershipEntity(existing.localMediaId, addedAt))
+        return getLibraryItem(existing.localMediaId)
+    }
+
+    @Transaction
     open suspend fun addToLibrary(
         candidate: MediaEntity,
         source: MediaSource,

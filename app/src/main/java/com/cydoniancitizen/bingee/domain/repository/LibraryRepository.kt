@@ -16,6 +16,8 @@ interface LibraryRepository {
 
     suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry>
 
+    suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry>
+
     suspend fun remove(ref: ExternalMediaRef): AppResult<Unit>
 
     suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean>

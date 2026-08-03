@@ -81,6 +81,25 @@ internal class DefaultLibraryRepository @Inject constructor(
         }
     }
 
+    override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> =
+        withNormalizedExternalId(ref) { externalId ->
+            try {
+                val row = libraryDao.addExistingToLibrary(ref.source, externalId, clock.instant())
+                    ?: return@withNormalizedExternalId AppResult.Failure(AppError.MissingData)
+                AppResult.Success(row.toDomain(preferredRef = ExternalMediaRef(ref.source, externalId)))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IllegalArgumentException) {
+                AppResult.Failure(AppError.CorruptedData)
+            } catch (_: IllegalStateException) {
+                AppResult.Failure(AppError.CorruptedData)
+            } catch (_: SQLiteException) {
+                AppResult.Failure(AppError.LocalStorageFailure)
+            } catch (_: Exception) {
+                AppResult.Failure(AppError.Unknown)
+            }
+        }
+
     override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = withNormalizedExternalId(ref) { externalId ->
         persistenceRead {
             libraryDao.removeMembership(ref.source, externalId)

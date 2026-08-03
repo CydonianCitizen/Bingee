@@ -10,9 +10,9 @@ The token is not stored in ordinary preferences, Room, navigation arguments, sav
 
 ## Current network behavior
 
-Bingee calls TMDB's `GET /3/authentication` endpoint when the user explicitly validates or retries a credential. Search uses separate `GET /3/search/movie` and `GET /3/search/tv` requests after a 350 ms debounce. Bingee does not validate on every startup and performs no background credential checks.
+Bingee calls TMDB's `GET /3/authentication` endpoint when the user explicitly validates or retries a credential. Search uses separate `GET /3/search/movie` and `GET /3/search/tv` requests after a 350 ms debounce. Details use `GET /3/movie/{movie_id}` or `GET /3/tv/{series_id}` only when cache policy or manual refresh requires it. Bingee does not validate on every startup and performs no background credential checks.
 
-Search query text is held only in current screen memory. Bingee does not log it, persist search history, or cache result pages in long-lived storage. Search responses contain public TMDB metadata only. Poster images are loaded from TMDB's documented image CDN at list size `w342`; Coil owns transient memory and disk caching.
+Search query text is held only in current screen memory. Bingee does not log it, persist search history, or cache result pages in long-lived storage. Normalized public title details and fetch timestamps are cached in Room for offline use; raw provider responses are not persisted. Cached details may belong to Library members or non-members and remain after Library removal. Posters/backdrops use constrained TMDB image URLs; Coil owns image memory/disk caching.
 
 ## TMDB attribution
 

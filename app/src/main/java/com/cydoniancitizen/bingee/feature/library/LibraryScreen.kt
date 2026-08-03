@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,18 +34,24 @@ import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.ui.toUiError
 
 @Composable
-internal fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = hiltViewModel()) {
+internal fun LibraryScreen(
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: LibraryViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LibraryContent(
         state = state,
         onFilterChanged = viewModel::onFilterChanged,
         onRetry = viewModel::retry,
         onRemove = viewModel::remove,
+        onOpenDetails = onOpenDetails,
         onDismissActionError = viewModel::clearActionError,
         modifier = modifier
     )
@@ -56,6 +63,7 @@ internal fun LibraryContent(
     onFilterChanged: (LibraryFilter) -> Unit,
     onRetry: () -> Unit,
     onRemove: (LibraryEntry) -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
     onDismissActionError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -117,7 +125,8 @@ internal fun LibraryContent(
                         LibraryItem(
                             entry = entry,
                             isRemoving = entry.mediaRef in state.pendingRemovals,
-                            onRemove = { onRemove(entry) }
+                            onRemove = { onRemove(entry) },
+                            onOpenDetails = { onOpenDetails(entry.mediaRef, entry.mediaType) }
                         )
                     }
                 }
@@ -152,8 +161,14 @@ private fun LibraryFilters(selected: LibraryFilter, onSelected: (LibraryFilter) 
 }
 
 @Composable
-private fun LibraryItem(entry: LibraryEntry, isRemoving: Boolean, onRemove: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun LibraryItem(entry: LibraryEntry, isRemoving: Boolean, onRemove: () -> Unit, onOpenDetails: () -> Unit) {
+    val openDetailsDescription = stringResource(R.string.open_details, entry.title)
+    Card(
+        onClick = onOpenDetails,
+        modifier = Modifier.fillMaxWidth().semantics {
+            contentDescription = openDetailsDescription
+        }
+    ) {
         Row(
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
             horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)

@@ -172,6 +172,24 @@ class SearchScreenTest {
         composeRule.onNodeWithText("Remove from library").assertIsDisplayed()
     }
 
+    @Test
+    fun rowOpensDetailsButLibraryActionDoesNotNavigate() {
+        val opened = AtomicReference<Pair<ExternalMediaRef, MediaType>?>(null)
+        val toggled = AtomicBoolean(false)
+        setSearch(
+            state = resultsState(NextPageState.End),
+            onToggleLibrary = { toggled.set(true) },
+            onOpenDetails = { ref, type -> opened.set(ref to type) }
+        )
+
+        composeRule.onNodeWithContentDescription("Open details for Fixed Movie").performClick()
+        assertEquals(ExternalMediaRef(MediaSource.TMDB, "1") to MediaType.MOVIE, opened.get())
+        opened.set(null)
+        composeRule.onNodeWithText("Add to library").performClick()
+        assertTrue(toggled.get())
+        assertEquals(null, opened.get())
+    }
+
     private fun resultsState(nextPage: NextPageState) = SearchUiState(
         query = "fixed",
         credentialAvailability = SearchCredentialAvailability.AVAILABLE,
@@ -204,6 +222,7 @@ class SearchScreenTest {
         onLoadNextPage: () -> Unit = {},
         onRetryNextPage: () -> Unit = {},
         onToggleLibrary: (MediaSearchResult) -> Unit = {},
+        onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
         onOpenSettings: () -> Unit = {}
     ) {
         composeRule.setContent {
@@ -217,6 +236,7 @@ class SearchScreenTest {
                     onLoadNextPage = onLoadNextPage,
                     onRetryNextPage = onRetryNextPage,
                     onToggleLibrary = onToggleLibrary,
+                    onOpenDetails = onOpenDetails,
                     onOpenSettings = onOpenSettings
                 )
             }

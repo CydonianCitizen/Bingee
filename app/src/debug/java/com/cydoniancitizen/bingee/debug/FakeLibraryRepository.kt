@@ -47,6 +47,14 @@ class FakeLibraryRepository(
         return AppResult.Success(entry)
     }
 
+    override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> {
+        writeFailure?.let { return AppResult.Failure(it) }
+        val existing = entries.value.firstOrNull { it.mediaRef == ref }
+            ?: return AppResult.Failure(AppError.MissingData)
+        entries.value = entries.value.filterNot { it.mediaRef == ref } + existing
+        return AppResult.Success(existing)
+    }
+
     override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> {
         writeFailure?.let { return AppResult.Failure(it) }
         entries.value = entries.value.filterNot { it.mediaRef == ref }
