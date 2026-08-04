@@ -256,3 +256,29 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
         )
     }
 }
+
+internal val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `portable_preferences` (
+                `singleton_key` INTEGER NOT NULL,
+                `notification_lead_days` INTEGER NOT NULL,
+                `notify_movie_releases` INTEGER NOT NULL,
+                `notify_season_premieres` INTEGER NOT NULL,
+                `notify_episode_airings` INTEGER NOT NULL,
+                `legacy_bridge_completed` INTEGER NOT NULL,
+                PRIMARY KEY(`singleton_key`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO portable_preferences(
+                singleton_key, notification_lead_days, notify_movie_releases,
+                notify_season_premieres, notify_episode_airings, legacy_bridge_completed
+            ) VALUES (1, 1, 1, 1, 1, 0)
+            """.trimIndent()
+        )
+    }
+}

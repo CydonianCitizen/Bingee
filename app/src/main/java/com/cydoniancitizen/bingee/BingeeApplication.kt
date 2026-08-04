@@ -8,6 +8,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.cydoniancitizen.bingee.app.StartupWorkCoordinator
+import com.cydoniancitizen.bingee.data.importexport.BackupShareFileStore
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,9 @@ class BingeeApplication :
     @Inject
     internal lateinit var startupWorkCoordinator: StartupWorkCoordinator
 
+    @Inject
+    internal lateinit var backupShareFileStore: BackupShareFileStore
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val workManagerConfiguration: Configuration
@@ -38,6 +42,7 @@ class BingeeApplication :
 
     override fun onCreate() {
         super.onCreate()
+        backupShareFileStore.cleanupStale()
         applicationScope.launch { startupWorkCoordinator.reconcile() }
     }
 

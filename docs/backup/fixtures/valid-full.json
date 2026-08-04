@@ -1,0 +1,18 @@
+{
+  "formatId": "bingee-backup",
+  "schemaVersion": 1,
+  "exportedAt": "2026-08-04T10:00:00Z",
+  "data": {
+    "media": [
+      {"primaryRef":{"source":"TMDB","externalId":"101"},"externalRefs":[{"source":"TMDB","externalId":"101"}],"mediaType":"MOVIE","title":"Luce — 東京","originalTitle":"Light","overview":"Synthetic movie","posterUrl":null,"releaseDate":"2025-01-02"},
+      {"primaryRef":{"source":"TMDB","externalId":"202"},"externalRefs":[{"source":"TMDB","externalId":"202"}],"mediaType":"SERIES","title":"Series Ω","originalTitle":null,"overview":null,"posterUrl":null,"releaseDate":"2024-03-04"}
+    ],
+    "seasons": [{"mediaRef":{"source":"TMDB","externalId":"202"},"externalRef":{"source":"TMDB","externalId":"202-0"},"seasonNumber":0,"name":"Specials","overview":null,"posterUrl":null,"airDate":"2024-03-05","episodeCount":1}],
+    "episodes": [{"seasonRef":{"source":"TMDB","externalId":"202-0"},"externalRef":{"source":"TMDB","externalId":"202-0-1"},"episodeNumber":1,"title":"第一話","overview":null,"airDate":"2024-03-06","runtimeMinutes":42,"stillUrl":null}],
+    "library": [{"mediaRef":{"source":"TMDB","externalId":"101"},"addedAt":"2026-01-02T03:04:05Z"},{"mediaRef":{"source":"TMDB","externalId":"202"},"addedAt":"2026-01-03T03:04:05Z"}],
+    "movieProgress": [{"mediaRef":{"source":"TMDB","externalId":"101"},"watchedAt":"2026-02-02T03:04:05Z"}],
+    "episodeProgress": [{"episodeRef":{"source":"TMDB","externalId":"202-0-1"},"watchedAt":"2026-02-03T03:04:05Z"}],
+    "ratings": [{"mediaRef":{"source":"TMDB","externalId":"101"},"rating":9,"ratedAt":"2026-02-04T03:04:05Z","updatedAt":"2026-02-04T03:04:05Z"}],
+    "preferences": {"notificationLeadDays":3,"notifyMovieReleases":true,"notifySeasonPremieres":false,"notifyEpisodeAirings":true}
+  }
+}

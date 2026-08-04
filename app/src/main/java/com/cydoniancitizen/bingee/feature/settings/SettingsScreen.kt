@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -42,16 +43,23 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
+import com.cydoniancitizen.bingee.data.importexport.BACKUP_MIME_TYPE
+import com.cydoniancitizen.bingee.data.importexport.BackupFailureKind
 import com.cydoniancitizen.bingee.feature.credential.CredentialEditor
+import java.time.Clock
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 @Composable
 internal fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
-    notificationViewModel: ReleaseNotificationSettingsViewModel = hiltViewModel()
+    notificationViewModel: ReleaseNotificationSettingsViewModel = hiltViewModel(),
+    backupViewModel: BackupViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val notificationState by notificationViewModel.uiState.collectAsStateWithLifecycle()
+    val backupState by backupViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -64,6 +72,12 @@ internal fun SettingsScreen(
         } == true
         notificationViewModel.onPermissionResult(granted, permanentlyDenied)
     }
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(BACKUP_MIME_TYPE)
+    ) { uri -> uri?.let(backupViewModel::saveTo) }
+    val openBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(backupViewModel::importFrom) }
     SettingsContent(
         state = state,
         onInputChanged = viewModel::onInputChanged,
@@ -87,6 +101,15 @@ internal fun SettingsScreen(
         onOpenNotificationSettings = {
             notificationViewModel.openSystemSettings()
         },
+        backupState = backupState,
+        onSaveBackup = {
+            createBackupLauncher.launch("bingee-backup-${LocalDate.now(Clock.systemUTC())}.json")
+        },
+        onShareBackup = backupViewModel::share,
+        onRestoreBackup = { openBackupLauncher.launch(arrayOf(BACKUP_MIME_TYPE, "text/json", "text/plain")) },
+        onConfirmRestore = backupViewModel::confirmRestore,
+        onCancelRestore = backupViewModel::cancelPreview,
+        onDismissBackupFeedback = backupViewModel::dismissFeedback,
         modifier = modifier
     )
 }
@@ -107,6 +130,13 @@ internal fun SettingsContent(
     onSeasonPremieresChanged: (Boolean) -> Unit = {},
     onEpisodeAiringsChanged: (Boolean) -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
+    backupState: BackupUiState = BackupUiState(),
+    onSaveBackup: () -> Unit = {},
+    onShareBackup: () -> Unit = {},
+    onRestoreBackup: () -> Unit = {},
+    onConfirmRestore: () -> Unit = {},
+    onCancelRestore: () -> Unit = {},
+    onDismissBackupFeedback: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -141,6 +171,14 @@ internal fun SettingsContent(
         Text(
             text = stringResource(R.string.credential_remove_explanation),
             style = MaterialTheme.typography.bodyMedium
+        )
+        HorizontalDivider()
+        BackupSection(
+            state = backupState,
+            onSave = onSaveBackup,
+            onShare = onShareBackup,
+            onRestore = onRestoreBackup,
+            onDismiss = onDismissBackupFeedback
         )
         HorizontalDivider()
         NotificationSettingsSection(
@@ -185,6 +223,122 @@ internal fun SettingsContent(
             }
         )
     }
+
+    val preview = backupState.preview
+    if (backupState.operation == BackupOperation.PREVIEW_READY && preview != null) {
+        AlertDialog(
+            onDismissRequest = onCancelRestore,
+            title = { Text(stringResource(R.string.backup_replace_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)) {
+                    Text(
+                        stringResource(
+                            R.string.backup_preview_counts,
+                            preview.mediaCount,
+                            preview.movieCount,
+                            preview.seriesCount
+                        )
+                    )
+                    Text(
+                        stringResource(
+                            R.string.backup_preview_personal_counts,
+                            preview.libraryCount,
+                            preview.watchedMovieCount,
+                            preview.watchedEpisodeCount,
+                            preview.ratingCount
+                        )
+                    )
+                    Text(stringResource(R.string.backup_preview_current_library, preview.currentLibraryCount))
+                    Text(stringResource(R.string.backup_replace_warning))
+                    Text(stringResource(R.string.backup_preserved_warning))
+                    Text(stringResource(R.string.backup_plaintext_warning))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirmRestore) {
+                    Text(stringResource(R.string.backup_replace_local_data))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancelRestore) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun BackupSection(
+    state: BackupUiState,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+    onRestore: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val canStart = state.operation == BackupOperation.IDLE ||
+        state.operation == BackupOperation.SUCCESS ||
+        state.operation == BackupOperation.FAILURE
+    val isBusy = state.operation == BackupOperation.SAVING ||
+        state.operation == BackupOperation.SHARING ||
+        state.operation == BackupOperation.READING ||
+        state.operation == BackupOperation.VALIDATING ||
+        state.operation == BackupOperation.RESTORING
+    Text(
+        text = stringResource(R.string.settings_backup_title),
+        modifier = Modifier.semantics { heading() },
+        style = MaterialTheme.typography.headlineSmall
+    )
+    Text(stringResource(R.string.settings_backup_description))
+    Text(stringResource(R.string.backup_plaintext_warning), style = MaterialTheme.typography.bodySmall)
+    Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)) {
+        Button(onClick = onSave, enabled = canStart) {
+            Text(stringResource(R.string.backup_save))
+        }
+        Button(onClick = onShare, enabled = canStart) {
+            Text(stringResource(R.string.backup_share))
+        }
+    }
+    Button(onClick = onRestore, enabled = canStart) {
+        Text(stringResource(R.string.backup_restore))
+    }
+    if (isBusy) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+    state.failure?.let { failure ->
+        Text(
+            text = stringResource(failure.toStringRes()),
+            color = if (failure == BackupFailureKind.SCHEDULING_WARNING) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.error
+            }
+        )
+        if (state.operation == BackupOperation.FAILURE) {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_dismiss)) }
+        }
+    }
+    if (state.operation == BackupOperation.SUCCESS && state.failure == null) {
+        Text(stringResource(R.string.backup_success))
+    }
+}
+
+private fun BackupFailureKind.toStringRes(): Int = when (this) {
+    BackupFailureKind.UNREADABLE -> R.string.backup_error_unreadable
+    BackupFailureKind.TOO_LARGE -> R.string.backup_error_too_large
+    BackupFailureKind.INVALID_UTF8,
+    BackupFailureKind.MALFORMED_JSON,
+    BackupFailureKind.INVALID_STRUCTURE -> R.string.backup_error_malformed
+    BackupFailureKind.WRONG_FORMAT -> R.string.backup_error_wrong_format
+    BackupFailureKind.MISSING_VERSION -> R.string.backup_error_missing_version
+    BackupFailureKind.UNSUPPORTED_VERSION -> R.string.backup_error_unsupported_version
+    BackupFailureKind.VALIDATION -> R.string.backup_error_validation
+    BackupFailureKind.DUPLICATE_IDENTITY -> R.string.backup_error_duplicate
+    BackupFailureKind.MISSING_REFERENCE -> R.string.backup_error_missing_reference
+    BackupFailureKind.CONFLICTING_REFERENCE -> R.string.backup_error_conflicting_reference
+    BackupFailureKind.WRITE_FAILED -> R.string.backup_error_write
+    BackupFailureKind.TRANSACTION_FAILED -> R.string.backup_error_transaction
+    BackupFailureKind.SCHEDULING_WARNING -> R.string.backup_warning_schedule
 }
 
 @Composable

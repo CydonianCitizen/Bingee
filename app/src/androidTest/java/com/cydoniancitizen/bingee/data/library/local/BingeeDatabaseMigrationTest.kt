@@ -169,6 +169,59 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrateSixToSevenCreatesPortablePreferencesWithoutDeviceEnablement() {
+        helper.createDatabase(V6_TO_V7_DB, 6).close()
+
+        val migrated = helper.runMigrationsAndValidate(V6_TO_V7_DB, 7, true, MIGRATION_6_7)
+
+        assertEquals(1, migrated.count("portable_preferences"))
+        migrated.query(
+            "SELECT notification_lead_days, notify_movie_releases, notify_season_premieres, " +
+                "notify_episode_airings, legacy_bridge_completed FROM portable_preferences"
+        ).use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(1, cursor.getInt(0))
+            assertEquals(1, cursor.getInt(1))
+            assertEquals(1, cursor.getInt(2))
+            assertEquals(1, cursor.getInt(3))
+            assertEquals(0, cursor.getInt(4))
+        }
+        migrated.close()
+    }
+
+    @Test
+    fun migrateOneThroughSevenPreservesExistingRowsAndValidatesFullChain() {
+        helper.createDatabase(V1_TO_V7_DB, 1).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
+                    "release_date, created_at, metadata_updated_at) VALUES(1, 'MOVIE', 'Movie', NULL, NULL, NULL, " +
+                    "'2026-01-01', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '1')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-01-02T00:00:00Z')")
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            V1_TO_V7_DB,
+            7,
+            true,
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7
+        )
+
+        assertEquals(1, migrated.count("media_entries"))
+        assertEquals(1, migrated.count("external_refs"))
+        assertEquals(1, migrated.count("library_entries"))
+        assertEquals(1, migrated.count("portable_preferences"))
+        migrated.close()
+    }
+
+    @Test
     fun migrateFourToFiveBackfillsDatedMetadataAndPreservesPersonalState() {
         helper.createDatabase(V4_TO_V5_DB, 4).apply {
             execSQL(
@@ -347,5 +400,7 @@ class BingeeDatabaseMigrationTest {
         const val V3_TO_V4_DB = "bingee-migration-3-4"
         const val V4_TO_V5_DB = "bingee-migration-4-5"
         const val V5_TO_V6_DB = "bingee-migration-5-6"
+        const val V6_TO_V7_DB = "bingee-migration-6-7"
+        const val V1_TO_V7_DB = "bingee-migration-1-7"
     }
 }

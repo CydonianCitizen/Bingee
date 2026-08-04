@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bingee.app/schema/bingee-backup-v1.schema.json",
+  "title": "Bingee backup v1",
+  "type": "object",
+  "required": ["formatId", "schemaVersion", "exportedAt", "data"],
+  "properties": {
+    "formatId": {"const": "bingee-backup"},
+    "schemaVersion": {"const": 1},
+    "exportedAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "data": {"$ref": "#/$defs/data"}
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "required": ["source", "externalId"],
+      "properties": {"source": {"const": "TMDB"}, "externalId": {"type": "string", "minLength": 1}},
+      "additionalProperties": true
+    },
+    "media": {
+      "type": "object",
+      "required": ["primaryRef", "externalRefs", "mediaType", "title", "originalTitle", "overview", "posterUrl", "releaseDate"],
+      "properties": {
+        "primaryRef": {"$ref": "#/$defs/ref"},
+        "externalRefs": {"type": "array", "items": {"$ref": "#/$defs/ref"}},
+        "mediaType": {"enum": ["MOVIE", "SERIES"]},
+        "title": {"type": "string", "minLength": 1},
+        "originalTitle": {"type": ["string", "null"]},
+        "overview": {"type": ["string", "null"]},
+        "posterUrl": {"type": ["string", "null"]},
+        "releaseDate": {"type": ["string", "null"], "format": "date"}
+      },
+      "additionalProperties": true
+    },
+    "season": {
+      "type": "object",
+      "required": ["mediaRef", "externalRef", "seasonNumber", "name", "overview", "posterUrl", "airDate", "episodeCount"],
+      "properties": {
+        "mediaRef": {"$ref": "#/$defs/ref"}, "externalRef": {"$ref": "#/$defs/ref"},
+        "seasonNumber": {"type": "integer", "minimum": 0}, "name": {"type": ["string", "null"]},
+        "overview": {"type": ["string", "null"]}, "posterUrl": {"type": ["string", "null"]},
+        "airDate": {"type": ["string", "null"], "format": "date"}, "episodeCount": {"type": "integer", "minimum": 0}
+      }, "additionalProperties": true
+    },
+    "episode": {
+      "type": "object",
+      "required": ["seasonRef", "externalRef", "episodeNumber", "title", "overview", "airDate", "runtimeMinutes", "stillUrl"],
+      "properties": {
+        "seasonRef": {"$ref": "#/$defs/ref"}, "externalRef": {"$ref": "#/$defs/ref"},
+        "episodeNumber": {"type": "integer", "minimum": 1}, "title": {"type": "string", "minLength": 1},
+        "overview": {"type": ["string", "null"]}, "airDate": {"type": ["string", "null"], "format": "date"},
+        "runtimeMinutes": {"type": ["integer", "null"], "exclusiveMinimum": 0}, "stillUrl": {"type": ["string", "null"]}
+      }, "additionalProperties": true
+    },
+    "dataRef": {"type": "object", "required": ["mediaRef"], "properties": {"mediaRef": {"$ref": "#/$defs/ref"}}, "additionalProperties": true},
+    "instantRef": {"type": "object", "required": ["mediaRef", "addedAt"], "properties": {"mediaRef": {"$ref": "#/$defs/ref"}, "addedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}}, "additionalProperties": true},
+    "movieProgress": {"type": "object", "required": ["mediaRef", "watchedAt"], "properties": {"mediaRef": {"$ref": "#/$defs/ref"}, "watchedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}}, "additionalProperties": true},
+    "episodeProgress": {"type": "object", "required": ["episodeRef", "watchedAt"], "properties": {"episodeRef": {"$ref": "#/$defs/ref"}, "watchedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}}, "additionalProperties": true},
+    "rating": {"type": "object", "required": ["mediaRef", "rating", "ratedAt", "updatedAt"], "properties": {"mediaRef": {"$ref": "#/$defs/ref"}, "rating": {"type": "integer", "minimum": 1, "maximum": 10}, "ratedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}, "updatedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}}, "additionalProperties": true},
+    "preferences": {"type": "object", "required": ["notificationLeadDays", "notifyMovieReleases", "notifySeasonPremieres", "notifyEpisodeAirings"], "properties": {"notificationLeadDays": {"enum": [0, 1, 3, 7]}, "notifyMovieReleases": {"type": "boolean"}, "notifySeasonPremieres": {"type": "boolean"}, "notifyEpisodeAirings": {"type": "boolean"}}, "additionalProperties": true},
+    "data": {
+      "type": "object",
+      "required": ["media", "seasons", "episodes", "library", "movieProgress", "episodeProgress", "ratings", "preferences"],
+      "properties": {
+        "media": {"type": "array", "items": {"$ref": "#/$defs/media"}},
+        "seasons": {"type": "array", "items": {"$ref": "#/$defs/season"}},
+        "episodes": {"type": "array", "items": {"$ref": "#/$defs/episode"}},
+        "library": {"type": "array", "items": {"$ref": "#/$defs/instantRef"}},
+        "movieProgress": {"type": "array", "items": {"$ref": "#/$defs/movieProgress"}},
+        "episodeProgress": {"type": "array", "items": {"$ref": "#/$defs/episodeProgress"}},
+        "ratings": {"type": "array", "items": {"$ref": "#/$defs/rating"}},
+        "preferences": {"$ref": "#/$defs/preferences"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

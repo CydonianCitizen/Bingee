@@ -25,3 +25,4 @@ ADRs capture durable decisions that affect Bingee''s architecture or contributio
 - 0014: Room v4 title ratings and local Library organization
 - 0015: Room v5 local release calendar and manual refresh
 - 0016: WorkManager background refresh, local release notifications, and Room v6
+- 0017: versioned JSON backup, replace restore, and Room v7 portable preferences

@@ -3,11 +3,14 @@ package com.cydoniancitizen.bingee.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
+import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -18,7 +21,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReleaseNotificationPreferencesTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val repository = DataStoreReleaseNotificationPreferences(context)
+    private val database = Room.inMemoryDatabaseBuilder(context, BingeeDatabase::class.java).build()
+    private val repository = DataStoreReleaseNotificationPreferences(context, database, database.portableSnapshotDao())
+
+    @After
+    fun closeDatabase() {
+        database.close()
+    }
 
     @Before
     fun resetDefaults() = runBlocking {

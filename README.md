@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and currently at **Milestone 8 — Local Release Calendar**. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, offline Library organization, and a Room-first Home calendar. Background work, notifications, and import/export are not implemented.
+The project is unreleased and currently at **Milestone 10 — Versioned JSON backup and restore**. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, offline Library organization, a Room-first Home calendar, approximate local notifications, and versioned JSON backup/restore.
 
 Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
@@ -65,6 +65,8 @@ On first run without a configured credential, Bingee offers TMDB setup or offlin
 
 WorkManager maintains a bounded batch of up to 20 followed titles approximately once per day when network is available. A separate network-free worker evaluates cached Room events for optional local notifications. Notifications are disabled by default; Settings requests Android notification permission only after the user enables them and supports same-day, one-day, three-day, or seven-day lead times plus movie, season, and episode categories. Android may delay work because of Doze, battery optimization, constraints, or device policy; Bingee promises no exact notification time.
 
+Settings → Data & backup saves through Android's Storage Access Framework, shares a validated plaintext JSON file through the system Sharesheet, and restores only with explicit `Replace local data` confirmation. Restore validates the complete file before one Room transaction. See [backup format v1](docs/backup-format-v1.md).
+
 ## TMDB configuration and privacy
 
 Bingee supports one TMDB credential format: the API Read Access Token available from the API section of a TMDB account. The app trims surrounding whitespace, checks Bearer-token structure locally, and validates the candidate with TMDB's `GET /3/authentication` endpoint. Only a remotely accepted candidate is saved.
@@ -73,7 +75,7 @@ The accepted token is encrypted with AES-256-GCM using key material held by Andr
 
 Bingee has no account or proprietary backend. Without a usable TMDB credential, the application shell and future local data remain available while remote metadata features stay disabled. Search reads the credential only inside the protected data/network boundary; query text is not logged or stored. See [privacy notes](docs/privacy.md), [ADR 0009](docs/adr/0009-tmdb-credential-configuration.md), and [ADR 0010](docs/adr/0010-tmdb-search.md).
 
-This product uses the TMDB API but is not endorsed or certified by TMDB. The official TMDB attribution logo is shown in Settings/About.
+This product uses the TMDB API but is not endorsed or certified by TMDB. The official TMDB attribution logo is shown in Settings/About. Credentials are never part of JSON backup files.
 
 ## Architecture
 
@@ -92,7 +94,7 @@ app/src/debug/java/com/cydoniancitizen/bingee/
   feature/    deterministic Search, Library, Details, Home, and Settings state previews
 ```
 
-Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB movie-, TV-, and season-detail DTOs remain separate inside the provider package; Room entities, relations, converters, and DAOs remain inside the data layer. Provider metadata tables contain neither personal watch state nor ratings. Ratings live in a dedicated local table and survive Library removal. Derived release events live in their own normalized table and remain hidden, not deleted, when membership is removed. Notification delivery identity lives in a separate Room v6 ledger; ordinary notification settings live in DataStore. The UI has no episode/season rating, written review, custom list, episode-detail, notification history/actions/snooze, cast, credits, recommendations, cache pruning, or Jikan behavior.
+Feature UI may depend on domain models and repository contracts, but composables receive state and callbacks rather than repositories. Domain code does not depend on Android UI, Compose, Retrofit, Room, provider DTOs, or DAOs. TMDB movie-, TV-, and season-detail DTOs remain separate inside the provider package; Room entities, relations, converters, and DAOs remain inside the data layer. Provider metadata tables contain neither personal watch state nor ratings. Ratings live in a dedicated local table and survive Library removal. Derived release events live in their own normalized table and remain hidden, not deleted, when membership is removed. Notification delivery identity lives in a separate Room v7 ledger; portable notification lead/category choices live in Room v7 while device-local enablement remains in DataStore. The UI has no episode/season rating, written review, custom list, episode-detail, notification history/actions/snooze, cast, credits, recommendations, cache pruning, or Jikan behavior.
 
 See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 

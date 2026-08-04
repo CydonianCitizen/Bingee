@@ -24,6 +24,15 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 tools:node="remove" />
         </provider>
+        <provider
+            android:name=".data.importexport.BingeeBackupFileProvider"
+            android:authorities="${applicationId}.backup-files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/backup_share_paths" />
+        </provider>
 
         <activity
             android:name=".MainActivity"

@@ -47,7 +47,7 @@ SearchScreen/LibraryScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v6)
+                           LibraryDao -> Room bingee.db (v7)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -93,7 +93,7 @@ CalendarRefreshWorker (CONNECTED) -> BackgroundRefreshPlanner (max 20 active tit
                                   -> CalendarRefreshCoordinator (concurrency 3)
                                   -> immediate NotificationEvaluationWorker
 
-NotificationEvaluationWorker (no network) -> notification preferences DataStore
+NotificationEvaluationWorker (no network) -> combined preferences (Room portable + DataStore enabled)
                                           -> ReleaseEventDao due window
                                           -> notification delivery ledger
                                           -> Android notifier
@@ -129,7 +129,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 6; schema versions 1 through 6 are generated through KSP into `app/schemas/` and version controlled.
+- Room database `bingee.db` is version 7; schema versions 1 through 7 are generated through KSP into `app/schemas/` and version controlled. The public backup schema is independent and currently version 1.
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
@@ -140,10 +140,18 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp. No redundant completion, count, fraction, or watched Boolean is persisted.
 - Version 5 adds normalized `release_events` and singleton `calendar_refresh_state`. Migration 4-to-5 preserves all v4 rows, backfills only non-null cached movie/season/episode dates, and leaves refresh state empty. The full explicit migration chain remains registered without destructive fallback.
 - Version 6 adds normalized `notification_deliveries`. Migration 5-to-6 preserves all v5 rows and creates an empty ledger. Delivery identity includes provider, subject type/ID, event type/date, and lead days; rows contain no notification text, permission, preference, title, progress, rating, token, provider body, or worker state.
+- Version 7 adds singleton `portable_preferences` for notification lead/category choices. Migration 6-to-7 preserves all prior tables and creates default choices with an incomplete legacy bridge marker. The first settings/preferences read atomically copies old DataStore lead/category values into Room; the bridge is idempotent. DataStore retains only device-local notification enablement.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
 - `media_ratings` is independent of Library membership and watch progress. Removing/re-adding a title, refreshing metadata, changing progress, or removing credentials retains the rating.
 - Every later schema revision requires a version increment, non-destructive migration, new schema export, and migration tests. Destructive fallback is prohibited.
+
+## Versioned backup and restore
+
+- `data/importexport` owns dedicated backup DTOs, a manual Gson tree/stream codec, bounded input, structural parsing, pure semantic validation, deterministic export mapping, SAF file access, and the narrow FileProvider share path.
+- Backup format `bingee-backup` v1 exports portable media metadata, provider-qualified references, active membership, personal timestamps, ratings, progress, all cached seasons/episodes for included series, and selected notification choices. It never serializes Room entities, local IDs, credentials, raw provider bodies, WorkManager records, or notification-delivery history. See `docs/backup-format-v1.md` and its JSON Schema.
+- Import supports only `REPLACE_PORTABLE_DATA`: parse and validate first, preview second, one explicit Room transaction last. The transaction regenerates local IDs, restores portable state, rebuilds release events, clears technical derived state, and leaves credential/permission/enablement/device runtime state outside the transaction.
+- SAF uses `CreateDocument("application/json")` and `OpenDocument`; sharing uses a private cache subdirectory exposed only through a read-only `FileProvider` URI. Backup content and selected URIs are never logged.
 
 ## Local release calendar
 
