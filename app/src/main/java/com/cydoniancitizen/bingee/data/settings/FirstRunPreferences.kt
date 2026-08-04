@@ -3,7 +3,6 @@ package com.cydoniancitizen.bingee.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import javax.inject.Inject
@@ -17,8 +16,6 @@ internal interface FirstRunPreferences {
 
     suspend fun markOnboardingComplete()
 }
-
-private val Context.bingeePreferences by preferencesDataStore(name = "bingee_preferences")
 
 @Singleton
 internal class DataStoreFirstRunPreferences @Inject constructor(

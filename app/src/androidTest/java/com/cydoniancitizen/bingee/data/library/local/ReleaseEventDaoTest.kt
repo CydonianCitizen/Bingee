@@ -128,6 +128,29 @@ class ReleaseEventDaoTest {
         assertEquals(now, dao.observeLastSuccessfulRefresh().first())
     }
 
+    @Test
+    fun notificationCandidateWindowIsBoundedActiveAndDeterministic() = runBlocking {
+        dao.backfill(now)
+        val from = LocalDate.of(2026, 8, 3)
+        val through = LocalDate.of(2026, 8, 10)
+
+        val candidates = dao.getActiveEventsBetween(from, through, 200)
+        assertEquals(3, candidates.size)
+        assertEquals(
+            listOf(
+                ReleaseEventType.EPISODE_AIRING,
+                ReleaseEventType.SEASON_PREMIERE,
+                ReleaseEventType.MOVIE_RELEASE
+            ),
+            candidates.map { it.eventType }
+        )
+
+        database.libraryDao().removeMembership(MediaSource.TMDB, "42")
+        assertEquals(2, dao.getActiveEventsBetween(from, through, 200).size)
+        database.libraryDao().addExistingToLibrary(MediaSource.TMDB, "42", now)
+        assertEquals(3, dao.getActiveEventsBetween(from, through, 200).size)
+    }
+
     private fun insertFixture() {
         sql(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +

@@ -7,6 +7,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -20,18 +21,30 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.navigation.AppRoute
 import com.cydoniancitizen.bingee.core.navigation.BingeeNavHost
+import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.navigation.TopLevelDestination
 import com.cydoniancitizen.bingee.core.navigation.topLevelDestinationForRoute
+import com.cydoniancitizen.bingee.data.notification.NotificationNavigationTarget
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
-internal fun BingeeApp(startupViewModel: StartupViewModel = hiltViewModel()) {
+internal fun BingeeApp(
+    startupViewModel: StartupViewModel = hiltViewModel(),
+    notificationTarget: StateFlow<NotificationNavigationTarget?>? = null,
+    onNotificationTargetConsumed: () -> Unit = {}
+) {
     val startupState by startupViewModel.uiState.collectAsStateWithLifecycle()
+    val pendingTarget by notificationTarget
+        ?.collectAsStateWithLifecycle()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
     when (val state = startupState) {
         StartupUiState.Checking -> LoadingState(message = stringResource(R.string.startup_checking))
         is StartupUiState.Ready ->
             BingeeNavigation(
                 startDestination = startRouteFor(state.destination),
-                onOnboardingComplete = startupViewModel::completeOnboarding
+                onOnboardingComplete = startupViewModel::completeOnboarding,
+                notificationTarget = pendingTarget,
+                onNotificationTargetConsumed = onNotificationTargetConsumed
             )
     }
 }
@@ -40,10 +53,21 @@ internal fun BingeeApp(startupViewModel: StartupViewModel = hiltViewModel()) {
 private fun BingeeNavigation(
     startDestination: String,
     onOnboardingComplete: () -> Unit,
+    notificationTarget: NotificationNavigationTarget?,
+    onNotificationTargetConsumed: () -> Unit,
     navController: NavHostController = rememberNavController()
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = topLevelDestinationForRoute(backStackEntry?.destination?.route)
+
+    LaunchedEffect(startDestination, notificationTarget) {
+        val target = notificationTarget ?: return@LaunchedEffect
+        if (startDestination == AppRoute.ONBOARDING) return@LaunchedEffect
+        navController.navigate(DetailRoute.create(target.reference, target.mediaType)) {
+            launchSingleTop = true
+        }
+        onNotificationTargetConsumed()
+    }
 
     Scaffold(
         bottomBar = {

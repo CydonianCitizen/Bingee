@@ -17,9 +17,10 @@ import androidx.room.TypeConverters
         MovieWatchProgressEntity::class,
         MediaRatingEntity::class,
         ReleaseEventEntity::class,
-        CalendarRefreshStateEntity::class
+        CalendarRefreshStateEntity::class,
+        NotificationDeliveryEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -35,6 +36,8 @@ internal abstract class BingeeDatabase : RoomDatabase() {
     abstract fun ratingDao(): RatingDao
 
     abstract fun releaseEventDao(): ReleaseEventDao
+
+    abstract fun notificationDeliveryDao(): NotificationDeliveryDao
 
     companion object {
         const val DATABASE_NAME = "bingee.db"

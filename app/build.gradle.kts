@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material3)
@@ -66,6 +67,7 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
 
     ksp(libs.androidx.room.compiler)
+    ksp(libs.androidx.hilt.compiler)
     ksp(libs.google.hilt.compiler)
 
     testImplementation(libs.junit)
@@ -76,6 +78,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.work.testing)
     debugImplementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)

@@ -232,3 +232,27 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
         )
     }
 }
+
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS notification_deliveries (
+                source TEXT NOT NULL,
+                subject_type TEXT NOT NULL,
+                subject_external_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                event_date TEXT NOT NULL,
+                lead_days INTEGER NOT NULL,
+                notification_id INTEGER NOT NULL,
+                delivered_at TEXT NOT NULL,
+                PRIMARY KEY(source, subject_type, subject_external_id, event_type, event_date, lead_days)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_notification_deliveries_event_date " +
+                "ON notification_deliveries(event_date)"
+        )
+    }
+}

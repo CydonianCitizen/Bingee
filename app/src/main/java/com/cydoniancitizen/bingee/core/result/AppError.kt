@@ -43,6 +43,10 @@ sealed interface AppError {
         override val isRetryable = false
     }
 
+    data object NotificationDeliveryFailure : AppError {
+        override val isRetryable = true
+    }
+
     data object NotTrackable : AppError {
         override val isRetryable = false
     }

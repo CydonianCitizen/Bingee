@@ -59,6 +59,53 @@ internal abstract class ReleaseEventDao {
     abstract fun observeActiveEvents(fromDate: LocalDate): Flow<List<ReleaseEventRow>>
 
     @Query(
+        """
+        SELECT release_events.source,
+               external_refs.external_id AS parent_external_id,
+               release_events.subject_type,
+               release_events.subject_external_id,
+               release_events.event_type,
+               release_events.event_date,
+               media_entries.media_type,
+               media_entries.title AS media_title,
+               media_entries.poster_url,
+               seasons.season_number,
+               episodes.episode_number,
+               CASE
+                   WHEN release_events.event_type = 'EPISODE_AIRING' THEN episodes.title
+                   WHEN release_events.event_type = 'SEASON_PREMIERE' THEN seasons.name
+                   ELSE NULL
+               END AS subject_title
+        FROM release_events
+        INNER JOIN media_entries USING(local_media_id)
+        INNER JOIN library_entries USING(local_media_id)
+        INNER JOIN external_refs
+            ON external_refs.local_media_id = release_events.local_media_id
+           AND external_refs.source = release_events.source
+        LEFT JOIN seasons ON seasons.local_season_id = release_events.local_season_id
+        LEFT JOIN episodes ON episodes.local_episode_id = release_events.local_episode_id
+        WHERE release_events.event_date BETWEEN :fromDate AND :throughDate
+        ORDER BY release_events.event_date ASC,
+                 CASE release_events.event_type
+                     WHEN 'EPISODE_AIRING' THEN 0
+                     WHEN 'SEASON_PREMIERE' THEN 1
+                     ELSE 2
+                 END ASC,
+                 LOWER(media_entries.title) ASC,
+                 release_events.source ASC,
+                 release_events.subject_type ASC,
+                 release_events.subject_external_id ASC,
+                 release_events.event_type ASC
+        LIMIT :limit
+        """
+    )
+    abstract suspend fun getActiveEventsBetween(
+        fromDate: LocalDate,
+        throughDate: LocalDate,
+        limit: Int
+    ): List<ReleaseEventRow>
+
+    @Query(
         "SELECT last_successful_refresh_at FROM calendar_refresh_state " +
             "WHERE singleton_key = 1 LIMIT 1"
     )

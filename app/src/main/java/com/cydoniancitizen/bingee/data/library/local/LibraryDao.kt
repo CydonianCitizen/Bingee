@@ -73,6 +73,24 @@ internal abstract class LibraryDao {
 
     @Query(
         """
+        SELECT external_refs.source, external_refs.external_id, media_entries.media_type
+        FROM library_entries
+        INNER JOIN media_entries USING(local_media_id)
+        INNER JOIN external_refs USING(local_media_id)
+        LEFT JOIN media_details USING(local_media_id)
+        ORDER BY CASE WHEN media_details.details_fetched_at IS NULL THEN 0 ELSE 1 END ASC,
+                 media_details.details_fetched_at ASC,
+                 media_entries.metadata_updated_at ASC,
+                 external_refs.source ASC,
+                 external_refs.external_id ASC,
+                 media_entries.media_type ASC
+        LIMIT :limit
+        """
+    )
+    abstract suspend fun getBackgroundRefreshCandidates(limit: Int): List<BackgroundRefreshCandidateRow>
+
+    @Query(
+        """
         SELECT media_entries.local_media_id,
                media_entries.media_type,
                movie_watch_progress.watched_at AS movie_watched_at,

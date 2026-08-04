@@ -81,8 +81,8 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
-    fun migrateOneThroughFivePreservesCanonicalRowsAndValidatesFinalSchema() {
-        helper.createDatabase(V1_TO_V5_DB, 1).apply {
+    fun migrateOneThroughSixPreservesCanonicalRowsAndValidatesFinalSchema() {
+        helper.createDatabase(V1_TO_V6_DB, 1).apply {
             execSQL(
                 "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
                     "overview, poster_url, release_date, created_at, metadata_updated_at) " +
@@ -103,13 +103,14 @@ class BingeeDatabaseMigrationTest {
         }
 
         val migrated = helper.runMigrationsAndValidate(
-            V1_TO_V5_DB,
-            5,
+            V1_TO_V6_DB,
+            6,
             true,
             MIGRATION_1_2,
             MIGRATION_2_3,
             MIGRATION_3_4,
-            MIGRATION_4_5
+            MIGRATION_4_5,
+            MIGRATION_5_6
         )
 
         assertEquals(2, migrated.count("media_entries"))
@@ -119,6 +120,51 @@ class BingeeDatabaseMigrationTest {
         assertEquals(0, migrated.count("media_ratings"))
         assertEquals(1, migrated.count("release_events"))
         assertEquals(0, migrated.count("calendar_refresh_state"))
+        assertEquals(0, migrated.count("notification_deliveries"))
+        migrated.close()
+    }
+
+    @Test
+    fun migrateFiveToSixPreservesAllVersionFiveDataAndCreatesEmptyDeliveryLedger() {
+        helper.createDatabase(V5_TO_V6_DB, 5).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
+                    "release_date, created_at, metadata_updated_at) VALUES" +
+                    "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, '2026-08-05', " +
+                    "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
+            execSQL(
+                "INSERT INTO media_ratings(local_media_id, rating_value, rated_at, updated_at) " +
+                    "VALUES(1, 8, '2026-08-03T11:00:00Z', '2026-08-03T11:00:00Z')"
+            )
+            execSQL("INSERT INTO movie_watch_progress(local_media_id, watched_at) VALUES(1, '2026-08-03T11:00:00Z')")
+            execSQL(
+                "INSERT INTO release_events(local_event_id, local_media_id, local_season_id, local_episode_id, " +
+                    "source, subject_type, subject_external_id, event_type, event_date, projected_at, " +
+                    "source_metadata_updated_at) VALUES(1, 1, NULL, NULL, 'TMDB', 'MEDIA', '42', " +
+                    "'MOVIE_RELEASE', '2026-08-05', '2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z')"
+            )
+            execSQL(
+                "INSERT INTO calendar_refresh_state(singleton_key, last_successful_refresh_at) " +
+                    "VALUES(1, '2026-08-03T12:00:00Z')"
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(V5_TO_V6_DB, 6, true, MIGRATION_5_6)
+
+        listOf(
+            "media_entries",
+            "external_refs",
+            "library_entries",
+            "media_ratings",
+            "movie_watch_progress",
+            "release_events",
+            "calendar_refresh_state"
+        ).forEach { assertEquals(1, migrated.count(it)) }
+        assertEquals(0, migrated.count("notification_deliveries"))
         migrated.close()
     }
 
@@ -297,8 +343,9 @@ class BingeeDatabaseMigrationTest {
     private companion object {
         const val TEST_DB = "bingee-migration-1-2"
         const val V2_TO_V3_DB = "bingee-migration-2-3"
-        const val V1_TO_V5_DB = "bingee-migration-1-5"
+        const val V1_TO_V6_DB = "bingee-migration-1-6"
         const val V3_TO_V4_DB = "bingee-migration-3-4"
         const val V4_TO_V5_DB = "bingee-migration-4-5"
+        const val V5_TO_V6_DB = "bingee-migration-5-6"
     }
 }

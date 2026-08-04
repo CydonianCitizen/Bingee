@@ -36,6 +36,14 @@ internal class DefaultReleaseCalendarRepository @Inject constructor(
         .map<Instant?, AppResult<Instant?>> { AppResult.Success(it) }
         .catchPersistence()
 
+    override suspend fun getEvents(
+        fromDate: LocalDate,
+        throughDate: LocalDate,
+        limit: Int
+    ): AppResult<List<ReleaseEvent>> = persistenceRead {
+        dao.getActiveEventsBetween(fromDate, throughDate, limit).map(ReleaseEventRow::toDomain)
+    }
+
     override suspend fun backfill(): AppResult<Unit> = persistenceWrite {
         dao.backfill(clock.instant())
     }
@@ -65,6 +73,14 @@ private fun <T> Flow<AppResult<T>>.catchPersistence(): Flow<AppResult<T>> = catc
 private suspend fun persistenceWrite(block: suspend () -> Unit): AppResult<Unit> = try {
     block()
     AppResult.Success(Unit)
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (throwable: Throwable) {
+    AppResult.Failure(throwable.persistenceError())
+}
+
+private suspend fun <T> persistenceRead(block: suspend () -> T): AppResult<T> = try {
+    AppResult.Success(block())
 } catch (cancelled: CancellationException) {
     throw cancelled
 } catch (throwable: Throwable) {

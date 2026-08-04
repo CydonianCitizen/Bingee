@@ -256,6 +256,11 @@ class DefaultCalendarRefreshCoordinatorTest {
         override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
             flowOf(AppResult.Success(emptyList()))
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = flowOf(AppResult.Success(lastMarked))
+        override suspend fun getEvents(
+            fromDate: LocalDate,
+            throughDate: LocalDate,
+            limit: Int
+        ): AppResult<List<ReleaseEvent>> = AppResult.Success(emptyList())
         override suspend fun backfill(): AppResult<Unit> {
             backfillCalls++
             return AppResult.Success(Unit)

@@ -1,0 +1,85 @@
+package com.cydoniancitizen.bingee
+
+import android.content.Intent
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.notification.NotificationDetailIntent
+import com.cydoniancitizen.bingee.data.notification.NotificationNavigationTarget
+import com.cydoniancitizen.bingee.data.settings.bingeePreferences
+import kotlinx.coroutines.runBlocking
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class NotificationActivityNavigationTest {
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    private val context
+        get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    @Before
+    fun completeOnboarding() = runBlocking {
+        context.bingeePreferences.edit { preferences ->
+            preferences[booleanPreferencesKey("onboarding_complete")] = true
+        }
+    }
+
+    @Test
+    fun coldStartNavigatesOnceAndRecreationDoesNotRepeatTarget() {
+        ActivityScenario.launch<MainActivity>(
+            NotificationDetailIntent.intent(
+                context,
+                NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "101"), MediaType.MOVIE)
+            )
+        ).use { scenario ->
+            composeRule.onNodeWithText("Title details").assertIsDisplayed()
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+
+            scenario.recreate()
+            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun warmTvIntentNavigatesToExistingDetailRoute() {
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
+            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            scenario.onActivity { activity ->
+                InstrumentationRegistry.getInstrumentation().callActivityOnNewIntent(
+                    activity,
+                    NotificationDetailIntent.intent(
+                        context,
+                        NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "202"), MediaType.SERIES)
+                    )
+                )
+            }
+
+            composeRule.onNodeWithText("Title details").assertIsDisplayed()
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun malformedNotificationIntentLeavesLauncherBehaviorUnchanged() {
+        val malformed = Intent(context, MainActivity::class.java).apply {
+            action = NotificationDetailIntent.ACTION_OPEN_DETAILS
+        }
+        ActivityScenario.launch<MainActivity>(malformed).use {
+            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+        }
+    }
+}

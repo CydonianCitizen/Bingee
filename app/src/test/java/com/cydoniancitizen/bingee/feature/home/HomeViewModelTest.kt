@@ -219,6 +219,11 @@ class HomeViewModelTest {
         }
 
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = last
+        override suspend fun getEvents(
+            fromDate: LocalDate,
+            throughDate: LocalDate,
+            limit: Int
+        ): AppResult<List<ReleaseEvent>> = AppResult.Success(emptyList())
         override suspend fun backfill(): AppResult<Unit> {
             backfillCalls++
             return AppResult.Success(Unit)
@@ -232,5 +237,9 @@ class HomeViewModelTest {
             calls++
             return summary
         }
+
+        override suspend fun refresh(
+            targets: List<com.cydoniancitizen.bingee.core.model.BackgroundRefreshTarget>
+        ): CalendarRefreshSummary = refresh()
     }
 }

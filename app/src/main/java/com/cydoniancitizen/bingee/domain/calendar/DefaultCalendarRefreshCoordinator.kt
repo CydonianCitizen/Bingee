@@ -1,10 +1,10 @@
 package com.cydoniancitizen.bingee.domain.calendar
 
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
+import com.cydoniancitizen.bingee.core.model.BackgroundRefreshTarget
 import com.cydoniancitizen.bingee.core.model.CachedSeason
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
-import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
@@ -44,6 +44,11 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
             is AppResult.Failure -> return failureSummary(result.error)
         }.distinctBy { it.mediaRef to it.mediaType }
 
+        return refresh(entries.map { BackgroundRefreshTarget(it.mediaRef, it.mediaType) })
+    }
+
+    override suspend fun refresh(targets: List<BackgroundRefreshTarget>): CalendarRefreshSummary {
+        val entries = targets.distinctBy { it.mediaRef to it.mediaType }
         if (entries.isEmpty()) return noWorkSummary()
         if (!credentialRepository.status.value.canRefresh()) {
             return CalendarRefreshSummary(
@@ -76,7 +81,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         return finalized.toSummary(entries.size)
     }
 
-    private suspend fun refreshEntry(entry: LibraryEntry): RefreshCounts {
+    private suspend fun refreshEntry(entry: BackgroundRefreshTarget): RefreshCounts {
         if (entry.mediaRef.source != MediaSource.TMDB) return RefreshCounts(skipped = 1)
         if (entry.mediaType == MediaType.MOVIE) {
             return detailsRepository.refreshDetails(entry.mediaRef, MediaType.MOVIE, force = true).toCounts()
@@ -98,7 +103,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         return counts
     }
 
-    private suspend fun readSeasons(entry: LibraryEntry): List<CachedSeason> =
+    private suspend fun readSeasons(entry: BackgroundRefreshTarget): List<CachedSeason> =
         when (val result = seriesRepository.observeSeasons(entry.mediaRef).first()) {
             is AppResult.Success -> result.value
             is AppResult.Failure -> emptyList()

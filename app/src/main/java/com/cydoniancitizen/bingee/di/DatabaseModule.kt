@@ -10,6 +10,8 @@ import com.cydoniancitizen.bingee.data.library.local.MIGRATION_1_2
 import com.cydoniancitizen.bingee.data.library.local.MIGRATION_2_3
 import com.cydoniancitizen.bingee.data.library.local.MIGRATION_3_4
 import com.cydoniancitizen.bingee.data.library.local.MIGRATION_4_5
+import com.cydoniancitizen.bingee.data.library.local.MIGRATION_5_6
+import com.cydoniancitizen.bingee.data.library.local.NotificationDeliveryDao
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
 import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
 import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
@@ -30,7 +32,7 @@ internal object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): BingeeDatabase =
         Room.databaseBuilder(context, BingeeDatabase::class.java, BingeeDatabase.DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
 
     @Provides
@@ -53,6 +55,10 @@ internal object DatabaseModule {
 
     @Provides
     fun provideReleaseEventDao(database: BingeeDatabase): ReleaseEventDao = database.releaseEventDao()
+
+    @Provides
+    fun provideNotificationDeliveryDao(database: BingeeDatabase): NotificationDeliveryDao =
+        database.notificationDeliveryDao()
 
     @Provides
     @Singleton

@@ -47,7 +47,7 @@ SearchScreen/LibraryScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v5)
+                           LibraryDao -> Room bingee.db (v6)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -84,6 +84,23 @@ HomeScreen -> HomeViewModel -> ReleaseCalendarRepository -> ReleaseEventDao -> R
                                             '-> SeriesRepository
 ~~~
 
+Background maintenance keeps remote and local-only work separate:
+
+~~~text
+Application startup -> BackgroundWorkScheduler -> unique periodic WorkManager requests
+
+CalendarRefreshWorker (CONNECTED) -> BackgroundRefreshPlanner (max 20 active titles)
+                                  -> CalendarRefreshCoordinator (concurrency 3)
+                                  -> immediate NotificationEvaluationWorker
+
+NotificationEvaluationWorker (no network) -> notification preferences DataStore
+                                          -> ReleaseEventDao due window
+                                          -> notification delivery ledger
+                                          -> Android notifier
+~~~
+
+Notification taps carry only provider-aware parent identity into `MainActivity`. Cold-start and `onNewIntent` targets are held until startup/onboarding resolves, navigated through the existing `DetailRoute`, then consumed once.
+
 Opening or recomposing Home never calls TMDB, OkHttp, Retrofit, or the credential store. A local idempotent backfill may run once per Home ViewModel lifecycle. Only the explicit refresh action invokes remote repositories.
 
 - core/model and core/result are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.
@@ -112,7 +129,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 5; schema versions 1 through 5 are generated through KSP into `app/schemas/` and version controlled.
+- Room database `bingee.db` is version 6; schema versions 1 through 6 are generated through KSP into `app/schemas/` and version controlled.
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
@@ -122,7 +139,8 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Version 4 adds one title-level `media_ratings` row per canonical media item. Migration 3-to-4 preserves all v3 data and creates no fabricated ratings. Rating values are validated as integers 1–10 before every DAO write; first/change/identical timestamp behavior follows ADR 0014.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp. No redundant completion, count, fraction, or watched Boolean is persisted.
 - Version 5 adds normalized `release_events` and singleton `calendar_refresh_state`. Migration 4-to-5 preserves all v4 rows, backfills only non-null cached movie/season/episode dates, and leaves refresh state empty. The full explicit migration chain remains registered without destructive fallback.
-- No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification, or background-work record is persisted.
+- Version 6 adds normalized `notification_deliveries`. Migration 5-to-6 preserves all v5 rows and creates an empty ledger. Delivery identity includes provider, subject type/ID, event type/date, and lead days; rows contain no notification text, permission, preference, title, progress, rating, token, provider body, or worker state.
+- No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
 - `media_ratings` is independent of Library membership and watch progress. Removing/re-adding a title, refreshing metadata, changing progress, or removing credentials retains the rating.
 - Every later schema revision requires a version increment, non-destructive migration, new schema export, and migration tests. Destructive fallback is prohibited.
@@ -137,7 +155,8 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Date groups sort ascending. Same-date rows sort episode, season, movie, normalized parent title, then provider-aware subject identity.
 - Manual refresh uses at most three concurrent title operations. Movies refresh details. TV refresh first updates details/summaries, then seasons with cached episode metadata, highest regular season, and known current/future regular seasons. Season zero is selected only when episode metadata is cached or its air date lies within Home window.
 - Successful and failed operations are isolated. At least one successful eligible operation permits advancing last-successful refresh after local consistency succeeds; complete failure and empty Library do not advance it.
-- Current limits: no background refresh, notifications, exact release time, regional theatrical selector, provider-removal reconciliation, external calendar integration, or Jikan.
+- Background refresh and notification evaluation each run as unique approximate 24-hour work. Calendar batches 20 oldest or never-refreshed active parents and retains title concurrency three. Notification evaluation is local-only, bounded to 200 candidates in the seven-day window, and prunes ledger rows beyond 30 days.
+- Current limits: no exact release time/delivery, per-event reminder, snooze, notification action/history, regional theatrical selector, provider-removal reconciliation, external calendar integration, push messaging, or Jikan.
 
 ## Fake strategy
 
@@ -201,4 +220,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0015. Episode/season ratings, written reviews, custom lists, background refresh, cache pruning, provider-removal reconciliation, and extra providers remain deferred.
+Accepted decisions are recorded in ADRs 0001–0016. Episode/season ratings, written reviews, custom lists, cache pruning, provider-removal reconciliation, and extra providers remain deferred.
