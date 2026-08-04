@@ -159,6 +159,8 @@ internal class BackupViewModel @Inject constructor(
                 var warning = false
                 try {
                     scheduler.reconcileNotificationWork(preferencesRepository.preferences.first().enabled)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
                 } catch (_: Exception) {
                     warning = true
                 }

@@ -1,28 +1,27 @@
-# Architecture Decision Records
+# Architecture decision index
 
-ADRs capture durable decisions that affect Bingee''s architecture or contribution model.
+This directory contains the durable architecture decisions for Bingee. Read `AGENTS.md` first; the newest applicable ADR takes precedence over older exploratory notes.
 
-- Copy `0000-template.md` for a new decision.
-- Use the next available four-digit number.
-- Keep accepted ADRs immutable; supersede them with a new ADR instead of rewriting history.
-- Use one of these statuses: Proposed, Accepted, Superseded, Rejected.
+To add an ADR, copy `0000-template.md`, use the next available four-digit number, and choose one of: Proposed, Accepted, Superseded, or Rejected. Keep accepted ADRs immutable; supersede them with a new ADR instead of rewriting history.
 
 ## Index
 
-- 0001: local-first architecture
-- 0002: initial Android technology stack
-- 0003: provisional repository structure
-- 0004: Apache 2.0 license
-- 0005: domain boundaries, contracts, and external identity
-- 0006: structured results, safe UI errors, and screen state
-- 0007: centralized navigation
-- 0008: debug-only deterministic fakes
-- 0009: TMDB credential configuration
-- 0010: separate TMDB movie and TV search
-- 0011: Room v1 and provider-aware local library persistence
-- 0012: cache-first TMDB details and Room v2
-- 0013: Room v3 seasons, episodes, and local watch progress
-- 0014: Room v4 title ratings and local Library organization
-- 0015: Room v5 local release calendar and manual refresh
-- 0016: WorkManager background refresh, local release notifications, and Room v6
-- 0017: versioned JSON backup, replace restore, and Room v7 portable preferences
+| ADR | Topic |
+| --- | --- |
+| 0001 | Local-first architecture |
+| 0002 | Initial Android technology stack |
+| 0003 | Package-structured repository |
+| 0004 | Apache License 2.0 |
+| 0005 | Domain boundaries and provider-qualified identity |
+| 0006 | Result errors and screen state |
+| 0007 | Centralized Navigation Compose |
+| 0008 | Debug fakes |
+| 0009 | TMDB credential configuration |
+| 0010 | TMDB search |
+| 0011 | Room v1 local Library |
+| 0012 | Cache-first TMDB details and Room v2 |
+| 0013 | Room v3 seasons, episodes, and progress |
+| 0014 | Room v4 ratings and Library organization |
+| 0015 | Room v5 local release calendar |
+| 0016 | WorkManager release notifications and Room v6 |
+| 0017 | Versioned JSON backup and transactional restore |

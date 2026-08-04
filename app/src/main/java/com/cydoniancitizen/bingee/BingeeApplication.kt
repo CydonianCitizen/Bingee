@@ -42,7 +42,13 @@ class BingeeApplication :
 
     override fun onCreate() {
         super.onCreate()
-        backupShareFileStore.cleanupStale()
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                backupShareFileStore.cleanupStale()
+            } catch (_: Exception) {
+                // Temporary cleanup is best effort and must not block or crash startup.
+            }
+        }
         applicationScope.launch { startupWorkCoordinator.reconcile() }
     }
 

@@ -169,6 +169,8 @@
     <string name="detail_episode_air_date">Air date: %1$s</string>
     <string name="detail_episode_air_date_unknown">Air date unknown · trackable</string>
     <string name="detail_episode_future">Not aired yet</string>
+    <string name="detail_episode_watched_state">Watched</string>
+    <string name="detail_episode_unwatched_state">Not watched</string>
     <string name="detail_episode_still">Still for %1$s</string>
     <string name="detail_episode_still_missing">No still available for %1$s</string>
     <string name="about_title">About Bingee and privacy</string>
@@ -234,6 +236,7 @@
     <string name="backup_save">Save backup</string>
     <string name="backup_share">Share backup</string>
     <string name="backup_restore">Restore backup</string>
+    <string name="backup_operation_in_progress">Backup operation in progress</string>
     <string name="backup_success">Backup operation completed.</string>
     <string name="backup_replace_title">Replace local data?</string>
     <string name="backup_preview_counts">Incoming: %1$d titles (%2$d movies, %3$d series).</string>

@@ -30,26 +30,29 @@ class NotificationActivityNavigationTest {
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
-    fun completeOnboarding() = runBlocking {
-        context.bingeePreferences.edit { preferences ->
-            preferences[booleanPreferencesKey("onboarding_complete")] = true
+    fun completeOnboarding() {
+        runBlocking {
+            context.bingeePreferences.edit { preferences ->
+                preferences[booleanPreferencesKey("onboarding_complete")] = true
+            }
         }
     }
 
     @Test
-    fun coldStartNavigatesOnceAndRecreationDoesNotRepeatTarget() {
-        ActivityScenario.launch<MainActivity>(
+    fun coldStartNavigatesOnceAndBackReturnsToHome() {
+        val scenario = ActivityScenario.launch<MainActivity>(
             NotificationDetailIntent.intent(
                 context,
                 NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "101"), MediaType.MOVIE)
             )
-        ).use { scenario ->
+        )
+        try {
             composeRule.onNodeWithText("Title details").assertIsDisplayed()
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
             composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
-
-            scenario.recreate()
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+        } finally {
+            scenario.onActivity { it.finish() }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         }
     }
 

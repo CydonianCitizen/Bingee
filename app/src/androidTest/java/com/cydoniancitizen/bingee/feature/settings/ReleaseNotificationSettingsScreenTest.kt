@@ -1,5 +1,9 @@
 package com.cydoniancitizen.bingee.feature.settings
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -77,5 +81,39 @@ class ReleaseNotificationSettingsScreenTest {
         }
         composeRule.onNodeWithText("Open notification settings").performScrollTo().performClick()
         assertTrue(opened.get())
+    }
+
+    @Test
+    fun notificationControlsExposeRolesAndSelectionState() {
+        composeRule.setContent {
+            BingeeTheme {
+                SettingsContent(
+                    state = SettingsUiState(),
+                    onInputChanged = {},
+                    onSubmit = {},
+                    onRetry = {},
+                    onRequestRemoval = {},
+                    onDismissRemoval = {},
+                    onConfirmRemoval = {},
+                    notificationState = ReleaseNotificationSettingsUiState(
+                        preferences = ReleaseNotificationPreferences(
+                            leadTime = ReleaseNotificationLeadTime.THREE_DAYS
+                        )
+                    )
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Movie releases")
+            .performScrollTo()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)
+            )
+        composeRule.onNodeWithText("Three days before")
+            .performScrollTo()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+            )
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
     }
 }

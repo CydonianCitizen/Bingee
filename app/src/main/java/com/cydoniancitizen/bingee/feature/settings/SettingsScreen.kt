@@ -7,7 +7,6 @@ import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,8 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -230,7 +235,10 @@ internal fun SettingsContent(
             onDismissRequest = onCancelRestore,
             title = { Text(stringResource(R.string.backup_replace_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
+                ) {
                     Text(
                         stringResource(
                             R.string.backup_preview_counts,
@@ -284,6 +292,7 @@ private fun BackupSection(
         state.operation == BackupOperation.READING ||
         state.operation == BackupOperation.VALIDATING ||
         state.operation == BackupOperation.RESTORING
+    val operationProgressDescription = stringResource(R.string.backup_operation_in_progress)
     Text(
         text = stringResource(R.string.settings_backup_title),
         modifier = Modifier.semantics { heading() },
@@ -291,23 +300,31 @@ private fun BackupSection(
     )
     Text(stringResource(R.string.settings_backup_description))
     Text(stringResource(R.string.backup_plaintext_warning), style = MaterialTheme.typography.bodySmall)
-    Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)) {
-        Button(onClick = onSave, enabled = canStart) {
+    Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+        Button(onClick = onSave, enabled = canStart, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.backup_save))
         }
-        Button(onClick = onShare, enabled = canStart) {
+        Button(onClick = onShare, enabled = canStart, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.backup_share))
         }
     }
-    Button(onClick = onRestore, enabled = canStart) {
+    Button(onClick = onRestore, enabled = canStart, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.backup_restore))
     }
     if (isBusy) {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    stateDescription = operationProgressDescription
+                    liveRegion = LiveRegionMode.Polite
+                }
+        )
     }
     state.failure?.let { failure ->
         Text(
             text = stringResource(failure.toStringRes()),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             color = if (failure == BackupFailureKind.SCHEDULING_WARNING) {
                 MaterialTheme.colorScheme.onSurface
             } else {
@@ -385,23 +402,37 @@ private fun NotificationSettingsSection(
             Text(stringResource(R.string.settings_notifications_open_system))
         }
     }
-    Text(stringResource(R.string.settings_notifications_lead_time), style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_notifications_lead_time),
+        modifier = Modifier.semantics { heading() },
+        style = MaterialTheme.typography.titleMedium
+    )
     ReleaseNotificationLeadTime.entries.forEach { leadTime ->
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(enabled = !state.isUpdating) { onLeadTimeChanged(leadTime) },
+                .selectable(
+                    selected = state.preferences.leadTime == leadTime,
+                    enabled = !state.isUpdating,
+                    role = Role.RadioButton,
+                    onClick = { onLeadTimeChanged(leadTime) }
+                )
+                .semantics(mergeDescendants = true) {},
             verticalAlignment = Alignment.CenterVertically
         ) {
             RadioButton(
                 selected = state.preferences.leadTime == leadTime,
-                onClick = { onLeadTimeChanged(leadTime) },
+                onClick = null,
                 enabled = !state.isUpdating
             )
             Text(stringResource(leadTime.labelRes()))
         }
     }
-    Text(stringResource(R.string.settings_notifications_categories), style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.settings_notifications_categories),
+        modifier = Modifier.semantics { heading() },
+        style = MaterialTheme.typography.titleMedium
+    )
     SettingSwitchRow(
         stringResource(R.string.settings_notifications_movies),
         state.preferences.movieReleases,
@@ -425,12 +456,20 @@ private fun NotificationSettingsSection(
 @Composable
 private fun SettingSwitchRow(label: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange
+            )
+            .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
@@ -37,6 +38,11 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
             )
             is MovieProgressState.Ready -> {
                 val watched = state.state as? MovieWatchState.Watched
+                val watchStateDescription = when {
+                    state.updating -> stringResource(R.string.detail_progress_updating)
+                    watched == null -> stringResource(R.string.detail_movie_unwatched)
+                    else -> stringResource(R.string.detail_movie_watched_at, watched.watchedAt.toString())
+                }
                 Text(
                     if (watched == null) {
                         stringResource(R.string.detail_movie_unwatched)
@@ -47,7 +53,11 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
                 Button(
                     onClick = onToggle,
                     enabled = !state.updating,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            stateDescription = watchStateDescription
+                        }
                 ) {
                     Text(
                         stringResource(

@@ -18,6 +18,7 @@ import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 
 internal object BackupJsonCodec {
     fun encode(document: BackupDocument): ByteArray {
@@ -35,6 +36,8 @@ internal object BackupJsonCodec {
         parse(bytes)
     } catch (failure: BackupParseFailure) {
         BackupParseResult.Failure(failure)
+    } catch (cancellation: CancellationException) {
+        throw cancellation
     } catch (_: Exception) {
         BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.UNREADABLE))
     }
@@ -48,6 +51,8 @@ internal object BackupJsonCodec {
         readDocument(root.asJsonObject)
     } catch (failure: BackupParseFailure) {
         BackupParseResult.Failure(failure)
+    } catch (cancellation: CancellationException) {
+        throw cancellation
     } catch (_: com.google.gson.JsonParseException) {
         BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.MALFORMED_JSON))
     } catch (_: CharacterCodingException) {

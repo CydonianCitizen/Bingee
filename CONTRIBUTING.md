@@ -38,6 +38,14 @@ Use `./gradlew spotlessApply` to format Kotlin and Kotlin Gradle files. Do not d
 
 If a change affects an Android-specific integration, run the relevant instrumentation test on an emulator or device and report what was tested.
 
+For release-hardening or persistence changes, also run the connected suite when an API 33+ device is available:
+
+```bash
+./gradlew connectedDebugAndroidTest
+```
+
+Report the device/API level, density, font scale, network mode, notification permission state, and any manual accessibility or Storage Access Framework flows. Do not report a device configuration that was not actually used.
+
 ## Issues and bug reports
 
 Search existing issues before filing a new one. A useful report includes:

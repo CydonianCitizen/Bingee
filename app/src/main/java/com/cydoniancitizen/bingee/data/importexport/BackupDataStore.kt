@@ -17,7 +17,26 @@ import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+
+internal enum class RestoreStage {
+    MEDIA,
+    EXTERNAL_REFERENCES,
+    SEASONS,
+    EPISODES,
+    LIBRARY_MEMBERSHIP,
+    MOVIE_PROGRESS,
+    EPISODE_PROGRESS,
+    RATINGS,
+    PORTABLE_PREFERENCES,
+    RELEASE_EVENTS
+}
+
+internal fun interface RestoreFailureInjector {
+    fun check(stage: RestoreStage)
+}
 
 @Singleton
 internal class BackupDataStore @Inject constructor(
@@ -146,7 +165,10 @@ internal class BackupDataStore @Inject constructor(
         snapshotDao.readSnapshot().memberships.size
     }
 
-    suspend fun restore(plan: ValidatedBackupPlan) {
+    suspend fun restore(
+        plan: ValidatedBackupPlan,
+        failureInjector: RestoreFailureInjector = RestoreFailureInjector {}
+    ) {
         database.withTransaction {
             val data = plan.document.data
             val exportedAt = plan.document.exportedAt
@@ -180,11 +202,17 @@ internal class BackupDataStore @Inject constructor(
                     )
                 )
                 mediaIds[media.primaryRef.key()] = localId
+            }
+            failureInjector.check(RestoreStage.MEDIA)
+
+            data.media.forEach { media ->
+                val localId = checkNotNull(mediaIds[media.primaryRef.key()])
                 media.externalRefs.forEach { ref ->
                     mediaIds[ref.key()] = localId
                     snapshotDao.insertExternalRef(ExternalRefEntity(localId, ref.source, ref.externalId))
                 }
             }
+            failureInjector.check(RestoreStage.EXTERNAL_REFERENCES)
 
             val seasonIds = linkedMapOf<String, Long>()
             data.seasons.forEach { season ->
@@ -205,6 +233,7 @@ internal class BackupDataStore @Inject constructor(
                 )
                 seasonIds[season.externalRef.key()] = localId
             }
+            failureInjector.check(RestoreStage.SEASONS)
 
             val episodeIds = linkedMapOf<String, Long>()
             data.episodes.forEach { episode ->
@@ -224,22 +253,26 @@ internal class BackupDataStore @Inject constructor(
                 )
                 episodeIds[episode.externalRef.key()] = localId
             }
+            failureInjector.check(RestoreStage.EPISODES)
 
             data.library.forEach { entry ->
                 snapshotDao.insertMembership(
                     LibraryMembershipEntity(checkNotNull(mediaIds[entry.mediaRef.key()]), entry.addedAt)
                 )
             }
+            failureInjector.check(RestoreStage.LIBRARY_MEMBERSHIP)
             data.movieProgress.forEach { progress ->
                 snapshotDao.insertMovieProgress(
                     MovieWatchProgressEntity(checkNotNull(mediaIds[progress.mediaRef.key()]), progress.watchedAt)
                 )
             }
+            failureInjector.check(RestoreStage.MOVIE_PROGRESS)
             data.episodeProgress.forEach { progress ->
                 snapshotDao.insertEpisodeProgress(
                     EpisodeWatchProgressEntity(checkNotNull(episodeIds[progress.episodeRef.key()]), progress.watchedAt)
                 )
             }
+            failureInjector.check(RestoreStage.EPISODE_PROGRESS)
             data.ratings.forEach { rating ->
                 snapshotDao.insertRating(
                     MediaRatingEntity(
@@ -250,6 +283,7 @@ internal class BackupDataStore @Inject constructor(
                     )
                 )
             }
+            failureInjector.check(RestoreStage.RATINGS)
             snapshotDao.replacePreferences(
                 PortablePreferencesEntity(
                     notificationLeadDays = data.preferences.notificationLeadDays,
@@ -259,7 +293,9 @@ internal class BackupDataStore @Inject constructor(
                     legacyBridgeCompleted = true
                 )
             )
+            failureInjector.check(RestoreStage.PORTABLE_PREFERENCES)
             releaseEventDao.backfill(exportedAt)
+            failureInjector.check(RestoreStage.RELEASE_EVENTS)
         }
     }
 
@@ -276,10 +312,12 @@ internal class BackupExporter @Inject constructor(
     suspend fun export(): ExportedBackup {
         val exportedAt = clock.instant()
         val document = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, dataStore.readPortableData())
-        check(BackupValidator.validate(document) is BackupValidationResult.Success)
-        return ExportedBackup(
-            bytes = BackupJsonCodec.encode(document),
-            filename = "bingee-backup-${exportedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate()}.json"
-        )
+        return withContext(Dispatchers.Default) {
+            check(BackupValidator.validate(document) is BackupValidationResult.Success)
+            ExportedBackup(
+                bytes = BackupJsonCodec.encode(document),
+                filename = "bingee-backup-${exportedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate()}.json"
+            )
+        }
     }
 }

@@ -10,6 +10,7 @@ import java.io.File
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -17,6 +18,14 @@ internal interface BackupFileGateway {
     suspend fun read(uri: Uri): BackupParseResult
     suspend fun write(uri: Uri, bytes: ByteArray): BackupFailureKind?
     suspend fun share(bytes: ByteArray): BackupFailureKind?
+}
+
+internal fun buildBackupShareIntent(uri: Uri): Intent = Intent(Intent.ACTION_SEND).apply {
+    type = BACKUP_MIME_TYPE
+    putExtra(Intent.EXTRA_STREAM, uri)
+    clipData = ClipData.newRawUri("backup", uri)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }
 
 @Singleton
@@ -86,15 +95,11 @@ internal class AndroidBackupFileGateway @Inject constructor(
                 "${context.packageName}.backup-files",
                 file
             )
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = BACKUP_MIME_TYPE
-                putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = ClipData.newRawUri("backup", uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            val send = buildBackupShareIntent(uri)
             context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (_: Exception) {
             file.delete()
             BackupFailureKind.WRITE_FAILED

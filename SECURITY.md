@@ -6,9 +6,9 @@ Bingee is unreleased. Only the current default branch receives security fixes; t
 
 ## Reporting a vulnerability
 
-Use GitHub''s private vulnerability reporting feature for this repository when it is available. Do not disclose a suspected vulnerability in a public issue, discussion, pull request, or commit.
+Use GitHub's private vulnerability reporting feature for this repository when it is available. Do not disclose a suspected vulnerability in a public issue, discussion, pull request, or commit.
 
-If private vulnerability reporting is unavailable, contact the maintainers through a private channel already published on the repository owner''s GitHub profile. Do not include exploit details in a public request for contact. This project does not publish a dedicated security email address yet.
+If private vulnerability reporting is unavailable, contact the maintainers through a private channel already published on the repository owner's GitHub profile. Do not include exploit details in a public request for contact. This project does not publish a dedicated security email address yet.
 
 Include:
 

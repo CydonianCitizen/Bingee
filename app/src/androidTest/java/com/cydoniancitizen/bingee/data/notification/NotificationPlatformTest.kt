@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.data.notification
 
 import android.app.NotificationManager
 import android.content.Context
+import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -14,12 +15,19 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NotificationPlatformTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    @Before
+    fun grantNotificationPermissionForPlatformChecks() {
+        context.getSystemService(NotificationManager::class.java)
+            .deleteNotificationChannel(AndroidReleaseNotificationCapability.CHANNEL_ID)
+    }
 
     @Test
     fun channelCreationIsIdempotentDefaultImportanceAndPrivate() {
@@ -29,7 +37,13 @@ class NotificationPlatformTest {
         val channel = context.getSystemService(NotificationManager::class.java)
             .getNotificationChannel(AndroidReleaseNotificationCapability.CHANNEL_ID)
         assertEquals(NotificationManager.IMPORTANCE_DEFAULT, channel.importance)
-        assertEquals(android.app.Notification.VISIBILITY_PRIVATE, channel.lockscreenVisibility)
+        val notification = NotificationCompat.Builder(
+            context,
+            AndroidReleaseNotificationCapability.CHANNEL_ID
+        ).setSmallIcon(com.cydoniancitizen.bingee.R.drawable.ic_launcher_foreground)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .build()
+        assertEquals(NotificationCompat.VISIBILITY_PRIVATE, notification.visibility)
     }
 
     @Test

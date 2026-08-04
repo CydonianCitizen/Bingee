@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Bingee never runs foreground work; WorkManager's optional declaration is removed. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:node="remove" />
+
     <application
         android:name=".BingeeApplication"
         android:allowBackup="true"
@@ -33,6 +38,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/backup_share_paths" />
         </provider>
+
+        <!-- No worker calls setForeground(), so remove WorkManager's unused foreground service. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:node="remove" />
+        <receiver
+            android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
+            tools:node="remove" />
 
         <activity
             android:name=".MainActivity"

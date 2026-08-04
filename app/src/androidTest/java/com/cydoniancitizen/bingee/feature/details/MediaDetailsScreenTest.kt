@@ -3,6 +3,9 @@ package com.cydoniancitizen.bingee.feature.details
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -56,6 +59,9 @@ class MediaDetailsScreenTest {
         composeRule.onNodeWithText("120 min").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Drama, Thriller").assertIsDisplayed()
         composeRule.onNodeWithText("Personal rating").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not watched")
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("Mark watched").performScrollTo().performClick()
         assertTrue(toggled.get())
     }
@@ -90,7 +96,9 @@ class MediaDetailsScreenTest {
         composeRule.onAllNodesWithText("Specials")[0].performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Not aired yet").assertIsNotEnabled()
+        composeRule.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not aired yet")
+        ).assertIsNotEnabled()
         composeRule.onNodeWithText("Rate episode").assertDoesNotExist()
         composeRule.onNodeWithText("Rate season").assertDoesNotExist()
     }
@@ -108,6 +116,12 @@ class MediaDetailsScreenTest {
         )
 
         composeRule.onNodeWithText("10 out of 10").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription,
+                "Personal rating, 10 out of 10"
+            )
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("Save rating").performScrollTo().performClick()
         composeRule.onNodeWithText("Remove personal rating").performScrollTo().performClick()
         assertTrue(saved.get())

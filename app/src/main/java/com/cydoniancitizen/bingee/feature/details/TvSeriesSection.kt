@@ -24,6 +24,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cydoniancitizen.bingee.R
@@ -294,7 +295,18 @@ private fun EpisodeRow(episode: TrackedEpisode, pending: Boolean, onToggle: () -
                 Text(stringResource(R.string.detail_minutes, it.toMinutes()))
             }
             val unavailable = episode.watchState == EpisodeWatchState.Unavailable
-            Button(onClick = onToggle, enabled = !pending && !unavailable) {
+            val watchStateDescription = when {
+                pending -> stringResource(R.string.detail_progress_updating)
+                unavailable -> stringResource(R.string.detail_episode_future)
+                episode.watchState is EpisodeWatchState.Watched ->
+                    stringResource(R.string.detail_episode_watched_state)
+                else -> stringResource(R.string.detail_episode_unwatched_state)
+            }
+            Button(
+                onClick = onToggle,
+                enabled = !pending && !unavailable,
+                modifier = Modifier.semantics { stateDescription = watchStateDescription }
+            ) {
                 Text(
                     stringResource(
                         when {
