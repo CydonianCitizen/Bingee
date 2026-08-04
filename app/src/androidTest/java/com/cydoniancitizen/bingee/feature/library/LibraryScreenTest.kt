@@ -1,5 +1,8 @@
 package com.cydoniancitizen.bingee.feature.library
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -28,10 +31,13 @@ class LibraryScreenTest {
 
     @Test
     fun emptyAndNoMatchingStatesAreDistinct() {
-        setLibrary(LibraryUiState(content = LibraryContentState.Empty))
+        var state by mutableStateOf(LibraryUiState(content = LibraryContentState.Empty))
+        setLibraryState({ state })
         composeRule.onNodeWithText("Your library is empty").assertIsDisplayed()
 
-        setLibrary(LibraryUiState(content = LibraryContentState.NoResults, totalEntryCount = 1))
+        composeRule.runOnIdle {
+            state = LibraryUiState(content = LibraryContentState.NoResults, totalEntryCount = 1)
+        }
         composeRule.onNodeWithText("No matching titles").assertIsDisplayed()
     }
 
@@ -90,11 +96,19 @@ class LibraryScreenTest {
         onMedia: (LibraryMediaFilter) -> Unit = {},
         onRemove: (LibraryEntry) -> Unit = {},
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
+    ) = setLibraryState({ state }, onSearch, onMedia, onRemove, onOpenDetails)
+
+    private fun setLibraryState(
+        state: () -> LibraryUiState,
+        onSearch: (String) -> Unit = {},
+        onMedia: (LibraryMediaFilter) -> Unit = {},
+        onRemove: (LibraryEntry) -> Unit = {},
+        onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
     ) {
         composeRule.setContent {
             BingeeTheme {
                 LibraryContent(
-                    state = state,
+                    state = state(),
                     onSearchQueryChanged = onSearch,
                     onClearSearch = {},
                     onMediaFilterChanged = onMedia,

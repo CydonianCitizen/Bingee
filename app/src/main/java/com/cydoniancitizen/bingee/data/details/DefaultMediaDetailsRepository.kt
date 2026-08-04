@@ -8,10 +8,9 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
-import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
-import com.cydoniancitizen.bingee.data.series.toEntity
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import java.time.Clock
@@ -29,7 +28,7 @@ import kotlinx.coroutines.sync.withLock
 @Singleton
 internal class DefaultMediaDetailsRepository @Inject constructor(
     private val detailsDao: DetailsDao,
-    private val seasonSummaryStore: SeasonSummaryStore,
+    private val metadataStore: MetadataCalendarStore,
     private val client: TmdbDetailsRemoteDataSource,
     private val freshnessPolicy: CacheFreshnessPolicy,
     private val clock: Clock
@@ -116,21 +115,7 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         }
         return try {
             val fetchedAt = clock.instant()
-            val write = details.toCacheWrite(fetchedAt)
-            detailsDao.storeDetails(
-                candidate = write.media,
-                source = reference.source,
-                externalId = reference.externalId,
-                details = write.details,
-                genres = write.genres
-            )
-            if (mediaType == MediaType.SERIES) {
-                seasonSummaryStore.upsertSeasonSummaries(
-                    source = reference.source,
-                    seriesExternalId = reference.externalId,
-                    summaries = payload.seasons.map { it.toEntity(fetchedAt) }
-                )
-            }
+            metadataStore.storeDetails(reference, details, payload.seasons, fetchedAt)
             AppResult.Success(Unit)
         } catch (cancelled: CancellationException) {
             throw cancelled

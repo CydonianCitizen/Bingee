@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,14 +62,14 @@ class DefaultRatingRepositoryTest {
     }
 
     @Test
-    fun missingAndMalformedProviderIdentityMapToSafeErrors() = runBlocking {
+    fun missingIdentityMapsToSafeErrorAndBlankIdentityIsRejectedAtDomainBoundary() = runBlocking {
         assertEquals(
             AppResult.Failure(AppError.MissingData),
             repository.setRating(ExternalMediaRef(MediaSource.TMDB, "missing"), PersonalRating(5))
         )
-        assertEquals(
-            AppResult.Failure(AppError.InvalidInput),
-            repository.removeRating(ExternalMediaRef(MediaSource.TMDB, "   "))
-        )
+        assertThrows(IllegalArgumentException::class.java) {
+            ExternalMediaRef(MediaSource.TMDB, "   ")
+        }
+        Unit
     }
 }

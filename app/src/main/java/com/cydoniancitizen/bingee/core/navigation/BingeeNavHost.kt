@@ -34,7 +34,12 @@ fun BingeeNavHost(
             )
         }
         composable(TopLevelDestination.HOME.route) {
-            HomeScreen()
+            HomeScreen(
+                onOpenSettings = onOpenSettings,
+                onOpenDetails = { reference, mediaType ->
+                    navController.navigate(DetailRoute.create(reference, mediaType))
+                }
+            )
         }
         composable(TopLevelDestination.SEARCH.route) {
             SearchScreen(

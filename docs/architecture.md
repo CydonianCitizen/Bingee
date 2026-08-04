@@ -47,7 +47,7 @@ SearchScreen/LibraryScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v4)
+                           LibraryDao -> Room bingee.db (v5)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -73,6 +73,19 @@ MediaDetailsViewModel -> WatchProgressRepository -> WatchProgressDao
 MediaDetailsViewModel -> RatingRepository -> RatingDao -> media_ratings
 ~~~
 
+Home is a separate Room-first projection:
+
+~~~text
+HomeScreen -> HomeViewModel -> ReleaseCalendarRepository -> ReleaseEventDao -> Room Flow
+                   |
+                   '-> explicit refresh -> CalendarRefreshCoordinator
+                                            |-> LibraryRepository snapshot
+                                            |-> MediaDetailsRepository
+                                            '-> SeriesRepository
+~~~
+
+Opening or recomposing Home never calls TMDB, OkHttp, Retrofit, or the credential store. A local idempotent backfill may run once per Home ViewModel lifecycle. Only the explicit refresh action invokes remote repositories.
+
 - core/model and core/result are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.
 - domain/repository exposes only domain models, AppResult, suspending one-shot operations, and Flow for observable local state.
 - feature owns screen UI. Composables receive immutable state and callbacks; they do not access repositories, Retrofit, OkHttp, Room, or provider DTOs.
@@ -81,7 +94,7 @@ MediaDetailsViewModel -> RatingRepository -> RatingDao -> media_ratings
 - data packages implement repository contracts. Provider clients, separate movie/TV DTOs, mappers, and error translation remain isolated by provider.
 - data/credential owns encrypted credential persistence and coordination. Raw credential text is transient input and never part of public screen state.
 - data/tmdb/auth owns credential validation. data/tmdb/search owns search; data/tmdb/details owns separate movie/TV detail DTOs, mappers, and endpoints. Shared TMDB code maps HTTP failures and resolves constrained image URLs. Retrofit responses and authorization details remain inside the data layer.
-- data/library owns explicit Room entities plus focused Library, Details, Series, and WatchProgress DAOs. data/details owns detail-cache mapping and repository behavior; data/series owns season-cache mapping, freshness, and remote synchronization; data/progress owns local watch operations. Room types and numeric local IDs do not cross the data boundary.
+- data/library owns explicit Room entities plus focused Library, Details, Series, WatchProgress, Rating, and ReleaseEvent DAOs. data/calendar owns deterministic event projection, the local repository, and the atomic metadata-plus-event write boundary. data/details owns detail-cache mapping and repository behavior; data/series owns season-cache mapping, freshness, and remote synchronization; data/progress owns local watch operations. Room types and numeric local IDs do not cross the data boundary.
 
 Provider IDs use ExternalMediaRef(source, externalId). A raw ID is never a global identity. Room generates a numeric local media ID for foreign keys; it remains private infrastructure and does not replace external identity.
 
@@ -99,7 +112,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 4; schema versions 1 through 4 are generated through KSP into `app/schemas/` and version controlled.
+- Room database `bingee.db` is version 5; schema versions 1 through 5 are generated through KSP into `app/schemas/` and version controlled.
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
@@ -108,10 +121,23 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Version 3 adds normalized season and episode metadata plus dedicated episode/movie progress rows. Migration 2-to-3 preserves v2 metadata, details, genres, references, membership, and timestamps while creating empty new structures.
 - Version 4 adds one title-level `media_ratings` row per canonical media item. Migration 3-to-4 preserves all v3 data and creates no fabricated ratings. Rating values are validated as integers 1–10 before every DAO write; first/change/identical timestamp behavior follows ADR 0014.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp. No redundant completion, count, fraction, or watched Boolean is persisted.
-- No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, release event, notification, or background-work record is persisted.
+- Version 5 adds normalized `release_events` and singleton `calendar_refresh_state`. Migration 4-to-5 preserves all v4 rows, backfills only non-null cached movie/season/episode dates, and leaves refresh state empty. The full explicit migration chain remains registered without destructive fallback.
+- No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification, or background-work record is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
 - `media_ratings` is independent of Library membership and watch progress. Removing/re-adding a title, refreshing metadata, changing progress, or removing credentials retains the rating.
 - Every later schema revision requires a version increment, non-destructive migration, new schema export, and migration tests. Destructive fallback is prohibited.
+
+## Local release calendar
+
+- Event types are movie release, season premiere, and episode airing. Identity is source plus subject type, subject external ID, and event type; subject type prevents numeric collisions among media, seasons, and episodes.
+- TMDB release and air dates remain ISO LocalDate. No time, UTC instant conversion, timezone shift, formatted header, relative label, watched state, rating, or membership is stored in an event row.
+- Movie detail, season-summary, and season-episode writes project corresponding events in the same Room transaction. A missing returned date deletes only that subject projection; failure rolls back metadata and event changes together.
+- Migration backfill plus repeatable local backfill derive events without network or credential. Backfill does not create a successful-refresh timestamp.
+- Home joins events to active library membership; removal hides retained events immediately and re-add restores them with retained rating/progress. Default window starts seven calendar days before injected-clock today and has no future cutoff.
+- Date groups sort ascending. Same-date rows sort episode, season, movie, normalized parent title, then provider-aware subject identity.
+- Manual refresh uses at most three concurrent title operations. Movies refresh details. TV refresh first updates details/summaries, then seasons with cached episode metadata, highest regular season, and known current/future regular seasons. Season zero is selected only when episode metadata is cached or its air date lies within Home window.
+- Successful and failed operations are isolated. At least one successful eligible operation permits advancing last-successful refresh after local consistency succeeds; complete failure and empty Library do not advance it.
+- Current limits: no background refresh, notifications, exact release time, regional theatrical selector, provider-removal reconciliation, external calendar integration, or Jikan.
 
 ## Fake strategy
 
@@ -175,4 +201,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0014. Episode/season ratings, written reviews, custom lists, background refresh, cache pruning, provider-removal reconciliation, and extra providers remain deferred.
+Accepted decisions are recorded in ADRs 0001–0015. Episode/season ratings, written reviews, custom lists, background refresh, cache pruning, provider-removal reconciliation, and extra providers remain deferred.

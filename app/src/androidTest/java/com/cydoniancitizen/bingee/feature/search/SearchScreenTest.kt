@@ -1,5 +1,8 @@
 package com.cydoniancitizen.bingee.feature.search
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
@@ -8,7 +11,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
@@ -33,18 +36,26 @@ class SearchScreenTest {
         val query = AtomicReference("")
         val cleared = AtomicBoolean(false)
         val category = AtomicReference(MediaSearchCategory.MOVIES)
-        setSearch(
-            state =
+        var state by mutableStateOf(
             SearchUiState(
                 query = "Alien",
                 credentialAvailability = SearchCredentialAvailability.AVAILABLE
-            ),
-            onQueryChanged = query::set,
-            onClearQuery = { cleared.set(true) },
+            )
+        )
+        setSearchState(
+            state = { state },
+            onQueryChanged = { value ->
+                query.set(value)
+                state = state.copy(query = value)
+            },
+            onClearQuery = {
+                cleared.set(true)
+                state = state.copy(query = "")
+            },
             onCategoryChanged = category::set
         )
 
-        composeRule.onNode(hasSetTextAction()).performTextInput("s")
+        composeRule.onNode(hasSetTextAction()).performTextReplacement("Aliens")
         composeRule.onNodeWithContentDescription("Clear search query").performClick()
         composeRule.onNodeWithText("TV Series").performClick()
 
@@ -55,13 +66,14 @@ class SearchScreenTest {
 
     @Test
     fun loadingAndEmptyStatesAreAccessible() {
-        setSearch(
+        var state by mutableStateOf(
             SearchUiState(
                 query = "fixed",
                 credentialAvailability = SearchCredentialAvailability.AVAILABLE,
                 content = SearchContentState.Loading
             )
         )
+        setSearchState({ state })
         composeRule
             .onNode(
                 SemanticsMatcher.expectValue(
@@ -70,41 +82,42 @@ class SearchScreenTest {
                 )
             ).assertIsDisplayed()
 
-        setSearch(
-            SearchUiState(
+        composeRule.runOnIdle {
+            state = SearchUiState(
                 query = "none",
                 credentialAvailability = SearchCredentialAvailability.AVAILABLE,
                 content = SearchContentState.Empty
             )
-        )
+        }
         composeRule.onNodeWithText("No results").assertIsDisplayed()
     }
 
     @Test
     fun initialErrorRetryAndUnauthorizedSettingsActionsWork() {
         val retried = AtomicBoolean(false)
-        setSearch(
-            state =
+        val opened = AtomicBoolean(false)
+        var state by mutableStateOf(
             SearchUiState(
                 query = "fixed",
                 credentialAvailability = SearchCredentialAvailability.AVAILABLE,
                 content = SearchContentState.Error(AppError.NetworkUnavailable)
-            ),
-            onRetryInitial = { retried.set(true) }
+            )
+        )
+        setSearchState(
+            state = { state },
+            onRetryInitial = { retried.set(true) },
+            onOpenSettings = { opened.set(true) }
         )
         composeRule.onNodeWithText("Retry").performClick()
         assertTrue(retried.get())
 
-        val opened = AtomicBoolean(false)
-        setSearch(
-            state =
-            SearchUiState(
+        composeRule.runOnIdle {
+            state = SearchUiState(
                 query = "fixed",
                 credentialAvailability = SearchCredentialAvailability.AVAILABLE,
                 content = SearchContentState.Error(AppError.Unauthorized)
-            ),
-            onOpenSettings = { opened.set(true) }
-        )
+            )
+        }
         composeRule.onNodeWithText("Open Settings").performClick()
         assertTrue(opened.get())
     }
@@ -124,18 +137,17 @@ class SearchScreenTest {
 
     @Test
     fun nextPageLoadingAndRetryRemainBelowExistingResults() {
-        setSearch(resultsState(NextPageState.Loading))
+        val retried = AtomicBoolean(false)
+        var state by mutableStateOf(resultsState(NextPageState.Loading))
+        setSearchState({ state }, onRetryNextPage = { retried.set(true) })
         composeRule.onNodeWithText("Fixed Movie").assertIsDisplayed()
         composeRule.onNodeWithText("Loading more results").assertIsDisplayed()
 
-        val retried = AtomicBoolean(false)
-        setSearch(
-            state =
-            resultsState(
+        composeRule.runOnIdle {
+            state = resultsState(
                 NextPageState.Error(AppError.RemoteServiceFailure, failedPage = 2)
-            ),
-            onRetryNextPage = { retried.set(true) }
-        )
+            )
+        }
         composeRule.onNodeWithText("Fixed Movie").assertIsDisplayed()
         composeRule.onNodeWithText("Retry loading more").performClick()
         assertTrue(retried.get())
@@ -157,18 +169,17 @@ class SearchScreenTest {
     @Test
     fun libraryActionReflectsObservedMembershipAndUsesExplicitCallback() {
         val toggled = AtomicReference<MediaSearchResult?>(null)
-        val state = resultsState(NextPageState.End)
+        var state by mutableStateOf(resultsState(NextPageState.End))
         val item = (state.content as SearchContentState.Results).items.single()
-        setSearch(state = state, onToggleLibrary = toggled::set)
+        setSearchState(state = { state }, onToggleLibrary = toggled::set)
 
         composeRule.onNodeWithText("Add to library").performClick()
 
         assertEquals(item, toggled.get())
 
-        setSearch(
-            state = state.copy(libraryMembership = setOf(item.externalRef)),
-            onToggleLibrary = toggled::set
-        )
+        composeRule.runOnIdle {
+            state = state.copy(libraryMembership = setOf(item.externalRef))
+        }
         composeRule.onNodeWithText("Remove from library").assertIsDisplayed()
     }
 
@@ -224,11 +235,35 @@ class SearchScreenTest {
         onToggleLibrary: (MediaSearchResult) -> Unit = {},
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
         onOpenSettings: () -> Unit = {}
+    ) = setSearchState(
+        { state },
+        onQueryChanged,
+        onClearQuery,
+        onCategoryChanged,
+        onRetryInitial,
+        onLoadNextPage,
+        onRetryNextPage,
+        onToggleLibrary,
+        onOpenDetails,
+        onOpenSettings
+    )
+
+    private fun setSearchState(
+        state: () -> SearchUiState,
+        onQueryChanged: (String) -> Unit = {},
+        onClearQuery: () -> Unit = {},
+        onCategoryChanged: (MediaSearchCategory) -> Unit = {},
+        onRetryInitial: () -> Unit = {},
+        onLoadNextPage: () -> Unit = {},
+        onRetryNextPage: () -> Unit = {},
+        onToggleLibrary: (MediaSearchResult) -> Unit = {},
+        onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
+        onOpenSettings: () -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
                 SearchContent(
-                    state = state,
+                    state = state(),
                     onQueryChanged = onQueryChanged,
                     onClearQuery = onClearQuery,
                     onCategoryChanged = onCategoryChanged,

@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
@@ -26,6 +27,7 @@ import kotlinx.coroutines.sync.withLock
 @Singleton
 internal class DefaultSeriesRepository @Inject constructor(
     private val seriesDao: SeriesDao,
+    private val metadataStore: MetadataCalendarStore,
     private val remote: TmdbSeasonRemoteDataSource,
     private val freshnessPolicy: SeasonCacheFreshnessPolicy,
     private val clock: Clock
@@ -93,13 +95,7 @@ internal class DefaultSeriesRepository @Inject constructor(
         }
         return try {
             val fetchedAt = clock.instant()
-            seriesDao.storeSeasonEpisodes(
-                source = seriesRef.source,
-                seriesExternalId = seriesRef.externalId,
-                season = payload.season.toEntity(fetchedAt),
-                episodes = payload.episodes.map { it.toEntity(fetchedAt) },
-                fetchedAt = fetchedAt
-            )
+            metadataStore.storeSeason(seriesRef, payload, fetchedAt)
             AppResult.Success(Unit)
         } catch (cancelled: CancellationException) {
             throw cancelled

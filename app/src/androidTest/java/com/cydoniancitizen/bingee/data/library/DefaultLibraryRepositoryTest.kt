@@ -69,7 +69,9 @@ class DefaultLibraryRepositoryTest {
         assertEquals(AppResult.Success(true), repository.isInLibrary(result.externalRef))
         assertEquals(AppResult.Success(setOf(result.externalRef)), repository.observeMembershipRefs().first())
         assertEquals(
-            AppResult.Success(listOf(entry)),
+            AppResult.Success(
+                listOf(entry.copy(progress = LibraryProgress.Movie(MovieWatchState.Unwatched)))
+            ),
             repository.observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.MOVIES)).first()
         )
         assertEquals(

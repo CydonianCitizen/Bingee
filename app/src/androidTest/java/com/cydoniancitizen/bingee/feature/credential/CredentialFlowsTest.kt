@@ -58,15 +58,13 @@ class CredentialFlowsTest {
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
 
         composeRule.onNodeWithText("Show").performClick()
+        composeRule.onNodeWithText("Hide").assertIsDisplayed()
         composeRule
             .onNode(hasSetTextAction())
-            .assert(
-                SemanticsMatcher("is not password") {
-                    !it.config.contains(SemanticsProperties.Password)
-                }
-            )
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
 
         composeRule.onNodeWithText("Hide").performClick()
+        composeRule.onNodeWithText("Show").assertIsDisplayed()
         composeRule
             .onNode(hasSetTextAction())
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))

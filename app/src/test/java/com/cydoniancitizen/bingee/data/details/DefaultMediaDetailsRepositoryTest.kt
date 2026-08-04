@@ -6,8 +6,10 @@ import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
+import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
@@ -16,8 +18,10 @@ import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
+import com.cydoniancitizen.bingee.data.series.toEntity
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload
+import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -163,7 +167,7 @@ class DefaultMediaDetailsRepositoryTest {
         client = remote,
         freshnessPolicy = CacheFreshnessPolicy(clock),
         clock = clock,
-        seasonSummaryStore = FakeSeasonSummaryStore()
+        metadataStore = FakeMetadataStore(dao, FakeSeasonSummaryStore())
     )
 
     private fun details(ref: ExternalMediaRef, type: MediaType, title: String) = MediaDetails(
@@ -224,6 +228,27 @@ class DefaultMediaDetailsRepositoryTest {
             seriesExternalId: String,
             summaries: List<SeasonEntity>
         ) = Unit
+    }
+
+    private class FakeMetadataStore(private val dao: FakeDetailsDao, private val seasons: SeasonSummaryStore) :
+        MetadataCalendarStore {
+        override suspend fun storeDetails(
+            reference: ExternalMediaRef,
+            details: MediaDetails,
+            seasons: List<Season>,
+            fetchedAt: Instant
+        ) {
+            val write = details.toCacheWrite(fetchedAt)
+            dao.storeDetails(write.media, reference.source, reference.externalId, write.details, write.genres)
+            this.seasons.upsertSeasonSummaries(
+                reference.source,
+                reference.externalId,
+                seasons.map { it.toEntity(fetchedAt) }
+            )
+        }
+
+        override suspend fun storeSeason(seriesRef: ExternalMediaRef, payload: TmdbSeasonPayload, fetchedAt: Instant) =
+            error("Not used")
     }
 
     private class FakeDetailsDao(initial: CachedDetailsRelation? = null, private val failWrites: Boolean = false) :

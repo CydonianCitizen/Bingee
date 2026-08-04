@@ -1,8 +1,12 @@
 package com.cydoniancitizen.bingee.feature.details
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -49,7 +53,7 @@ class MediaDetailsScreenTest {
 
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
         composeRule.onNodeWithText("Released").assertIsDisplayed()
-        composeRule.onNodeWithText("120 min").assertIsDisplayed()
+        composeRule.onNodeWithText("120 min").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Drama, Thriller").assertIsDisplayed()
         composeRule.onNodeWithText("Personal rating").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Mark watched").performScrollTo().performClick()
@@ -83,7 +87,7 @@ class MediaDetailsScreenTest {
 
         composeRule.onNodeWithText("TV Series").assertIsDisplayed()
         composeRule.onNodeWithText("Season 1").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Specials").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Specials")[0].performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Not aired yet").assertIsNotEnabled()
@@ -112,35 +116,41 @@ class MediaDetailsScreenTest {
 
     @Test
     fun loadingFullErrorRetryAndUnauthorizedSettingsAreActionable() {
-        setDetails(MediaDetailsUiState(content = DetailContentState.Loading))
+        val retried = AtomicBoolean(false)
+        val settings = AtomicBoolean(false)
+        var state by mutableStateOf(MediaDetailsUiState(content = DetailContentState.Loading))
+        setDetailsState(
+            state = { state },
+            onRetry = { retried.set(true) },
+            onOpenSettings = { settings.set(true) }
+        )
         composeRule.onNodeWithText("Loading title details").assertIsDisplayed()
 
-        val retried = AtomicBoolean(false)
-        setDetails(
-            MediaDetailsUiState(content = DetailContentState.Error(AppError.NetworkUnavailable)),
-            onRetry = { retried.set(true) }
-        )
+        composeRule.runOnIdle {
+            state = MediaDetailsUiState(content = DetailContentState.Error(AppError.NetworkUnavailable))
+        }
         composeRule.onNodeWithText("Retry").performClick()
         assertTrue(retried.get())
 
-        val settings = AtomicBoolean(false)
-        setDetails(
-            MediaDetailsUiState(content = DetailContentState.Error(AppError.Unauthorized)),
-            onOpenSettings = { settings.set(true) }
-        )
+        composeRule.runOnIdle {
+            state = MediaDetailsUiState(content = DetailContentState.Error(AppError.Unauthorized))
+        }
         composeRule.onNodeWithText("Open Settings").performClick()
         assertTrue(settings.get())
     }
 
     @Test
     fun staleRefreshErrorAndRefreshIndicatorKeepCachedContentVisible() {
-        setDetails(
+        var state by mutableStateOf(
             content(movie()).copy(refresh = DetailRefreshState.Error(AppError.NetworkUnavailable))
         )
+        setDetailsState({ state })
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
         composeRule.onNodeWithText("Saved details remain available.", substring = true).assertIsDisplayed()
 
-        setDetails(content(movie()).copy(refresh = DetailRefreshState.Refreshing))
+        composeRule.runOnIdle {
+            state = content(movie()).copy(refresh = DetailRefreshState.Refreshing)
+        }
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
     }
 
@@ -165,11 +175,29 @@ class MediaDetailsScreenTest {
         onToggleMovie: () -> Unit = {},
         onSaveRating: () -> Unit = {},
         onRemoveRating: () -> Unit = {}
+    ) = setDetailsState(
+        { state },
+        onRetry,
+        onToggle,
+        onOpenSettings,
+        onToggleMovie,
+        onSaveRating,
+        onRemoveRating
+    )
+
+    private fun setDetailsState(
+        state: () -> MediaDetailsUiState,
+        onRetry: () -> Unit = {},
+        onToggle: () -> Unit = {},
+        onOpenSettings: () -> Unit = {},
+        onToggleMovie: () -> Unit = {},
+        onSaveRating: () -> Unit = {},
+        onRemoveRating: () -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
                 MediaDetailsContent(
-                    state = state,
+                    state = state(),
                     onBack = {},
                     onRefresh = {},
                     onRetry = onRetry,

@@ -56,15 +56,23 @@ class DomainModelsTest {
     }
 
     @Test
-    fun releaseTimingPreservesDateOnlyValue() {
+    fun releaseEventPreservesDateOnlyValueAndStableIdentity() {
         val date = LocalDate.of(2027, 3, 10)
         val event =
             ReleaseEvent(
                 mediaRef = ExternalMediaRef(MediaSource.TMDB, "200"),
+                subject = ReleaseSubjectIdentity(
+                    source = MediaSource.TMDB,
+                    subjectType = ReleaseSubjectType.MEDIA,
+                    externalId = "200",
+                    eventType = ReleaseEventType.MOVIE_RELEASE
+                ),
                 mediaType = MediaType.MOVIE,
-                timing = ReleaseTiming.DateOnly(date)
+                eventDate = date,
+                title = "Movie"
             )
 
-        assertEquals(ReleaseTiming.DateOnly(date), event.timing)
+        assertEquals(date, event.eventDate)
+        assertEquals("TMDB:MEDIA:200:MOVIE_RELEASE", event.stableKey)
     }
 }

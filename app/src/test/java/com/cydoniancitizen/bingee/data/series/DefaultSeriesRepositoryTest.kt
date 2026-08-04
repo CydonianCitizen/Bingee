@@ -2,10 +2,12 @@ package com.cydoniancitizen.bingee.data.series
 
 import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
@@ -127,10 +129,11 @@ class DefaultSeriesRepositoryTest {
     }
 
     private fun repository(dao: FakeSeriesDao, remote: FakeRemote) = DefaultSeriesRepository(
-        dao,
-        remote,
-        SeasonCacheFreshnessPolicy(clock),
-        clock
+        seriesDao = dao,
+        metadataStore = FakeMetadataStore(dao),
+        remote = remote,
+        freshnessPolicy = SeasonCacheFreshnessPolicy(clock),
+        clock = clock
     )
 
     private fun payload(number: Int): TmdbSeasonPayload {
@@ -149,6 +152,25 @@ class DefaultSeriesRepositoryTest {
         override suspend fun load(seriesRef: ExternalMediaRef, seasonNumber: Int): AppResult<TmdbSeasonPayload> {
             calls += seasonNumber
             return result(seasonNumber)
+        }
+    }
+
+    private class FakeMetadataStore(private val dao: FakeSeriesDao) : MetadataCalendarStore {
+        override suspend fun storeDetails(
+            reference: ExternalMediaRef,
+            details: MediaDetails,
+            seasons: List<Season>,
+            fetchedAt: Instant
+        ) = error("Not used")
+
+        override suspend fun storeSeason(seriesRef: ExternalMediaRef, payload: TmdbSeasonPayload, fetchedAt: Instant) {
+            dao.storeSeasonEpisodes(
+                seriesRef.source,
+                seriesRef.externalId,
+                payload.season.toEntity(fetchedAt),
+                payload.episodes.map { it.toEntity(fetchedAt) },
+                fetchedAt
+            )
         }
     }
 

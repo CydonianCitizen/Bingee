@@ -81,8 +81,8 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
-    fun migrateOneThroughFourPreservesCanonicalRowsAndValidatesFinalSchema() {
-        helper.createDatabase(V1_TO_V4_DB, 1).apply {
+    fun migrateOneThroughFivePreservesCanonicalRowsAndValidatesFinalSchema() {
+        helper.createDatabase(V1_TO_V5_DB, 1).apply {
             execSQL(
                 "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
                     "overview, poster_url, release_date, created_at, metadata_updated_at) " +
@@ -103,12 +103,13 @@ class BingeeDatabaseMigrationTest {
         }
 
         val migrated = helper.runMigrationsAndValidate(
-            V1_TO_V4_DB,
-            4,
+            V1_TO_V5_DB,
+            5,
             true,
             MIGRATION_1_2,
             MIGRATION_2_3,
-            MIGRATION_3_4
+            MIGRATION_3_4,
+            MIGRATION_4_5
         )
 
         assertEquals(2, migrated.count("media_entries"))
@@ -116,6 +117,72 @@ class BingeeDatabaseMigrationTest {
         assertEquals(2, migrated.count("library_entries"))
         assertNewMilestoneSixTablesEmpty(migrated)
         assertEquals(0, migrated.count("media_ratings"))
+        assertEquals(1, migrated.count("release_events"))
+        assertEquals(0, migrated.count("calendar_refresh_state"))
+        migrated.close()
+    }
+
+    @Test
+    fun migrateFourToFiveBackfillsDatedMetadataAndPreservesPersonalState() {
+        helper.createDatabase(V4_TO_V5_DB, 4).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
+                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
+                    "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, '2027-01-02', " +
+                    "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')," +
+                    "(2, 'SERIES', 'Series', NULL, NULL, NULL, NULL, " +
+                    "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '100')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T10:00:00Z')")
+            execSQL(
+                "INSERT INTO seasons(local_season_id, local_media_id, source, external_id, season_number, " +
+                    "name, overview, poster_url, air_date, episode_count, metadata_updated_at, episodes_fetched_at) " +
+                    "VALUES(10, 2, 'TMDB', '42', 0, 'Specials', NULL, NULL, '2027-01-03', 2, " +
+                    "'2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z')"
+            )
+            execSQL(
+                "INSERT INTO episodes(local_episode_id, local_season_id, source, external_id, episode_number, " +
+                    "title, overview, air_date, runtime_minutes, still_url, metadata_updated_at) VALUES" +
+                    "(20, 10, 'TMDB', '42', 1, 'Dated', NULL, '2027-01-04', NULL, NULL, " +
+                    "'2026-08-03T10:00:00Z')," +
+                    "(21, 10, 'TMDB', '43', 2, 'Undated', NULL, NULL, NULL, NULL, " +
+                    "'2026-08-03T10:00:00Z')"
+            )
+            execSQL("INSERT INTO movie_watch_progress(local_media_id, watched_at) VALUES(1, '2026-08-03T11:00:00Z')")
+            execSQL(
+                "INSERT INTO episode_watch_progress(local_episode_id, watched_at) VALUES(20, '2026-08-03T11:00:00Z')"
+            )
+            execSQL(
+                "INSERT INTO media_ratings(local_media_id, rating_value, rated_at, updated_at) " +
+                    "VALUES(1, 8, '2026-08-03T11:00:00Z', '2026-08-03T11:00:00Z')"
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(V4_TO_V5_DB, 5, true, MIGRATION_4_5)
+
+        assertEquals(3, migrated.count("release_events"))
+        assertEquals(0, migrated.count("calendar_refresh_state"))
+        assertEquals(1, migrated.count("media_ratings"))
+        assertEquals(1, migrated.count("movie_watch_progress"))
+        assertEquals(1, migrated.count("episode_watch_progress"))
+        assertEquals(2, migrated.count("library_entries"))
+        migrated.query(
+            "SELECT subject_type, event_type, event_date FROM release_events " +
+                "ORDER BY event_date"
+        ).use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("MEDIA", cursor.getString(0))
+            assertEquals("MOVIE_RELEASE", cursor.getString(1))
+            assertEquals("2027-01-02", cursor.getString(2))
+            cursor.moveToNext()
+            assertEquals("SEASON", cursor.getString(0))
+            cursor.moveToNext()
+            assertEquals("EPISODE", cursor.getString(0))
+        }
         migrated.close()
     }
 
@@ -230,7 +297,8 @@ class BingeeDatabaseMigrationTest {
     private companion object {
         const val TEST_DB = "bingee-migration-1-2"
         const val V2_TO_V3_DB = "bingee-migration-2-3"
-        const val V1_TO_V4_DB = "bingee-migration-1-4"
+        const val V1_TO_V5_DB = "bingee-migration-1-5"
         const val V3_TO_V4_DB = "bingee-migration-3-4"
+        const val V4_TO_V5_DB = "bingee-migration-4-5"
     }
 }
