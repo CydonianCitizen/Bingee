@@ -58,6 +58,7 @@ import java.time.ZoneOffset
 @Composable
 internal fun SettingsScreen(
     modifier: Modifier = Modifier,
+    onOpenTvTimeImport: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     notificationViewModel: ReleaseNotificationSettingsViewModel = hiltViewModel(),
     backupViewModel: BackupViewModel = hiltViewModel()
@@ -115,6 +116,7 @@ internal fun SettingsScreen(
         onConfirmRestore = backupViewModel::confirmRestore,
         onCancelRestore = backupViewModel::cancelPreview,
         onDismissBackupFeedback = backupViewModel::dismissFeedback,
+        onOpenTvTimeImport = onOpenTvTimeImport,
         modifier = modifier
     )
 }
@@ -142,6 +144,7 @@ internal fun SettingsContent(
     onConfirmRestore: () -> Unit = {},
     onCancelRestore: () -> Unit = {},
     onDismissBackupFeedback: () -> Unit = {},
+    onOpenTvTimeImport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -185,6 +188,7 @@ internal fun SettingsContent(
             onRestore = onRestoreBackup,
             onDismiss = onDismissBackupFeedback
         )
+        TvTimeImportSection(onOpen = onOpenTvTimeImport)
         HorizontalDivider()
         NotificationSettingsSection(
             state = notificationState,
@@ -273,6 +277,21 @@ internal fun SettingsContent(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun TvTimeImportSection(onOpen: () -> Unit) {
+    Text(
+        text = stringResource(R.string.tvtime_import_title),
+        modifier = Modifier.semantics { heading() },
+        style = MaterialTheme.typography.headlineSmall
+    )
+    Text(stringResource(R.string.tvtime_import_experimental))
+    Text(stringResource(R.string.tvtime_import_privacy), style = MaterialTheme.typography.bodySmall)
+    Text(stringResource(R.string.tvtime_import_limitations), style = MaterialTheme.typography.bodySmall)
+    Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.tvtime_import_open_action))
     }
 }
 

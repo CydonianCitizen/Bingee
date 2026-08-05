@@ -108,6 +108,9 @@ internal abstract class SeriesDao : SeasonSummaryStore {
     )
     protected abstract suspend fun getEpisode(source: MediaSource, externalId: String): EpisodeEntity?
 
+    suspend fun getEpisodeForImport(source: MediaSource, externalId: String): EpisodeEntity? =
+        getEpisode(source, externalId)
+
     @Query(
         """
         SELECT * FROM episodes

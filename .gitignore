@@ -24,6 +24,9 @@ keystore.properties
 secrets.properties
 secrets.xml
 
+# Private external-import evidence
+.local-evidence/tv-time/
+
 # Operating-system files
 .DS_Store
 Thumbs.db

@@ -17,7 +17,13 @@ Bingee is an Android, local-first movie and TV-series tracker. The current verti
 - approximate WorkManager refresh and optional local notifications;
 - versioned plaintext JSON export and replace-only restore through SAF.
 
-No Bingee account, proprietary backend, cloud sync, analytics, crash-reporting SDK, Jikan behavior, or TV Time import exists.
+No Bingee account, proprietary backend, cloud sync, analytics, crash-reporting SDK, or Jikan behavior exists. Milestone 12B adds an experimental additive TV Time importer for one documented JSON ZIP profile only; it does not change the beta gate status below.
+
+## Milestone 12B carry-forward
+
+The importer accepts only the role-based JSON ZIP profile derived from `TVTIME-SAMPLE-001` and documented in `docs/imports/tv-time-source-format-v1.md`. It uses SAF, bounded private ZIP inspection, structural role detection, dedicated source parsing, conservative TMDB matching, manual review/skip, an additive preview, and one Room transaction. Existing membership, progress, ratings, credentials, preferences, notification state, and calendar state are preserved. Ratings, favorites, custom lists, rewatch information, CSV, other TV Time layouts, TV Time authentication, and TV Time network access are unsupported.
+
+Milestone 12B JVM coverage and Room transaction tests are part of the implementation evidence. Device-only import flow, real SAF picker behavior, large-data stress, process death, accessibility walkthroughs, and connected transaction/UI tests remain evidence tasks unless explicitly recorded below. Their absence does not resolve any Milestone 11 blocker.
 
 The tested build is `0.1.0-dev` / version code `1`. The intended first beta release-note label is `0.1.0-beta1`; signing and publication remain maintainer actions.
 
@@ -103,7 +109,7 @@ Block public beta for any migration failure, incomplete restore rollback, semant
 - remote metadata requires the user's TMDB credential;
 - no cloud synchronization or account exists;
 - Jikan/anime is not implemented;
-- TV Time and generic third-party imports are not implemented;
+- No generic third-party importer is implemented. The experimental TV Time action is limited to the documented JSON ZIP profile and is not a claim of broad TV Time support;
 - JSON backup is plaintext;
 - release signing is not configured in the repository;
 - release optimization/minification is disabled in the current development build;

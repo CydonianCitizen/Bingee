@@ -3,6 +3,7 @@ package com.cydoniancitizen.bingee.data.tmdb.search
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 internal interface TmdbSearchService {
@@ -12,7 +13,8 @@ internal interface TmdbSearchService {
         @Query("query") query: String,
         @Query("include_adult") includeAdult: Boolean,
         @Query("language") language: String,
-        @Query("page") page: Int
+        @Query("page") page: Int,
+        @Query("primary_release_year") primaryReleaseYear: Int? = null
     ): Response<TmdbMovieSearchResponseDto>
 
     @GET("3/search/tv")
@@ -21,6 +23,15 @@ internal interface TmdbSearchService {
         @Query("query") query: String,
         @Query("include_adult") includeAdult: Boolean,
         @Query("language") language: String,
-        @Query("page") page: Int
+        @Query("page") page: Int,
+        @Query("first_air_date_year") firstAirDateYear: Int? = null
     ): Response<TmdbTvSearchResponseDto>
+
+    @GET("3/find/{external_id}")
+    suspend fun findByExternalId(
+        @Header("Authorization") authorization: String,
+        @Path("external_id") externalId: String,
+        @Query("external_source") externalSource: String,
+        @Query("language") language: String
+    ): Response<TmdbFindResponseDto>
 }

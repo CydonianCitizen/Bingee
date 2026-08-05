@@ -47,7 +47,7 @@ SearchScreen/LibraryScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v7)
+                           LibraryDao -> Room bingee.db (v8)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -129,7 +129,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 7; schema versions 1 through 7 are generated through KSP into `app/schemas/` and version controlled. The public backup schema is independent and currently version 1.
+- Room database `bingee.db` is version 8; schema versions 1 through 8 are generated through KSP into `app/schemas/` and version controlled. Version 8 adds only source-provenance references; the public backup schema is independent and currently version 1.
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
@@ -141,6 +141,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Version 5 adds normalized `release_events` and singleton `calendar_refresh_state`. Migration 4-to-5 preserves all v4 rows, backfills only non-null cached movie/season/episode dates, and leaves refresh state empty. The full explicit migration chain remains registered without destructive fallback.
 - Version 6 adds normalized `notification_deliveries`. Migration 5-to-6 preserves all v5 rows and creates an empty ledger. Delivery identity includes provider, subject type/ID, event type/date, and lead days; rows contain no notification text, permission, preference, title, progress, rating, token, provider body, or worker state.
 - Version 7 adds singleton `portable_preferences` for notification lead/category choices. Migration 6-to-7 preserves all prior tables and creates default choices with an incomplete legacy bridge marker. The first settings/preferences read atomically copies old DataStore lead/category values into Room; the bridge is idempotent. DataStore retains only device-local notification enablement.
+- Version 8 adds `import_provenance_refs`, with explicit namespaced source identity, target type, and a single local media/season/episode foreign-key target. Migration 7-to-8 is non-destructive and does not overload `MediaSource`; TVDB, IMDb, and TV Time UUID values remain provenance, not TMDB provider routes.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
 - `media_ratings` is independent of Library membership and watch progress. Removing/re-adding a title, refreshing metadata, changing progress, or removing credentials retains the rating.
@@ -152,6 +153,14 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Backup format `bingee-backup` v1 exports portable media metadata, provider-qualified references, active membership, personal timestamps, ratings, progress, all cached seasons/episodes for included series, and selected notification choices. It never serializes Room entities, local IDs, credentials, raw provider bodies, WorkManager records, or notification-delivery history. See `docs/backup-format-v1.md` and its JSON Schema.
 - Import supports only `REPLACE_PORTABLE_DATA`: parse and validate first, preview second, one explicit Room transaction last. The transaction regenerates local IDs, restores portable state, rebuilds release events, clears technical derived state, and leaves credential/permission/enablement/device runtime state outside the transaction.
 - SAF uses `CreateDocument("application/json")` and `OpenDocument`; sharing uses a private cache subdirectory exposed only through a read-only `FileProvider` URI. Backup content and selected URIs are never logged.
+
+## Experimental TV Time import
+
+`data/imports/tvtime` is a focused source boundary, not a generic third-party importer. `TvTimeZipGateway` owns SAF reads, private temporary-copy cleanup, archive limits, and path/encryption/nested-archive checks. `TvTimeSourceParser` owns the exact `TVTIME-SAMPLE-001` role grammar and maps dedicated source DTOs into provider-neutral `Imported*` hints. It does not call TMDB or Room and retains no raw JSON. A source summary is available before matching; safe record errors and unknown-field warnings remain structural diagnostics.
+
+`TvTimeMatcher` reuses the existing authenticated TMDB search, Find-by-external-ID, details, and season data sources. It accepts only unique compatible exact identities, a documented movie title/year proposal, and ordinary episode numbering under an accepted parent series. Series title-only results and specials remain reviewable. Requests are sequential/bounded and deduplicated for one import session; TMDB errors never mutate Room.
+
+`TvTimeImportPlanBuilder` resolves all accepted candidates and canonical metadata before confirmation. `TvTimeImportStore` executes one additive `RoomDatabase.withTransaction` and uses `import_provenance_refs` (Room v8) for distinct TVDB, IMDb, and TV Time UUID namespaces. Existing membership, progress, ratings, credentials, portable preferences, notification delivery state, and calendar refresh state are preserved. Bingee backup restore remains the separate replace-only path.
 
 ## Local release calendar
 
@@ -228,4 +237,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0016. Episode/season ratings, written reviews, custom lists, cache pruning, provider-removal reconciliation, and extra providers remain deferred.
+Accepted decisions are recorded in ADRs 0001–0019. Episode/season ratings, written reviews, custom lists, cache pruning, provider-removal reconciliation, Jikan, cloud sync, and other third-party import formats remain deferred.

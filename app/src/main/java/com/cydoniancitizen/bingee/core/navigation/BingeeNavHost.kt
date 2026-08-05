@@ -13,6 +13,7 @@ import com.cydoniancitizen.bingee.feature.library.LibraryScreen
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingRoute
 import com.cydoniancitizen.bingee.feature.search.SearchScreen
 import com.cydoniancitizen.bingee.feature.settings.SettingsScreen
+import com.cydoniancitizen.bingee.feature.tvtimeimport.TvTimeImportScreen
 
 @Composable
 fun BingeeNavHost(
@@ -57,7 +58,10 @@ fun BingeeNavHost(
             )
         }
         composable(TopLevelDestination.SETTINGS.route) {
-            SettingsScreen()
+            SettingsScreen(onOpenTvTimeImport = { navController.navigate(AppRoute.TV_TIME_IMPORT) })
+        }
+        composable(AppRoute.TV_TIME_IMPORT) {
+            TvTimeImportScreen(onBack = navController::popBackStack)
         }
         composable(
             route = DetailRoute.TEMPLATE,

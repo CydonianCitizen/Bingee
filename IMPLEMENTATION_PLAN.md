@@ -579,6 +579,10 @@ Ottenere e documentare esempi reali, anonimizzati e legalmente utilizzabili del 
 - Nessun record ambiguo viene collegato silenziosamente con bassa confidenza.
 - L'import può essere rieseguito senza moltiplicare i progressi.
 
+## Stato Milestone 12B — 2026-08-04
+
+È presente un'implementazione sperimentale limitata al profilo JSON ZIP role-based documentato da `TVTIME-SAMPLE-001`: SAF, ZIP bounded e sicuro, parsing strutturale, matching TMDB conservativo, review/skip, anteprima e transazione Room additiva/idempotente. CSV, varianti TV Time non verificate, rating, preferiti, liste custom, rewatch timeline, autenticazione/rete TV Time e sostituzione dati restano fuori scope. La milestone resta parziale finché non sono completate le verifiche runtime/manuali e il full connected suite non supera il timeout esistente.
+
 ---
 
 # Milestone 13 — Integrazione Jikan e anime

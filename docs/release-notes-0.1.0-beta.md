@@ -21,6 +21,6 @@ Bingee is a local-first Android app for keeping a personal movie and TV-series h
 - JSON backups are plaintext and are not encrypted or password protected. Keep them private.
 - Bingee has no cloud synchronization or proprietary account.
 - Anime/Jikan is not available yet.
-- TV Time and other third-party imports are not available yet.
+- Experimental TV Time JSON ZIP import is outside this beta release scope; the later Milestone 12B implementation supports only one documented profile and is not a broad TV Time or generic third-party import claim.
 
 Please report issues with the Android version, device, app version, steps to reproduce, and redacted logs. Do not send credentials, personal backups, URIs, or device identifiers.

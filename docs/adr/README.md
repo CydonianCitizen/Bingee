@@ -25,3 +25,5 @@ To add an ADR, copy `0000-template.md`, use the next available four-digit number
 | 0015 | Room v5 local release calendar |
 | 0016 | WorkManager release notifications and Room v6 |
 | 0017 | Versioned JSON backup and transactional restore |
+| 0018 | TV Time import evidence and boundaries |
+| 0019 | TV Time JSON ZIP import implementation |

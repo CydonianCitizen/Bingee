@@ -282,3 +282,34 @@ internal val MIGRATION_6_7 = object : Migration(6, 7) {
         )
     }
 }
+
+internal val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `import_provenance_refs` (
+                `namespace` TEXT NOT NULL,
+                `external_id` TEXT NOT NULL,
+                `target_type` TEXT NOT NULL,
+                `local_media_id` INTEGER,
+                `local_season_id` INTEGER,
+                `local_episode_id` INTEGER,
+                PRIMARY KEY(`namespace`, `external_id`, `target_type`),
+                FOREIGN KEY(`local_media_id`) REFERENCES `media_entries`(`local_media_id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(`local_season_id`) REFERENCES `seasons`(`local_season_id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(`local_episode_id`) REFERENCES `episodes`(`local_episode_id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                CHECK ((`local_media_id` IS NOT NULL) + (`local_season_id` IS NOT NULL) + (`local_episode_id` IS NOT NULL) = 1)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_import_provenance_refs_local_media_id` ON `import_provenance_refs` (`local_media_id`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_import_provenance_refs_local_season_id` ON `import_provenance_refs` (`local_season_id`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_import_provenance_refs_local_episode_id` ON `import_provenance_refs` (`local_episode_id`)"
+        )
+    }
+}

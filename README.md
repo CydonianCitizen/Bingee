@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and currently in **Milestone 11 — Hardening and beta readiness**. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, offline Library organization, a Room-first Home calendar, approximate local notifications, and versioned JSON backup/restore. The beta evidence and known limitations are tracked in [beta readiness](docs/beta-readiness.md).
+The project is unreleased and carries Milestone 11's partial beta-readiness status while Milestone 12B adds an experimental TV Time importer. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, offline Library organization, a Room-first Home calendar, approximate local notifications, versioned JSON backup/restore, and an additive importer for one documented TV Time JSON ZIP profile. The beta evidence and known limitations are tracked in [beta readiness](docs/beta-readiness.md).
 
 Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
@@ -66,6 +66,8 @@ On first run without a configured credential, Bingee offers TMDB setup or offlin
 WorkManager maintains a bounded batch of up to 20 followed titles approximately once per day when network is available. A separate network-free worker evaluates cached Room events for optional local notifications. Notifications are disabled by default; Settings requests Android notification permission only after the user enables them and supports same-day, one-day, three-day, or seven-day lead times plus movie, season, and episode categories. Android may delay work because of Doze, battery optimization, constraints, or device policy; Bingee promises no exact notification time.
 
 Settings → Data & backup saves through Android's Storage Access Framework, shares a validated plaintext JSON file through the system Sharesheet, and restores only with explicit `Replace local data` confirmation. Restore validates the complete file before one Room transaction. See [backup format v1](docs/backup-format-v1.md).
+
+Settings → Data & backup also exposes an experimental `Import TV Time history` action. It supports only the role-based JSON ZIP profile derived from evidence ID `TVTIME-SAMPLE-001`. The archive is inspected locally with bounded ZIP limits, then matched conservatively through the existing TMDB credential. Ambiguous records require review or skip; confirmation applies additive, idempotent changes only. Ratings, favorites, custom lists, rewatch counters/timelines, CSV, other TV Time variants, TV Time authentication, and TV Time network access are unsupported. See [TV Time source profile](docs/imports/tv-time-source-format-v1.md) and [ADR 0019](docs/adr/0019-tv-time-import-implementation.md).
 
 Release drafts and the manual verification matrix are in [beta readiness](docs/beta-readiness.md) and [beta release notes](docs/release-notes-0.1.0-beta.md). No public release has been published from this repository.
 

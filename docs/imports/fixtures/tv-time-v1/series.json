@@ -1,0 +1,157 @@
+[
+  {
+    "_noEpisodeData": false,
+    "created_at": "2041-02-03T04:05:06.1234Z",
+    "id": {
+      "imdb": null,
+      "tvdb": 991001
+    },
+    "is_favorite": true,
+    "seasons": [
+      {
+        "episodes": [
+          {
+            "id": {
+              "imdb": null,
+              "tvdb": 992001
+            },
+            "is_watched": true,
+            "name": "Special \"One\", 演",
+            "number": 1,
+            "rewatch_count": 0,
+            "special": true,
+            "watched_at": "2041-02-04T05:06:07Z",
+            "watched_count": 1
+          }
+        ],
+        "is_specials": true,
+        "number": 0
+      },
+      {
+        "episodes": [
+          {
+            "id": {
+              "imdb": null,
+              "tvdb": 992002
+            },
+            "is_watched": false,
+            "name": "Episode, Unseen",
+            "number": 1,
+            "rewatch_count": 0,
+            "special": false,
+            "watched_at": null,
+            "watched_count": 0
+          },
+          {
+            "id": {
+              "imdb": null,
+              "tvdb": 992003
+            },
+            "is_watched": true,
+            "name": "Episode Two",
+            "number": 2,
+            "rewatch_count": 0,
+            "special": false,
+            "watched_at": "2041-02-05T05:06:07Z",
+            "watched_count": 1
+          }
+        ],
+        "is_specials": false,
+        "number": 1
+      }
+    ],
+    "status": "synthetic-status",
+    "title": "Synthetic Series Alpha",
+    "uuid": "44444444-4444-4444-8444-444444444444"
+  },
+  {
+    "_noEpisodeData": false,
+    "created_at": "2041-02-03T04:05:06.12345Z",
+    "id": {
+      "imdb": null,
+      "tvdb": 991002
+    },
+    "is_favorite": false,
+    "seasons": [
+      {
+        "episodes": [
+          {
+            "id": {
+              "imdb": null,
+              "tvdb": 992004
+            },
+            "is_watched": true,
+            "name": "Quoted \"Episode\"",
+            "number": 1,
+            "rewatch_count": 1,
+            "special": false,
+            "watched_at": "2041-02-06T05:06:07Z",
+            "watched_count": 2
+          }
+        ],
+        "is_specials": false,
+        "number": 1
+      },
+      {
+        "episodes": [],
+        "is_specials": false,
+        "number": 2042
+      }
+    ],
+    "status": "synthetic-status",
+    "title": "Synthetic Series Beta",
+    "uuid": "55555555-5555-4555-8555-555555555555"
+  },
+  {
+    "_noEpisodeData": false,
+    "created_at": "2041-02-03T04:05:06Z",
+    "id": {
+      "imdb": null,
+      "tvdb": 991003
+    },
+    "is_favorite": false,
+    "seasons": [
+      {
+        "episodes": [],
+        "is_specials": false,
+        "number": 2
+      }
+    ],
+    "status": "synthetic-status",
+    "title": "Synthetic Series Gamma",
+    "uuid": "66666666-6666-4666-8666-666666666666"
+  },
+  {
+    "_noEpisodeData": false,
+    "created_at": "2041-02-03T04:05:06Z",
+    "id": {
+      "imdb": null,
+      "tvdb": 991004
+    },
+    "is_favorite": true,
+    "seasons": [
+      {
+        "episodes": [
+          {
+            "id": {
+              "imdb": null,
+              "tvdb": 992005
+            },
+            "is_watched": false,
+            "name": "Unicode Épisode",
+            "number": 1,
+            "rewatch_count": 0,
+            "special": false,
+            "watched_at": null,
+            "watched_count": 0
+          }
+        ],
+        "is_specials": false,
+        "number": 1
+      }
+    ],
+    "status": "synthetic-status",
+    "title": "Synthetic Series Delta",
+    "uuid": "77777777-7777-4777-8777-777777777777"
+  }
+]

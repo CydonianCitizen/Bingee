@@ -37,4 +37,5 @@ fun topLevelDestinationForRoute(route: String?): TopLevelDestination? =
 
 object AppRoute {
     const val ONBOARDING = "onboarding"
+    const val TV_TIME_IMPORT = "tv-time-import"
 }

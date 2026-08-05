@@ -222,6 +222,16 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrateSevenToEightCreatesEmptyImportProvenanceTable() {
+        helper.createDatabase(V7_TO_V8_DB, 7).close()
+
+        val migrated = helper.runMigrationsAndValidate(V7_TO_V8_DB, 8, true, MIGRATION_7_8)
+
+        assertEquals(0, migrated.count("import_provenance_refs"))
+        migrated.close()
+    }
+
+    @Test
     fun migrateFourToFiveBackfillsDatedMetadataAndPreservesPersonalState() {
         helper.createDatabase(V4_TO_V5_DB, 4).apply {
             execSQL(
@@ -402,5 +412,6 @@ class BingeeDatabaseMigrationTest {
         const val V5_TO_V6_DB = "bingee-migration-5-6"
         const val V6_TO_V7_DB = "bingee-migration-6-7"
         const val V1_TO_V7_DB = "bingee-migration-1-7"
+        const val V7_TO_V8_DB = "bingee-migration-7-8"
     }
 }
