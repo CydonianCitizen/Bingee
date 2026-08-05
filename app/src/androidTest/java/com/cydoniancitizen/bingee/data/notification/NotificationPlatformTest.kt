@@ -63,11 +63,19 @@ class NotificationPlatformTest {
             ReleaseEventType.MOVIE_RELEASE -> ReleaseSubjectType.MEDIA
             ReleaseEventType.SEASON_PREMIERE -> ReleaseSubjectType.SEASON
             ReleaseEventType.EPISODE_AIRING -> ReleaseSubjectType.EPISODE
+            ReleaseEventType.ANIME_PREMIERE -> ReleaseSubjectType.MEDIA
+        }
+
+        val source = if (type == ReleaseEventType.ANIME_PREMIERE) MediaSource.JIKAN else MediaSource.TMDB
+        val mediaType = when (type) {
+            ReleaseEventType.MOVIE_RELEASE -> MediaType.MOVIE
+            ReleaseEventType.ANIME_PREMIERE -> MediaType.ANIME
+            else -> MediaType.SERIES
         }
         return ReleaseEvent(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "42"),
-            subject = ReleaseSubjectIdentity(MediaSource.TMDB, subjectType, "7", type),
-            mediaType = if (type == ReleaseEventType.MOVIE_RELEASE) MediaType.MOVIE else MediaType.SERIES,
+            mediaRef = ExternalMediaRef(source, "42"),
+            subject = ReleaseSubjectIdentity(source, subjectType, "7", type),
+            mediaType = mediaType,
             eventDate = LocalDate.of(2026, 8, 4),
             title = "Fixture",
             seasonNumber = season,

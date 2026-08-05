@@ -255,6 +255,7 @@ private fun ReleaseEventCard(event: ReleaseEvent, category: ReleaseDateCategory,
 @Composable
 private fun ReleaseEvent.description(): String = when (subject.eventType) {
     ReleaseEventType.MOVIE_RELEASE -> stringResource(R.string.home_event_movie_release)
+    ReleaseEventType.ANIME_PREMIERE -> stringResource(R.string.home_event_anime_premiere)
     ReleaseEventType.SEASON_PREMIERE -> {
         val name = subjectTitle ?: stringResource(R.string.detail_season_fallback, requireNotNull(seasonNumber))
         stringResource(R.string.home_event_season, requireNotNull(seasonNumber), name)

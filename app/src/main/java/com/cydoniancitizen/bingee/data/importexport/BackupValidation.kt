@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.data.importexport
 
+import com.cydoniancitizen.bingee.core.model.AnimeWatchProgress
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 
@@ -32,7 +33,10 @@ internal data class BackupPreview(
 internal object BackupValidator {
     fun validate(document: BackupDocument): BackupValidationResult = try {
         require(document.formatId == BACKUP_FORMAT_ID, BackupFailureKind.WRONG_FORMAT)
-        require(document.schemaVersion == BACKUP_SCHEMA_VERSION, BackupFailureKind.UNSUPPORTED_VERSION)
+        require(
+            document.schemaVersion in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION,
+            BackupFailureKind.UNSUPPORTED_VERSION
+        )
         val data = document.data
         require(data.media.size <= BackupLimits.MAX_MEDIA, BackupFailureKind.TOO_LARGE)
         require(data.seasons.size <= BackupLimits.MAX_SEASONS, BackupFailureKind.TOO_LARGE)
@@ -46,6 +50,15 @@ internal object BackupValidator {
             checkText(media.originalTitle)
             checkText(media.overview)
             checkUrl(media.posterUrl)
+            val expectedSource = if (media.mediaType == MediaType.ANIME) MediaSource.JIKAN else MediaSource.TMDB
+            require(media.primaryRef.source == expectedSource, BackupFailureKind.CONFLICTING_REFERENCE)
+            if (document.schemaVersion == BACKUP_SCHEMA_VERSION_V1) {
+                require(media.mediaType != MediaType.ANIME, BackupFailureKind.VALIDATION)
+            }
+            require(
+                media.externalRefs.all { it.source == expectedSource },
+                BackupFailureKind.CONFLICTING_REFERENCE
+            )
             checkProvider(media.primaryRef)
             val refs = media.externalRefs
             require(refs.isNotEmpty(), BackupFailureKind.MISSING_REFERENCE)
@@ -75,6 +88,8 @@ internal object BackupValidator {
         data.seasons.forEach { season ->
             checkProvider(season.mediaRef)
             checkProvider(season.externalRef)
+            require(season.mediaRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(season.externalRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
             val media = mediaByRef[season.mediaRef.key()] ?: missing()
             require(media.mediaType == MediaType.SERIES, BackupFailureKind.CONFLICTING_REFERENCE)
             require(media.primaryRef.source == season.externalRef.source, BackupFailureKind.CONFLICTING_REFERENCE)
@@ -105,6 +120,8 @@ internal object BackupValidator {
         data.episodes.forEach { episode ->
             checkProvider(episode.seasonRef)
             checkProvider(episode.externalRef)
+            require(episode.seasonRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(episode.externalRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
             val season = seasonsByRef[episode.seasonRef.key()] ?: missing()
             require(season.externalRef.source == episode.externalRef.source, BackupFailureKind.CONFLICTING_REFERENCE)
             require(episode.episodeNumber > 0, BackupFailureKind.VALIDATION)
@@ -156,6 +173,64 @@ internal object BackupValidator {
             require(ratingRefs.add(rating.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
+        if (document.schemaVersion == BACKUP_SCHEMA_VERSION_V1) {
+            require(data.animeDetails.isEmpty(), BackupFailureKind.VALIDATION)
+            require(data.animeRelations.isEmpty(), BackupFailureKind.VALIDATION)
+            require(data.animeProgress.isEmpty(), BackupFailureKind.VALIDATION)
+        }
+
+        val animeDetailRefs = hashSetOf<String>()
+        data.animeDetails.forEach { details ->
+            val media = mediaByRef[details.mediaRef.key()] ?: missing()
+            require(media.mediaType == MediaType.ANIME, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(details.mediaRef.source == MediaSource.JIKAN, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(animeDetailRefs.add(details.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+            require(details.episodeCount == null || details.episodeCount > 0, BackupFailureKind.VALIDATION)
+            require(details.year == null || details.year in 1900..9999, BackupFailureKind.VALIDATION)
+            require(details.providerScore == null || details.providerScore in 0.0..10.0, BackupFailureKind.VALIDATION)
+            checkText(details.englishTitle)
+            checkText(details.japaneseTitle)
+            checkText(details.synopsis)
+            checkText(details.duration)
+            checkText(details.season)
+            checkUrl(details.posterUrl)
+        }
+
+        val animeRelationKeys = hashSetOf<String>()
+        data.animeRelations.forEach { relation ->
+            val media = mediaByRef[relation.mediaRef.key()] ?: missing()
+            require(media.mediaType == MediaType.ANIME, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(relation.mediaRef.source == MediaSource.JIKAN, BackupFailureKind.CONFLICTING_REFERENCE)
+            checkProvider(relation.relatedRef)
+            require(relation.relatedRef.source == MediaSource.JIKAN, BackupFailureKind.CONFLICTING_REFERENCE)
+            checkText(relation.relationType)
+            checkText(relation.relatedTitle)
+            require(relation.relationType.isNotBlank(), BackupFailureKind.VALIDATION)
+            require(relation.relatedTitle.isNotBlank(), BackupFailureKind.VALIDATION)
+            require(
+                animeRelationKeys.add(
+                    "${relation.mediaRef.key()}|${relation.relationType}|${relation.relatedRef.key()}"
+                ),
+                BackupFailureKind.DUPLICATE_IDENTITY
+            )
+        }
+
+        val animeProgressRefs = hashSetOf<String>()
+        data.animeProgress.forEach { progress ->
+            val media = mediaByRef[progress.mediaRef.key()] ?: missing()
+            require(media.mediaType == MediaType.ANIME, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(progress.mediaRef.source == MediaSource.JIKAN, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(
+                progress.watchedEpisodeCount in 0..AnimeWatchProgress.MAX_WATCHED_EPISODES,
+                BackupFailureKind.VALIDATION
+            )
+            require(
+                (progress.completedAt == null) == (progress.completionOrigin == null),
+                BackupFailureKind.VALIDATION
+            )
+            require(animeProgressRefs.add(progress.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+        }
+
         require(data.preferences.notificationLeadDays in setOf(0, 1, 3, 7), BackupFailureKind.VALIDATION)
         BackupValidationResult.Success(ValidatedBackupPlan(document))
     } catch (failure: BackupValidationFailure) {
@@ -185,8 +260,12 @@ internal object BackupValidator {
     }
 
     private fun checkProvider(ref: BackupRef) {
-        require(ref.source == MediaSource.TMDB, BackupFailureKind.VALIDATION)
+        require(ref.source == MediaSource.TMDB || ref.source == MediaSource.JIKAN, BackupFailureKind.VALIDATION)
         require(ref.externalId.isNotBlank(), BackupFailureKind.VALIDATION)
+        require(
+            ref.source != MediaSource.JIKAN || ref.externalId.matches(Regex("[1-9][0-9]*")),
+            BackupFailureKind.VALIDATION
+        )
         require(ref.externalId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
     }
 

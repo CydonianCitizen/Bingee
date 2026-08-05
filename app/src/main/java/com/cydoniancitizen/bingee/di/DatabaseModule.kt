@@ -3,6 +3,7 @@ package com.cydoniancitizen.bingee.di
 import android.content.Context
 import androidx.room.Room
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
+import com.cydoniancitizen.bingee.data.library.local.AnimeDao
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
 import com.cydoniancitizen.bingee.data.library.local.ImportProgressDao
@@ -15,6 +16,7 @@ import com.cydoniancitizen.bingee.data.library.local.MIGRATION_4_5
 import com.cydoniancitizen.bingee.data.library.local.MIGRATION_5_6
 import com.cydoniancitizen.bingee.data.library.local.MIGRATION_6_7
 import com.cydoniancitizen.bingee.data.library.local.MIGRATION_7_8
+import com.cydoniancitizen.bingee.data.library.local.MIGRATION_8_9
 import com.cydoniancitizen.bingee.data.library.local.NotificationDeliveryDao
 import com.cydoniancitizen.bingee.data.library.local.PortableSnapshotDao
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
@@ -44,7 +46,8 @@ internal object DatabaseModule {
                 MIGRATION_4_5,
                 MIGRATION_5_6,
                 MIGRATION_6_7,
-                MIGRATION_7_8
+                MIGRATION_7_8,
+                MIGRATION_8_9
             )
             .build()
 
@@ -81,6 +84,9 @@ internal object DatabaseModule {
 
     @Provides
     fun provideImportProvenanceDao(database: BingeeDatabase): ImportProvenanceDao = database.importProvenanceDao()
+
+    @Provides
+    fun provideAnimeDao(database: BingeeDatabase): AnimeDao = database.animeDao()
 
     @Provides
     @Singleton

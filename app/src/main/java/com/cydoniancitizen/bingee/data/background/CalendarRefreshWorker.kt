@@ -5,8 +5,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
-import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
+import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.background.BackgroundWorkScheduler
@@ -45,20 +45,14 @@ internal class CalendarRefreshWorkerExecutor @Inject constructor(
         }
         if (plan.isEmpty()) return WorkerRunDecision.SUCCESS
 
-        when (credentialRepository.status.value) {
-            is TmdbCredentialStatus.Rejected,
-            TmdbCredentialStatus.StorageUnreadable -> return WorkerRunDecision.SUCCESS
-            else -> Unit
-        }
-        try {
-            credentialRepository.refreshLocalStatus()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            return WorkerRunDecision.SUCCESS
-        }
-        if (!credentialRepository.status.value.isUsableForBackgroundRefresh()) {
-            return WorkerRunDecision.SUCCESS
+        if (plan.any { it.mediaRef.source == MediaSource.TMDB }) {
+            try {
+                credentialRepository.refreshLocalStatus()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // The coordinator skips only TMDB; Jikan work remains eligible.
+            }
         }
 
         val summary = refreshCoordinator.refresh(plan)
@@ -78,12 +72,6 @@ internal class CalendarRefreshWorkerExecutor @Inject constructor(
     internal companion object {
         const val BATCH_SIZE = CalendarRefreshWorker.BATCH_SIZE
     }
-}
-
-private fun TmdbCredentialStatus.isUsableForBackgroundRefresh(): Boolean = when (this) {
-    TmdbCredentialStatus.Valid -> true
-    is TmdbCredentialStatus.TemporarilyUnverifiable -> hasStoredCredential
-    else -> false
 }
 
 internal enum class WorkerRunDecision { SUCCESS, RETRY, FAILURE }

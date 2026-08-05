@@ -41,6 +41,8 @@ internal class AndroidReleaseNotificationContentMapper @Inject constructor(
                     relative,
                     event.subjectTitle ?: context.getString(R.string.home_episode_title_unknown)
                 )
+            ReleaseEventType.ANIME_PREMIERE ->
+                error("Anime premiere notifications are unsupported")
         }
         return ReleaseNotificationContent(title = event.title, body = body)
     }

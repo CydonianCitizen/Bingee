@@ -1,12 +1,26 @@
 package com.cydoniancitizen.bingee.core.navigation
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.cydoniancitizen.bingee.R
+import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
+import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.feature.details.AnimeDetailsScreen
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
 import com.cydoniancitizen.bingee.feature.library.LibraryScreen
@@ -70,11 +84,46 @@ fun BingeeNavHost(
                 navArgument(DetailRoute.MEDIA_TYPE_ARG) { type = NavType.StringType },
                 navArgument(DetailRoute.EXTERNAL_ID_ARG) { type = NavType.StringType }
             )
-        ) {
-            MediaDetailsScreen(
-                onBack = navController::popBackStack,
-                onOpenSettings = onOpenSettings
+        ) { entry ->
+            val args = DetailRoute.parse(
+                entry.arguments?.getString(DetailRoute.SOURCE_ARG),
+                entry.arguments?.getString(DetailRoute.MEDIA_TYPE_ARG),
+                entry.arguments?.getString(DetailRoute.EXTERNAL_ID_ARG)
             )
+            when {
+                args == null -> InvalidDetailRoute(onBack = navController::popBackStack)
+                args.reference.source == MediaSource.JIKAN -> {
+                    AnimeDetailsScreen(
+                        onBack = navController::popBackStack,
+                        onOpenRelated = { relation ->
+                            navController.navigate(DetailRoute.create(relation.animeRef, MediaType.ANIME))
+                        }
+                    )
+                }
+                else -> {
+                    MediaDetailsScreen(
+                        onBack = navController::popBackStack,
+                        onOpenSettings = onOpenSettings
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InvalidDetailRoute(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(BingeeDimensions.screenPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+    ) {
+        ErrorState(
+            title = stringResource(R.string.detail_error_title),
+            message = stringResource(R.string.error_invalid_input)
+        )
+        Button(onClick = onBack) {
+            Text(stringResource(R.string.detail_back))
         }
     }
 }

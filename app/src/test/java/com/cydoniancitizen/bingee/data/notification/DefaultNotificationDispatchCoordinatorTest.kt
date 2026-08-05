@@ -117,18 +117,43 @@ class DefaultNotificationDispatchCoordinatorTest {
         assertEquals(listOf("post-fail", "record-fail", "ok"), notifier.postedSubjects)
     }
 
+    @Test
+    fun animePremiereIsExcludedWithoutMappingPostingOrDeliveryLedgerWrite() = runTest {
+        val delivery = FakeDeliveryRepository()
+        val notifier = FakeNotifier()
+        val summary = coordinator(
+            FakePreferences(ReleaseNotificationPreferences(enabled = true)),
+            FakeCapability(NotificationCapabilityStatus.AVAILABLE),
+            FakeCalendar(listOf(event("anime", ReleaseEventType.ANIME_PREMIERE, today))),
+            delivery,
+            notifier,
+            object : ReleaseNotificationContentMapper {
+                override fun map(event: ReleaseEvent, daysUntilEvent: Int): ReleaseNotificationContent =
+                    error("Anime notifications must never be mapped")
+            }
+        ).dispatch()
+
+        assertFalse(ReleaseNotificationPreferences().includes(ReleaseEventType.ANIME_PREMIERE))
+        assertEquals(1, summary.candidates)
+        assertEquals(1, summary.skippedByCategory)
+        assertEquals(0, summary.posted)
+        assertTrue(delivery.rows.isEmpty())
+        assertTrue(notifier.postedSubjects.isEmpty())
+    }
+
     private fun coordinator(
         preferences: FakePreferences,
         capability: FakeCapability,
         calendar: FakeCalendar,
         delivery: FakeDeliveryRepository = FakeDeliveryRepository(),
-        notifier: FakeNotifier = FakeNotifier()
+        notifier: FakeNotifier = FakeNotifier(),
+        contentMapper: ReleaseNotificationContentMapper = FakeContentMapper()
     ) = DefaultNotificationDispatchCoordinator(
         preferences,
         capability,
         calendar,
         delivery,
-        FakeContentMapper(),
+        contentMapper,
         notifier,
         clock
     )
@@ -138,11 +163,17 @@ class DefaultNotificationDispatchCoordinatorTest {
             ReleaseEventType.MOVIE_RELEASE -> ReleaseSubjectType.MEDIA
             ReleaseEventType.SEASON_PREMIERE -> ReleaseSubjectType.SEASON
             ReleaseEventType.EPISODE_AIRING -> ReleaseSubjectType.EPISODE
+            ReleaseEventType.ANIME_PREMIERE -> ReleaseSubjectType.MEDIA
         }
-        val mediaType = if (type == ReleaseEventType.MOVIE_RELEASE) MediaType.MOVIE else MediaType.SERIES
+        val mediaType = when (type) {
+            ReleaseEventType.MOVIE_RELEASE -> MediaType.MOVIE
+            ReleaseEventType.ANIME_PREMIERE -> MediaType.ANIME
+            else -> MediaType.SERIES
+        }
+        val source = if (type == ReleaseEventType.ANIME_PREMIERE) MediaSource.JIKAN else MediaSource.TMDB
         return ReleaseEvent(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "900"),
-            subject = ReleaseSubjectIdentity(MediaSource.TMDB, subjectType, subjectId, type),
+            mediaRef = ExternalMediaRef(source, "900"),
+            subject = ReleaseSubjectIdentity(source, subjectType, subjectId, type),
             mediaType = mediaType,
             eventDate = date,
             title = "Fixture",

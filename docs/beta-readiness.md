@@ -6,7 +6,7 @@ This document is the reproducible gate for the first Android beta. It records ev
 
 ## Scope and supported behavior
 
-Bingee is an Android, local-first movie and TV-series tracker. The current vertical slice supports:
+Bingee is an Android, local-first movie, TV-series, and anime tracker. The current vertical slice supports:
 
 - TMDB movie and TV search and details;
 - local Library add/remove, filters, and sorting;
@@ -16,8 +16,9 @@ Bingee is an Android, local-first movie and TV-series tracker. The current verti
 - a local release calendar;
 - approximate WorkManager refresh and optional local notifications;
 - versioned plaintext JSON export and replace-only restore through SAF.
+- provider-separated Jikan anime search, cache-first details, entry-level progress, local ratings, Library membership, and date-backed premieres;
 
-No Bingee account, proprietary backend, cloud sync, analytics, crash-reporting SDK, or Jikan behavior exists. Milestone 12B adds an experimental additive TV Time importer for one documented JSON ZIP profile only; it does not change the beta gate status below.
+No Bingee account, proprietary backend, cloud sync, analytics, crash-reporting SDK, MyAnimeList account access, or cross-provider merge exists. Milestone 12B adds an experimental additive TV Time importer for one documented JSON ZIP profile only; it does not change the beta gate status below.
 
 ## Milestone 12B carry-forward
 
@@ -36,7 +37,7 @@ The tested build is `0.1.0-dev` / version code `1`. The intended first beta rele
 
 ## Privacy and backup warning
 
-Room, preferences, watch history, ratings, cached metadata, and selected notification categories are local. The credential is encrypted, stored separately under Android's no-backup directory, and is never exported. JSON backups are plaintext and not password protected; they can contain titles, membership, watched timestamps, ratings, seasons/episodes, and portable notification choices. Notification permission, device enablement, internal IDs, delivery ledger, refresh state, WorkManager state, URI, and credential remain device/technical state.
+Room, preferences, watch history, ratings, cached metadata, and selected notification categories are local. The credential is encrypted, stored separately under Android's no-backup directory, and is never exported. JSON backups are plaintext and not password protected; v2 backups can contain titles, membership, watched timestamps, ratings, seasons/episodes, anime details/relations/progress, and portable notification choices. Notification permission, device enablement, internal IDs, delivery ledger, refresh state, WorkManager state, URI, and credential remain device/technical state.
 
 Restore is replace-only and explicit. Users must retain a backup before uninstalling or changing devices. A malformed or failed restore must not alter the existing database.
 
@@ -106,9 +107,9 @@ Block public beta for any migration failure, incomplete restore rollback, semant
 ## Current known limitations
 
 - background work and notifications are approximate, not exact alarms;
-- remote metadata requires the user's TMDB credential;
+- TMDB remote metadata requires the user's credential; Jikan anime does not;
 - no cloud synchronization or account exists;
-- Jikan/anime is not implemented;
+- Anime notifications, per-episode anime history, manga, MyAnimeList account sync, recommendations, and automatic TMDB/Jikan merging are not implemented;
 - No generic third-party importer is implemented. The experimental TV Time action is limited to the documented JSON ZIP profile and is not a claim of broad TV Time support;
 - JSON backup is plaintext;
 - release signing is not configured in the repository;

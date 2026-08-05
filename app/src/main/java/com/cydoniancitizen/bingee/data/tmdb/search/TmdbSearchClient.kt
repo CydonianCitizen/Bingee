@@ -14,6 +14,7 @@ internal class TmdbSearchClient @Inject constructor(
     private val service: TmdbSearchService
 ) {
     suspend fun search(query: MediaSearchQuery, year: Int? = null): AppResult<MediaSearchPage> {
+        if (query.category == MediaSearchCategory.ANIME) return AppResult.Failure(AppError.UnsupportedData)
         val credential = when (val stored = credentialStore.read()) {
             is AppResult.Success -> stored.value ?: return AppResult.Failure(AppError.Unauthorized)
             is AppResult.Failure -> return stored
@@ -47,6 +48,8 @@ internal class TmdbSearchClient @Inject constructor(
                 },
                 transform = { TmdbTvSearchMapper.map(it, query.page) }
             )
+
+            MediaSearchCategory.ANIME -> AppResult.Failure(AppError.UnsupportedData)
         }
     }
 

@@ -11,7 +11,9 @@ class ReleaseNotificationPreferencesTest {
         val preferences = ReleaseNotificationPreferences()
         assertFalse(preferences.enabled)
         assertEquals(ReleaseNotificationLeadTime.ONE_DAY, preferences.leadTime)
-        ReleaseEventType.entries.forEach { assertTrue(preferences.includes(it)) }
+        ReleaseEventType.entries.filterNot { it == ReleaseEventType.ANIME_PREMIERE }
+            .forEach { assertTrue(preferences.includes(it)) }
+        assertFalse(preferences.includes(ReleaseEventType.ANIME_PREMIERE))
     }
 
     @Test

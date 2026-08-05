@@ -18,6 +18,9 @@ internal abstract class LibraryDao {
         @androidx.room.ColumnInfo(name = "local_media_id") val localMediaId: Long,
         @androidx.room.ColumnInfo(name = "media_type") val mediaType: MediaType,
         @androidx.room.ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
+        @androidx.room.ColumnInfo(name = "anime_watched_episodes") val animeWatchedEpisodes: Int,
+        @androidx.room.ColumnInfo(name = "anime_episode_total") val animeEpisodeTotal: Int?,
+        @androidx.room.ColumnInfo(name = "anime_completed_at") val animeCompletedAt: Instant?,
         @androidx.room.ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
         @androidx.room.ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
         @androidx.room.ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
@@ -30,10 +33,13 @@ internal abstract class LibraryDao {
         SELECT media_entries.*, library_entries.added_at AS membership_added_at
         FROM media_entries
         INNER JOIN library_entries USING(local_media_id)
+        LEFT JOIN anime_details USING(local_media_id)
         WHERE (:mediaType IS NULL OR media_entries.media_type = :mediaType)
           AND (
               LOWER(media_entries.title) LIKE :searchPattern ESCAPE '\'
               OR LOWER(COALESCE(media_entries.original_title, '')) LIKE :searchPattern ESCAPE '\'
+              OR LOWER(COALESCE(anime_details.english_title, '')) LIKE :searchPattern ESCAPE '\'
+              OR LOWER(COALESCE(anime_details.japanese_title, '')) LIKE :searchPattern ESCAPE '\'
           )
         ORDER BY library_entries.added_at DESC,
                  LOWER(media_entries.title) ASC,
@@ -78,8 +84,9 @@ internal abstract class LibraryDao {
         INNER JOIN media_entries USING(local_media_id)
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN media_details USING(local_media_id)
-        ORDER BY CASE WHEN media_details.details_fetched_at IS NULL THEN 0 ELSE 1 END ASC,
-                 media_details.details_fetched_at ASC,
+        LEFT JOIN anime_details USING(local_media_id)
+        ORDER BY CASE WHEN COALESCE(media_details.details_fetched_at, anime_details.details_updated_at) IS NULL THEN 0 ELSE 1 END ASC,
+                 COALESCE(media_details.details_fetched_at, anime_details.details_updated_at) ASC,
                  media_entries.metadata_updated_at ASC,
                  external_refs.source ASC,
                  external_refs.external_id ASC,
@@ -94,6 +101,9 @@ internal abstract class LibraryDao {
         SELECT media_entries.local_media_id,
                media_entries.media_type,
                movie_watch_progress.watched_at AS movie_watched_at,
+               COALESCE(anime_progress.watched_episode_count, 0) AS anime_watched_episodes,
+               anime_details.episode_count AS anime_episode_total,
+               anime_progress.completed_at AS anime_completed_at,
                (
                    SELECT COUNT(*)
                    FROM episodes
@@ -143,6 +153,8 @@ internal abstract class LibraryDao {
         FROM media_entries
         INNER JOIN library_entries USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
+        LEFT JOIN anime_progress USING(local_media_id)
+        LEFT JOIN anime_details USING(local_media_id)
         """
     )
     abstract fun observeLibraryProgress(today: LocalDate): Flow<List<LibraryProgressRow>>

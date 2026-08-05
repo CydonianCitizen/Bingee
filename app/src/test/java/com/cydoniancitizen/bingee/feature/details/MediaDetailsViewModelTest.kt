@@ -49,7 +49,7 @@ class MediaDetailsViewModelTest {
     fun malformedAndUnsupportedRoutesFailSafelyWithoutRefresh() = runTest(mainDispatcherRule.dispatcher) {
         val remote = FakeDetailsRepository()
         val malformed = viewModel(SavedStateHandle(), remote)
-        val unsupported = viewModel(args(MediaSource.JIKAN), remote)
+        val unsupported = viewModel(args(MediaSource.JIKAN, MediaType.ANIME), remote)
         runCurrent()
 
         assertEquals(DetailContentState.Error(AppError.InvalidInput), malformed.uiState.value.content)

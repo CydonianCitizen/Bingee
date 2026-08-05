@@ -313,3 +313,68 @@ internal val MIGRATION_7_8 = object : Migration(7, 8) {
         )
     }
 }
+
+internal val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS anime_details (
+                local_media_id INTEGER NOT NULL,
+                format TEXT NOT NULL,
+                provider_status TEXT NOT NULL,
+                english_title TEXT,
+                japanese_title TEXT,
+                synopsis TEXT,
+                episode_count INTEGER,
+                duration TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                season TEXT,
+                year INTEGER,
+                provider_score REAL,
+                image_url TEXT,
+                details_updated_at TEXT NOT NULL,
+                PRIMARY KEY(local_media_id),
+                FOREIGN KEY(local_media_id) REFERENCES media_entries(local_media_id)
+                    ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS anime_progress (
+                local_media_id INTEGER NOT NULL,
+                watched_episode_count INTEGER NOT NULL,
+                completed_at TEXT,
+                completion_origin TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(local_media_id),
+                FOREIGN KEY(local_media_id) REFERENCES media_entries(local_media_id)
+                    ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS anime_relations (
+                local_media_id INTEGER NOT NULL,
+                relation_type TEXT NOT NULL,
+                related_jikan_id TEXT NOT NULL,
+                related_title TEXT NOT NULL,
+                related_format TEXT NOT NULL,
+                PRIMARY KEY(local_media_id, relation_type, related_jikan_id),
+                FOREIGN KEY(local_media_id) REFERENCES media_entries(local_media_id)
+                    ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_anime_relations_local_media_id " +
+                "ON anime_relations(local_media_id)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_anime_relations_related_jikan_id " +
+                "ON anime_relations(related_jikan_id)"
+        )
+    }
+}

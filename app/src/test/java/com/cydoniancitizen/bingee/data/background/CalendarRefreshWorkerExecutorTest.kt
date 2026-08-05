@@ -28,7 +28,7 @@ class CalendarRefreshWorkerExecutorTest {
     )
 
     @Test
-    fun emptyPlanAndMissingOrRejectedCredentialSucceedWithoutRefresh() = runTest {
+    fun emptyPlanSkipsAndMissingOrRejectedCredentialStillReachProviderAwareRefresh() = runTest {
         val emptyCoordinator = FakeCoordinator(summary(CalendarRefreshOutcome.COMPLETE_SUCCESS))
         assertEquals(
             WorkerRunDecision.SUCCESS,
@@ -50,8 +50,8 @@ class CalendarRefreshWorkerExecutorTest {
                     coordinator
                 ).execute(0)
             )
-            assertEquals(0, coordinator.calls)
-            assertEquals(if (status is TmdbCredentialStatus.Rejected) 0 else 1, credential.refreshCalls)
+            assertEquals(1, coordinator.calls)
+            assertEquals(1, credential.refreshCalls)
         }
     }
 
@@ -72,6 +72,22 @@ class CalendarRefreshWorkerExecutorTest {
             assertEquals(1, scheduler.immediateCalls)
             assertEquals(listOf(target), coordinator.targets)
         }
+    }
+
+    @Test
+    fun workerKeepsGlobalRefreshBatchAtTwenty() = runTest {
+        val planner = FakePlanner(AppResult.Success(listOf(target)))
+
+        assertEquals(
+            WorkerRunDecision.SUCCESS,
+            executor(
+                planner,
+                FakeCredential(),
+                FakeCoordinator(summary(CalendarRefreshOutcome.COMPLETE_SUCCESS))
+            ).execute(0)
+        )
+
+        assertEquals(CalendarRefreshWorker.BATCH_SIZE, planner.requestedLimit)
     }
 
     @Test
@@ -131,7 +147,12 @@ class CalendarRefreshWorkerExecutorTest {
 
     private class FakePlanner(private val result: AppResult<List<BackgroundRefreshTarget>>) :
         BackgroundRefreshPlanner {
-        override suspend fun plan(limit: Int) = result
+        var requestedLimit: Int? = null
+
+        override suspend fun plan(limit: Int): AppResult<List<BackgroundRefreshTarget>> {
+            requestedLimit = limit
+            return result
+        }
     }
 
     private class FakeCredential(

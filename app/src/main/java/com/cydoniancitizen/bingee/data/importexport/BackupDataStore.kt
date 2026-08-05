@@ -1,7 +1,12 @@
 package com.cydoniancitizen.bingee.data.importexport
 
 import androidx.room.withTransaction
+import com.cydoniancitizen.bingee.core.model.AnimeFormat
+import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.library.local.AnimeDetailsEntity
+import com.cydoniancitizen.bingee.data.library.local.AnimeProgressEntity
+import com.cydoniancitizen.bingee.data.library.local.AnimeRelationEntity
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
 import com.cydoniancitizen.bingee.data.library.local.EpisodeWatchProgressEntity
@@ -25,13 +30,17 @@ internal enum class RestoreStage {
     MEDIA,
     EXTERNAL_REFERENCES,
     SEASONS,
+    ANIME_DETAILS,
+    ANIME_RELATIONS,
+    ANIME_PROGRESS,
     EPISODES,
     LIBRARY_MEMBERSHIP,
     MOVIE_PROGRESS,
     EPISODE_PROGRESS,
     RATINGS,
     PORTABLE_PREFERENCES,
-    RELEASE_EVENTS
+    RELEASE_EVENTS,
+    ANIME_RELEASE_EVENTS
 }
 
 internal fun interface RestoreFailureInjector {
@@ -60,6 +69,7 @@ internal class BackupDataStore @Inject constructor(
                 addAll(rows.ratings.map { it.localMediaId })
                 addAll(rows.movieProgress.map { it.localMediaId })
                 addAll(episodeMediaIds)
+                addAll(rows.animeProgress.map { it.localMediaId })
             }
             val media = rows.media.filter { it.localMediaId in portableMediaIds }
             val refsByMedia = rows.refs.groupBy { it.localMediaId }
@@ -156,7 +166,62 @@ internal class BackupDataStore @Inject constructor(
                         BackupRating(mediaRefById.getValue(it.localMediaId), it.ratingValue, it.ratedAt, it.updatedAt)
                     }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
-                preferences = dataPreferences
+                preferences = dataPreferences,
+                animeDetails = rows.animeDetails
+                    .filter { it.localMediaId in portableMediaIds }
+                    .map {
+                        BackupAnimeDetails(
+                            mediaRef = mediaRefById.getValue(it.localMediaId),
+                            format = it.format,
+                            status = it.providerStatus,
+                            englishTitle = it.englishTitle,
+                            japaneseTitle = it.japaneseTitle,
+                            synopsis = it.synopsis,
+                            episodeCount = it.episodeCount,
+                            duration = it.duration,
+                            startDate = it.startDate,
+                            endDate = it.endDate,
+                            season = it.season,
+                            year = it.year,
+                            providerScore = it.providerScore,
+                            posterUrl = it.imageUrl
+                        )
+                    }
+                    .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
+                animeRelations = rows.animeRelations
+                    .filter { it.localMediaId in portableMediaIds }
+                    .map {
+                        BackupAnimeRelation(
+                            mediaRef = mediaRefById.getValue(it.localMediaId),
+                            relationType = it.relationType,
+                            relatedRef = BackupRef(
+                                MediaSource.JIKAN,
+                                it.relatedJikanId
+                            ),
+                            relatedTitle = it.relatedTitle,
+                            relatedFormat = it.relatedFormat
+                        )
+                    }
+                    .sortedWith(
+                        compareBy(
+                            { it.mediaRef.externalId },
+                            { it.relationType },
+                            { it.relatedRef.externalId }
+                        )
+                    ),
+                animeProgress = rows.animeProgress
+                    .filter { it.localMediaId in portableMediaIds }
+                    .map {
+                        BackupAnimeProgress(
+                            mediaRef = mediaRefById.getValue(it.localMediaId),
+                            watchedEpisodeCount = it.watchedEpisodeCount,
+                            completedAt = it.completedAt,
+                            completionOrigin = it.completionOrigin,
+                            updatedAt = it.updatedAt
+                        )
+                    }
+                    .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId }))
+
             )
         }
     }
@@ -175,6 +240,9 @@ internal class BackupDataStore @Inject constructor(
             snapshotDao.deleteNotificationDeliveries()
             snapshotDao.deleteReleaseEvents()
             snapshotDao.deleteEpisodeProgress()
+            snapshotDao.deleteAnimeProgress()
+            snapshotDao.deleteAnimeRelations()
+            snapshotDao.deleteAnimeDetails()
             snapshotDao.deleteMovieProgress()
             snapshotDao.deleteRatings()
             snapshotDao.deleteMemberships()
@@ -213,6 +281,55 @@ internal class BackupDataStore @Inject constructor(
                 }
             }
             failureInjector.check(RestoreStage.EXTERNAL_REFERENCES)
+            data.animeDetails.forEach { details ->
+                snapshotDao.insertAnimeDetails(
+                    AnimeDetailsEntity(
+                        localMediaId = checkNotNull(mediaIds[details.mediaRef.key()]),
+                        format = details.format,
+                        providerStatus = details.status,
+                        englishTitle = details.englishTitle,
+                        japaneseTitle = details.japaneseTitle,
+                        synopsis = details.synopsis,
+                        episodeCount = details.episodeCount,
+                        duration = details.duration,
+                        startDate = details.startDate,
+                        endDate = details.endDate,
+                        season = details.season,
+                        year = details.year,
+                        providerScore = details.providerScore,
+                        imageUrl = details.posterUrl,
+                        detailsUpdatedAt = exportedAt
+                    )
+                )
+            }
+            failureInjector.check(RestoreStage.ANIME_DETAILS)
+
+            data.animeRelations.forEach { relation ->
+                snapshotDao.insertAnimeRelation(
+                    AnimeRelationEntity(
+                        localMediaId = checkNotNull(mediaIds[relation.mediaRef.key()]),
+                        relationType = relation.relationType,
+                        relatedJikanId = relation.relatedRef.externalId,
+                        relatedTitle = relation.relatedTitle,
+                        relatedFormat = relation.relatedFormat
+                            ?: AnimeFormat.UNKNOWN
+                    )
+                )
+            }
+            failureInjector.check(RestoreStage.ANIME_RELATIONS)
+
+            data.animeProgress.forEach { progress ->
+                snapshotDao.insertAnimeProgress(
+                    AnimeProgressEntity(
+                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key()]),
+                        watchedEpisodeCount = progress.watchedEpisodeCount,
+                        completedAt = progress.completedAt,
+                        completionOrigin = progress.completionOrigin,
+                        updatedAt = progress.updatedAt
+                    )
+                )
+            }
+            failureInjector.check(RestoreStage.ANIME_PROGRESS)
 
             val seasonIds = linkedMapOf<String, Long>()
             data.seasons.forEach { season ->
@@ -295,6 +412,7 @@ internal class BackupDataStore @Inject constructor(
             )
             failureInjector.check(RestoreStage.PORTABLE_PREFERENCES)
             releaseEventDao.backfill(exportedAt)
+            failureInjector.check(RestoreStage.ANIME_RELEASE_EVENTS)
             failureInjector.check(RestoreStage.RELEASE_EVENTS)
         }
     }

@@ -13,6 +13,7 @@ Bingee is a local-first Android app for keeping a personal movie and TV-series h
 - a local release calendar;
 - optional local release notifications;
 - versioned JSON backup and replace-only restore.
+- provider-separated Anime search, offline cached Anime details, entry-level progress, Library support, and date-backed premieres;
 
 ## Important notes
 
@@ -20,7 +21,7 @@ Bingee is a local-first Android app for keeping a personal movie and TV-series h
 - Background refresh and notification delivery are approximate; Android can delay them.
 - JSON backups are plaintext and are not encrypted or password protected. Keep them private.
 - Bingee has no cloud synchronization or proprietary account.
-- Anime/Jikan is not available yet.
+- Anime metadata comes through the unofficial, read-only Jikan API; Bingee has no MyAnimeList account access, anime notifications, or cross-provider merging.
 - Experimental TV Time JSON ZIP import is outside this beta release scope; the later Milestone 12B implementation supports only one documented profile and is not a broad TV Time or generic third-party import claim.
 
 Please report issues with the Android version, device, app version, steps to reproduce, and redacted logs. Do not send credentials, personal backups, URIs, or device identifiers.

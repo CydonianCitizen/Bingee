@@ -129,7 +129,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 8; schema versions 1 through 8 are generated through KSP into `app/schemas/` and version controlled. Version 8 adds only source-provenance references; the public backup schema is independent and currently version 1.
+- Room database `bingee.db` is version 9; schemas 1 through 9 remain version controlled. Explicit migration 8→9 creates empty `anime_details`, `anime_relations`, and `anime_progress` structures without rewriting v8 media, TV Time provenance, ratings, progress, events, notifications, or preferences.
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
@@ -150,7 +150,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 ## Versioned backup and restore
 
 - `data/importexport` owns dedicated backup DTOs, a manual Gson tree/stream codec, bounded input, structural parsing, pure semantic validation, deterministic export mapping, SAF file access, and the narrow FileProvider share path.
-- Backup format `bingee-backup` v1 exports portable media metadata, provider-qualified references, active membership, personal timestamps, ratings, progress, all cached seasons/episodes for included series, and selected notification choices. It never serializes Room entities, local IDs, credentials, raw provider bodies, WorkManager records, or notification-delivery history. See `docs/backup-format-v1.md` and its JSON Schema.
+- Export now emits `bingee-backup` v2 and import accepts v1 and v2. V2 adds Jikan identity, minimal offline anime metadata, relations, entry-level progress, membership, and existing local ratings; restore regenerates local IDs and anime-premiere events transactionally. Freshness, provider responses, credentials, network state, WorkManager records, and delivery history remain excluded.
 - Import supports only `REPLACE_PORTABLE_DATA`: parse and validate first, preview second, one explicit Room transaction last. The transaction regenerates local IDs, restores portable state, rebuilds release events, clears technical derived state, and leaves credential/permission/enablement/device runtime state outside the transaction.
 - SAF uses `CreateDocument("application/json")` and `OpenDocument`; sharing uses a private cache subdirectory exposed only through a read-only `FileProvider` URI. Backup content and selected URIs are never logged.
 
@@ -173,7 +173,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Manual refresh uses at most three concurrent title operations. Movies refresh details. TV refresh first updates details/summaries, then seasons with cached episode metadata, highest regular season, and known current/future regular seasons. Season zero is selected only when episode metadata is cached or its air date lies within Home window.
 - Successful and failed operations are isolated. At least one successful eligible operation permits advancing last-successful refresh after local consistency succeeds; complete failure and empty Library do not advance it.
 - Background refresh and notification evaluation each run as unique approximate 24-hour work. Calendar batches 20 oldest or never-refreshed active parents and retains title concurrency three. Notification evaluation is local-only, bounded to 200 candidates in the seven-day window, and prunes ledger rows beyond 30 days.
-- Current limits: no exact release time/delivery, per-event reminder, snooze, notification action/history, regional theatrical selector, provider-removal reconciliation, external calendar integration, push messaging, or Jikan.
+- Current limits: no exact release time/delivery, per-event reminder, snooze, notification action/history, regional theatrical selector, provider-removal reconciliation, external calendar integration, push messaging, anime notification, or inferred anime episode event.
 
 ## Fake strategy
 
@@ -194,7 +194,7 @@ Debug fakes live in app/src/debug; debug-variant JVM tests in app/src/test reuse
 
 ## Navigation
 
-TopLevelDestination is the only source of Home, Search, Library, and Settings routes, order, labels, and icons. BingeeNavHost owns the route-to-screen graph; reusable composables never receive a NavController. `DetailRoute` is non-top-level and carries only `MediaSource`, `MediaType`, and external provider ID. `MediaType` is required to select an endpoint when a Search result has no local row. No token, local Room ID, query, URL, or metadata payload enters navigation.
+TopLevelDestination is the only source of Home, Search, Library, and Settings routes, order, labels, and icons. BingeeNavHost owns the route-to-screen graph; reusable composables never receive a NavController. `DetailRoute` is non-top-level and carries only `MediaSource`, `MediaType`, and external provider ID. Provider/type pairs are validated before navigation; malformed routes render an input error rather than substituting another provider. `MediaType` is required to select an endpoint when a Search result has no local row. No token, local Room ID, query, URL, or metadata payload enters navigation.
 
 AppRoute.ONBOARDING and DetailRoute are non-top-level routes. Startup reads local credential status and the non-sensitive first-run preference before constructing the graph. It starts at onboarding only for a first run without a usable stored credential; offline continuation and successful configuration both replace onboarding with Home. Removing a credential later does not force navigation away from the shell or delete cached details.
 
@@ -237,4 +237,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0019. Episode/season ratings, written reviews, custom lists, cache pruning, provider-removal reconciliation, Jikan, cloud sync, and other third-party import formats remain deferred.
+Accepted decisions are recorded in ADRs 0001–0021. ADR 0020 keeps Search provider-separated; ADR 0021 keeps every Jikan entry, cour, sequel, and relation distinct. Cross-provider linking, per-episode anime history, anime notifications, manga, accounts, recommendations, cloud sync, and other import formats remain deferred.

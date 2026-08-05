@@ -9,6 +9,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.repository.AnimeRepository
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaRepository
 import com.cydoniancitizen.bingee.domain.repository.TmdbCredentialRepository
@@ -69,6 +70,7 @@ internal data class SearchUiState(
 @HiltViewModel
 internal class SearchViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val animeRepository: AnimeRepository,
     private val libraryRepository: LibraryRepository,
     credentialRepository: TmdbCredentialRepository
 ) : ViewModel() {
@@ -103,7 +105,7 @@ internal class SearchViewModel @Inject constructor(
 
         resetRequests()
         mutableUiState.update { it.copy(content = SearchContentState.Idle) }
-        if (normalized != null && hasCredential()) {
+        if (normalized != null && hasProviderFor(mutableUiState.value.category)) {
             startInitialSearch(SEARCH_DEBOUNCE_MILLIS)
         }
     }
@@ -118,13 +120,13 @@ internal class SearchViewModel @Inject constructor(
         mutableUiState.update {
             it.copy(category = category, content = SearchContentState.Idle)
         }
-        if (normalizedQuery() != null && hasCredential()) {
+        if (normalizedQuery() != null && hasProviderFor(category)) {
             startInitialSearch(0)
         }
     }
 
     fun retryInitialSearch() {
-        if (hasCredential() && normalizedQuery() != null) {
+        if (hasProviderFor(mutableUiState.value.category) && normalizedQuery() != null) {
             startInitialSearch(0)
         }
     }
@@ -193,6 +195,10 @@ internal class SearchViewModel @Inject constructor(
         val availability = status.toSearchAvailability()
         if (availability == mutableUiState.value.credentialAvailability) return
 
+        if (mutableUiState.value.category == MediaSearchCategory.ANIME) {
+            mutableUiState.update { it.copy(credentialAvailability = availability) }
+            return
+        }
         resetRequests()
         mutableUiState.update {
             it.copy(
@@ -215,7 +221,7 @@ internal class SearchViewModel @Inject constructor(
             if (!isCurrent(generation, request)) return@launch
 
             mutableUiState.update { it.copy(content = SearchContentState.Loading) }
-            when (val result = mediaRepository.search(request)) {
+            when (val result = search(request)) {
                 is AppResult.Success -> {
                     if (!isCurrent(generation, request)) return@launch
                     val unique = result.value.results.distinctBy { it.externalRef }
@@ -261,7 +267,7 @@ internal class SearchViewModel @Inject constructor(
         if (
             page !in MediaSearchQuery.FIRST_PAGE..minOf(results.totalPages, MediaSearchQuery.MAX_PAGE) ||
             nextPageJob?.isActive == true ||
-            !hasCredential()
+            !hasProviderFor(current.category)
         ) {
             return
         }
@@ -271,7 +277,7 @@ internal class SearchViewModel @Inject constructor(
             it.copy(content = results.copy(nextPage = NextPageState.Loading))
         }
         nextPageJob = viewModelScope.launch {
-            when (val result = mediaRepository.search(request)) {
+            when (val result = search(request)) {
                 is AppResult.Success -> {
                     if (!isCurrent(generation, request)) return@launch
                     val latest = mutableUiState.value.content as? SearchContentState.Results ?: return@launch
@@ -318,10 +324,21 @@ internal class SearchViewModel @Inject constructor(
     private fun hasCredential(): Boolean =
         mutableUiState.value.credentialAvailability == SearchCredentialAvailability.AVAILABLE
 
+    private fun hasProviderFor(category: MediaSearchCategory): Boolean =
+        category == MediaSearchCategory.ANIME || hasCredential()
+
+    private suspend fun search(query: MediaSearchQuery) = if (query.category ==
+        MediaSearchCategory.ANIME
+    ) {
+        animeRepository.search(query)
+    } else {
+        mediaRepository.search(query)
+    }
+
     private fun isCurrent(generation: Long, request: MediaSearchQuery): Boolean {
         val current = mutableUiState.value
         return requestGeneration == generation &&
-            current.credentialAvailability == SearchCredentialAvailability.AVAILABLE &&
+            hasProviderFor(request.category) &&
             current.category == request.category &&
             normalizedQuery() == request.query
     }

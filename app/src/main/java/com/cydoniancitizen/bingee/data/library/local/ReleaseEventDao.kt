@@ -205,6 +205,18 @@ internal abstract class ReleaseEventDao {
     }
 
     @Transaction
+    open suspend fun reconcileAnime(parentRef: ExternalMediaRef, event: ProjectedReleaseEvent?) {
+        require(parentRef.source == MediaSource.JIKAN)
+        replaceProjection(
+            source = parentRef.source,
+            subjectType = ReleaseSubjectType.MEDIA,
+            subjectExternalId = parentRef.externalId,
+            eventType = ReleaseEventType.ANIME_PREMIERE,
+            event = event
+        )
+    }
+
+    @Transaction
     open suspend fun reconcileSeason(seasonRef: ExternalMediaRef, event: ProjectedReleaseEvent?) {
         replaceProjection(
             source = seasonRef.source,
@@ -282,6 +294,9 @@ internal abstract class ReleaseEventDao {
         deleteMoviesWithoutDates()
         updateMovieDates(projectedAt)
         insertMovieDates(projectedAt)
+        deleteAnimeWithoutDates()
+        updateAnimeDates(projectedAt)
+        insertAnimeDates(projectedAt)
         deleteSeasonsWithoutDates()
         updateSeasonDates(projectedAt)
         insertSeasonDates(projectedAt)
@@ -457,4 +472,66 @@ internal abstract class ReleaseEventDao {
         """
     )
     protected abstract suspend fun insertEpisodeDates(projectedAt: Instant)
+
+    @Query(
+        """
+        DELETE FROM release_events
+        WHERE subject_type = 'MEDIA' AND event_type = 'ANIME_PREMIERE'
+          AND EXISTS (
+              SELECT 1 FROM anime_details
+              INNER JOIN external_refs USING(local_media_id)
+              WHERE external_refs.source = release_events.source
+                AND external_refs.external_id = release_events.subject_external_id
+                AND anime_details.start_date IS NULL
+          )
+        """
+    )
+    protected abstract suspend fun deleteAnimeWithoutDates()
+
+    @Query(
+        """
+        UPDATE release_events
+        SET event_date = (
+                SELECT anime_details.start_date FROM anime_details
+                INNER JOIN external_refs USING(local_media_id)
+                WHERE external_refs.source = release_events.source
+                  AND external_refs.external_id = release_events.subject_external_id
+            ),
+            projected_at = :projectedAt,
+            source_metadata_updated_at = (
+                SELECT anime_details.details_updated_at FROM anime_details
+                INNER JOIN external_refs USING(local_media_id)
+                WHERE external_refs.source = release_events.source
+                  AND external_refs.external_id = release_events.subject_external_id
+            )
+        WHERE subject_type = 'MEDIA' AND event_type = 'ANIME_PREMIERE'
+          AND event_date != (
+              SELECT anime_details.start_date FROM anime_details
+              INNER JOIN external_refs USING(local_media_id)
+              WHERE external_refs.source = release_events.source
+                AND external_refs.external_id = release_events.subject_external_id
+          )
+        """
+    )
+    protected abstract suspend fun updateAnimeDates(projectedAt: Instant)
+
+    @Query(
+        """
+        INSERT OR IGNORE INTO release_events(
+            local_event_id, local_media_id, local_season_id, local_episode_id, source,
+            subject_type, subject_external_id, event_type, event_date, projected_at,
+            source_metadata_updated_at
+        )
+        SELECT NULL, anime_details.local_media_id, NULL, NULL, external_refs.source,
+               'MEDIA', external_refs.external_id, 'ANIME_PREMIERE', anime_details.start_date,
+               :projectedAt, anime_details.details_updated_at
+        FROM anime_details
+        INNER JOIN media_entries USING(local_media_id)
+        INNER JOIN external_refs USING(local_media_id)
+        WHERE media_entries.media_type = 'ANIME'
+          AND external_refs.source = 'JIKAN'
+          AND anime_details.start_date IS NOT NULL
+        """
+    )
+    protected abstract suspend fun insertAnimeDates(projectedAt: Instant)
 }

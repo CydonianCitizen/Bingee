@@ -11,6 +11,7 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
+import com.cydoniancitizen.bingee.domain.repository.AnimeRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaRepository
 import com.cydoniancitizen.bingee.testutil.FakeCredentialRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
@@ -39,6 +40,7 @@ class SearchViewModelTest {
         val missing =
             SearchViewModel(
                 missingRepository,
+                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
                 FakeCredentialRepository(TmdbCredentialStatus.NotConfigured)
             )
@@ -50,6 +52,7 @@ class SearchViewModelTest {
         val valid =
             SearchViewModel(
                 validRepository,
+                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
                 FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
@@ -308,7 +311,8 @@ class SearchViewModelTest {
                 gate.await()
                 AppResult.Success(page(query.query, 1, 1))
             }
-        val viewModel = SearchViewModel(repository, FakeLibraryRepository(), credentialRepository)
+        val viewModel =
+            SearchViewModel(repository, RecordingAnimeRepository(), FakeLibraryRepository(), credentialRepository)
         runCurrent()
         viewModel.onQueryChanged("fixed")
         advanceTimeBy(SearchViewModel.SEARCH_DEBOUNCE_MILLIS)
@@ -330,6 +334,7 @@ class SearchViewModelTest {
         val viewModel =
             SearchViewModel(
                 RecordingMediaRepository(),
+                RecordingAnimeRepository(),
                 libraryRepository,
                 FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
@@ -353,6 +358,7 @@ class SearchViewModelTest {
         val viewModel =
             SearchViewModel(
                 RecordingMediaRepository(),
+                RecordingAnimeRepository(),
                 libraryRepository,
                 FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
@@ -367,10 +373,33 @@ class SearchViewModelTest {
         assertTrue(viewModel.uiState.value.pendingLibraryActions.isEmpty())
     }
 
+    @Test
+    fun animeSearchUsesJikanBoundaryWithoutTmdbCredential() = runTest(mainDispatcherRule.dispatcher) {
+        val tmdb = RecordingMediaRepository()
+        val anime = RecordingAnimeRepository()
+        val viewModel = SearchViewModel(
+            tmdb,
+            anime,
+            FakeLibraryRepository(),
+            FakeCredentialRepository(TmdbCredentialStatus.NotConfigured)
+        )
+        runCurrent()
+
+        viewModel.onCategoryChanged(MediaSearchCategory.ANIME)
+        viewModel.onQueryChanged("Frieren")
+        advanceTimeBy(SearchViewModel.SEARCH_DEBOUNCE_MILLIS)
+        runCurrent()
+
+        assertEquals(listOf(MediaSearchCategory.ANIME), anime.requests.map { it.category })
+        assertTrue(tmdb.requests.isEmpty())
+        assertTrue(viewModel.uiState.value.content is SearchContentState.Results)
+    }
+
     private fun validViewModel(repository: MediaRepository): SearchViewModel {
         val viewModel =
             SearchViewModel(
                 repository,
+                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
                 FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
@@ -397,6 +426,15 @@ class SearchViewModelTest {
         override suspend fun search(query: MediaSearchQuery): AppResult<MediaSearchPage> {
             requests += query
             return responder(query)
+        }
+    }
+
+    private class RecordingAnimeRepository : AnimeRepository {
+        val requests = mutableListOf<MediaSearchQuery>()
+
+        override suspend fun search(query: MediaSearchQuery): AppResult<MediaSearchPage> {
+            requests += query
+            return AppResult.Success(page(query.query, query.page, query.page, MediaType.ANIME))
         }
     }
 

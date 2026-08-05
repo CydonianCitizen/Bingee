@@ -1,5 +1,8 @@
 package com.cydoniancitizen.bingee.data.importexport
 
+import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
+import com.cydoniancitizen.bingee.core.model.AnimeFormat
+import com.cydoniancitizen.bingee.core.model.AnimeStatus
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.google.gson.JsonArray
@@ -114,6 +117,16 @@ internal object BackupJsonCodec {
         writer.name("ratings").beginArray()
         data.ratings.forEach { writeRating(writer, it) }
         writer.endArray()
+
+        writer.name("animeDetails").beginArray()
+        data.animeDetails.forEach { writeAnimeDetails(writer, it) }
+        writer.endArray()
+        writer.name("animeRelations").beginArray()
+        data.animeRelations.forEach { writeAnimeRelation(writer, it) }
+        writer.endArray()
+        writer.name("animeProgress").beginArray()
+        data.animeProgress.forEach { writeAnimeProgress(writer, it) }
+        writer.endArray()
         writer.name("preferences")
         writePreferences(writer, data.preferences)
         writer.endObject()
@@ -204,6 +217,54 @@ internal object BackupJsonCodec {
         writer.name("updatedAt").value(rating.updatedAt.toString()).endObject()
     }
 
+    private fun writeAnimeDetails(writer: JsonWriter, details: BackupAnimeDetails) {
+        writer.beginObject().name("mediaRef")
+        writeRef(writer, details.mediaRef)
+        writer.name("format").value(details.format.name)
+        writer.name("status").value(details.status.name)
+        writeNullable(writer, "englishTitle", details.englishTitle)
+        writeNullable(writer, "japaneseTitle", details.japaneseTitle)
+        writeNullable(writer, "synopsis", details.synopsis)
+        if (details.episodeCount == null) {
+            writer.name("episodeCount").nullValue()
+        } else {
+            writer.name("episodeCount").value(details.episodeCount)
+        }
+        writeNullable(writer, "duration", details.duration)
+        writeNullable(writer, "startDate", details.startDate?.toString())
+        writeNullable(writer, "endDate", details.endDate?.toString())
+        writeNullable(writer, "season", details.season)
+        if (details.year == null) writer.name("year").nullValue() else writer.name("year").value(details.year)
+        if (details.providerScore == null) {
+            writer.name("providerScore").nullValue()
+        } else {
+            writer.name("providerScore").value(details.providerScore)
+        }
+        writeNullable(writer, "posterUrl", details.posterUrl)
+        writer.endObject()
+    }
+
+    private fun writeAnimeRelation(writer: JsonWriter, relation: BackupAnimeRelation) {
+        writer.beginObject().name("mediaRef")
+        writeRef(writer, relation.mediaRef)
+        writer.name("relationType").value(relation.relationType)
+        writer.name("relatedRef")
+        writeRef(writer, relation.relatedRef)
+        writer.name("relatedTitle").value(relation.relatedTitle)
+        writeNullable(writer, "relatedFormat", relation.relatedFormat?.name)
+        writer.endObject()
+    }
+
+    private fun writeAnimeProgress(writer: JsonWriter, progress: BackupAnimeProgress) {
+        writer.beginObject().name("mediaRef")
+        writeRef(writer, progress.mediaRef)
+        writer.name("watchedEpisodeCount").value(progress.watchedEpisodeCount)
+        writeNullable(writer, "completedAt", progress.completedAt?.toString())
+        writeNullable(writer, "completionOrigin", progress.completionOrigin?.name)
+        writer.name("updatedAt").value(progress.updatedAt.toString())
+        writer.endObject()
+    }
+
     private fun writePreferences(writer: JsonWriter, preferences: BackupPreferences) {
         writer.beginObject()
             .name("notificationLeadDays").value(preferences.notificationLeadDays)
@@ -218,15 +279,17 @@ internal object BackupJsonCodec {
         if (formatId != BACKUP_FORMAT_ID) problem(BackupFailureKind.WRONG_FORMAT)
         if (!root.has("schemaVersion")) problem(BackupFailureKind.MISSING_VERSION)
         val schemaVersion = requiredInt(root, "schemaVersion")
-        if (schemaVersion != BACKUP_SCHEMA_VERSION) problem(BackupFailureKind.UNSUPPORTED_VERSION)
+        if (schemaVersion !in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION) {
+            problem(BackupFailureKind.UNSUPPORTED_VERSION)
+        }
         val exportedAt = requiredInstant(root, "exportedAt")
         val data = requiredObject(root, "data")
         return BackupParseResult.Success(
-            BackupDocument(BACKUP_FORMAT_ID, schemaVersion, exportedAt, readData(data))
+            BackupDocument(BACKUP_FORMAT_ID, schemaVersion, exportedAt, readData(data, schemaVersion))
         )
     }
 
-    private fun readData(data: JsonObject) = BackupData(
+    private fun readData(data: JsonObject, schemaVersion: Int) = BackupData(
         media = requiredArray(data, "media", BackupLimits.MAX_MEDIA).map(::readMedia),
         seasons = requiredArray(data, "seasons", BackupLimits.MAX_SEASONS).map(::readSeason),
         episodes = requiredArray(data, "episodes", BackupLimits.MAX_EPISODES).map(::readEpisode),
@@ -234,7 +297,10 @@ internal object BackupJsonCodec {
         movieProgress = requiredArray(data, "movieProgress", BackupLimits.MAX_MEDIA).map(::readMovieProgress),
         episodeProgress = requiredArray(data, "episodeProgress", BackupLimits.MAX_EPISODES).map(::readEpisodeProgress),
         ratings = requiredArray(data, "ratings", BackupLimits.MAX_MEDIA).map(::readRating),
-        preferences = readPreferences(requiredObject(data, "preferences"))
+        preferences = readPreferences(requiredObject(data, "preferences")),
+        animeDetails = versionedArray(data, "animeDetails", schemaVersion).map(::readAnimeDetails),
+        animeRelations = versionedArray(data, "animeRelations", schemaVersion).map(::readAnimeRelation),
+        animeProgress = versionedArray(data, "animeProgress", schemaVersion).map(::readAnimeProgress)
     )
 
     private fun readRef(value: JsonElement): BackupRef {
@@ -323,6 +389,48 @@ internal object BackupJsonCodec {
         )
     }
 
+    private fun readAnimeDetails(value: JsonElement): BackupAnimeDetails {
+        val objectValue = value.asObjectOrProblem()
+        return BackupAnimeDetails(
+            mediaRef = readRef(required(objectValue, "mediaRef")),
+            format = readAnimeFormat(requiredString(objectValue, "format")),
+            status = readAnimeStatus(requiredString(objectValue, "status")),
+            englishTitle = nullableString(objectValue, "englishTitle"),
+            japaneseTitle = nullableString(objectValue, "japaneseTitle"),
+            synopsis = nullableString(objectValue, "synopsis"),
+            episodeCount = nullableInt(objectValue, "episodeCount"),
+            duration = nullableString(objectValue, "duration"),
+            startDate = nullableDate(objectValue, "startDate"),
+            endDate = nullableDate(objectValue, "endDate"),
+            season = nullableString(objectValue, "season"),
+            year = nullableInt(objectValue, "year"),
+            providerScore = nullableDouble(objectValue, "providerScore"),
+            posterUrl = nullableString(objectValue, "posterUrl")
+        )
+    }
+
+    private fun readAnimeRelation(value: JsonElement): BackupAnimeRelation {
+        val objectValue = value.asObjectOrProblem()
+        return BackupAnimeRelation(
+            mediaRef = readRef(required(objectValue, "mediaRef")),
+            relationType = requiredString(objectValue, "relationType"),
+            relatedRef = readRef(required(objectValue, "relatedRef")),
+            relatedTitle = requiredString(objectValue, "relatedTitle"),
+            relatedFormat = nullableString(objectValue, "relatedFormat")?.let(::readAnimeFormat)
+        )
+    }
+
+    private fun readAnimeProgress(value: JsonElement): BackupAnimeProgress {
+        val objectValue = value.asObjectOrProblem()
+        return BackupAnimeProgress(
+            mediaRef = readRef(required(objectValue, "mediaRef")),
+            watchedEpisodeCount = requiredInt(objectValue, "watchedEpisodeCount"),
+            completedAt = nullableInstant(objectValue, "completedAt"),
+            completionOrigin = nullableString(objectValue, "completionOrigin")?.let(::readCompletionOrigin),
+            updatedAt = requiredInstant(objectValue, "updatedAt")
+        )
+    }
+
     private fun readPreferences(value: JsonObject) = BackupPreferences(
         requiredInt(value, "notificationLeadDays"),
         requiredBoolean(value, "notifyMovieReleases"),
@@ -332,6 +440,24 @@ internal object BackupJsonCodec {
 
     private fun readMediaType(value: String): MediaType = try {
         MediaType.valueOf(value)
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
+    private fun readAnimeFormat(value: String): AnimeFormat = try {
+        AnimeFormat.valueOf(value)
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
+    private fun readAnimeStatus(value: String): AnimeStatus = try {
+        AnimeStatus.valueOf(value)
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
+    private fun readCompletionOrigin(value: String): AnimeCompletionOrigin = try {
+        AnimeCompletionOrigin.valueOf(value)
     } catch (_: Exception) {
         problem(BackupFailureKind.INVALID_STRUCTURE)
     }
@@ -363,6 +489,16 @@ internal object BackupJsonCodec {
     private fun nullableInt(objectValue: JsonObject, name: String): Int? =
         if (!objectValue.has(name) || objectValue.get(name).isJsonNull) null else requiredInt(objectValue, name)
 
+    private fun nullableDouble(objectValue: JsonObject, name: String): Double? {
+        if (!objectValue.has(name) || objectValue.get(name).isJsonNull) return null
+        val value = required(objectValue, name)
+        if (!value.isJsonPrimitive || !value.asJsonPrimitive.isNumber) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
+        return value.asDouble.takeIf(Double::isFinite)
+            ?: problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
     private fun requiredBoolean(objectValue: JsonObject, name: String): Boolean {
         val value = required(objectValue, name)
         if (!value.isJsonPrimitive || !value.asJsonPrimitive.isBoolean) problem(BackupFailureKind.INVALID_STRUCTURE)
@@ -377,6 +513,11 @@ internal object BackupJsonCodec {
         } catch (_: Exception) {
             problem(BackupFailureKind.INVALID_STRUCTURE)
         }
+    }
+
+    private fun nullableInstant(objectValue: JsonObject, name: String): Instant? {
+        if (!objectValue.has(name) || objectValue.get(name).isJsonNull) return null
+        return requiredInstant(objectValue, name)
     }
 
     private fun nullableDate(objectValue: JsonObject, name: String): LocalDate? {
@@ -396,6 +537,12 @@ internal object BackupJsonCodec {
         if (!value.isJsonArray || value.asJsonArray.size() > max) problem(BackupFailureKind.TOO_LARGE)
         return value.asJsonArray
     }
+    private fun versionedArray(data: JsonObject, name: String, schemaVersion: Int): JsonArray =
+        if (schemaVersion == BACKUP_SCHEMA_VERSION_V1) {
+            JsonArray()
+        } else {
+            requiredArray(data, name, BackupLimits.MAX_MEDIA)
+        }
 
     private fun JsonElement.asObjectOrProblem(): JsonObject =
         if (isJsonObject) asJsonObject else problem(BackupFailureKind.INVALID_STRUCTURE)

@@ -55,6 +55,14 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
     mediaType == MediaType.MOVIE -> LibraryProgress.Movie(
         movieWatchedAt?.let(MovieWatchState::Watched) ?: MovieWatchState.Unwatched
     )
+    mediaType == MediaType.ANIME -> LibraryProgress.Anime(
+        watchedEpisodes = animeWatchedEpisodes,
+        totalEpisodes = animeEpisodeTotal,
+        completed = animeCompletedAt != null || (
+            animeEpisodeTotal != null && animeEpisodeTotal > 0 &&
+                animeWatchedEpisodes >= animeEpisodeTotal
+            )
+    )
     trackableEpisodes == 0 -> LibraryProgress.Unavailable
     else -> LibraryProgress.Series(
         SeriesProgress(

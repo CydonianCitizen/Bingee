@@ -1,12 +1,16 @@
 package com.cydoniancitizen.bingee.data.importexport
 
+import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
+import com.cydoniancitizen.bingee.core.model.AnimeFormat
+import com.cydoniancitizen.bingee.core.model.AnimeStatus
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
 import java.time.LocalDate
 
 internal const val BACKUP_FORMAT_ID = "bingee-backup"
-internal const val BACKUP_SCHEMA_VERSION = 1
+internal const val BACKUP_SCHEMA_VERSION_V1 = 1
+internal const val BACKUP_SCHEMA_VERSION = 2
 internal const val BACKUP_MIME_TYPE = "application/json"
 internal const val MAX_BACKUP_BYTES = 50 * 1024 * 1024
 
@@ -61,6 +65,39 @@ internal data class BackupEpisodeProgress(val episodeRef: BackupRef, val watched
 
 internal data class BackupRating(val mediaRef: BackupRef, val rating: Int, val ratedAt: Instant, val updatedAt: Instant)
 
+internal data class BackupAnimeDetails(
+    val mediaRef: BackupRef,
+    val format: AnimeFormat,
+    val status: AnimeStatus,
+    val englishTitle: String?,
+    val japaneseTitle: String?,
+    val synopsis: String?,
+    val episodeCount: Int?,
+    val duration: String?,
+    val startDate: LocalDate?,
+    val endDate: LocalDate?,
+    val season: String?,
+    val year: Int?,
+    val providerScore: Double?,
+    val posterUrl: String?
+)
+
+internal data class BackupAnimeRelation(
+    val mediaRef: BackupRef,
+    val relationType: String,
+    val relatedRef: BackupRef,
+    val relatedTitle: String,
+    val relatedFormat: AnimeFormat?
+)
+
+internal data class BackupAnimeProgress(
+    val mediaRef: BackupRef,
+    val watchedEpisodeCount: Int,
+    val completedAt: Instant?,
+    val completionOrigin: AnimeCompletionOrigin?,
+    val updatedAt: Instant
+)
+
 internal data class BackupPreferences(
     val notificationLeadDays: Int,
     val notifyMovieReleases: Boolean,
@@ -76,7 +113,10 @@ internal data class BackupData(
     val movieProgress: List<BackupMovieProgress>,
     val episodeProgress: List<BackupEpisodeProgress>,
     val ratings: List<BackupRating>,
-    val preferences: BackupPreferences
+    val preferences: BackupPreferences,
+    val animeDetails: List<BackupAnimeDetails> = emptyList(),
+    val animeRelations: List<BackupAnimeRelation> = emptyList(),
+    val animeProgress: List<BackupAnimeProgress> = emptyList()
 )
 
 internal data class BackupDocument(

@@ -25,9 +25,9 @@ class DomainModelsTest {
     }
 
     @Test
-    fun mediaTypeRepresentsStructureOnly() {
-        assertEquals(listOf(MediaType.MOVIE, MediaType.SERIES), MediaType.entries)
-        assertTrue(MediaType.entries.none { it.name.contains("ANIME") })
+    fun mediaTypeKeepsAnimeDistinctFromMoviesAndSeries() {
+        assertEquals(listOf(MediaType.MOVIE, MediaType.SERIES, MediaType.ANIME), MediaType.entries)
+        assertTrue(MediaType.ANIME !in listOf(MediaType.MOVIE, MediaType.SERIES))
     }
 
     @Test(expected = IllegalArgumentException::class)

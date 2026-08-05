@@ -64,7 +64,7 @@ private fun PreviewLibrary(query: LibraryQuery) {
 }
 
 @Composable
-private fun PreviewContent(state: LibraryUiState) {
+internal fun PreviewContent(state: LibraryUiState) {
     LibraryContent(
         state = state,
         onSearchQueryChanged = {},

@@ -281,12 +281,10 @@ private fun LibraryItem(entry: LibraryEntry, isRemoving: Boolean, onRemove: () -
                 Text(entry.title, style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(
-                        if (entry.mediaType ==
-                            MediaType.MOVIE
-                        ) {
-                            R.string.library_type_movie
-                        } else {
-                            R.string.library_type_tv
+                        when (entry.mediaType) {
+                            MediaType.MOVIE -> R.string.library_type_movie
+                            MediaType.SERIES -> R.string.library_type_tv
+                            MediaType.ANIME -> R.string.library_type_anime
                         }
                     )
                 )
@@ -331,6 +329,11 @@ private fun LibraryProgress.displayText(): String = when (this) {
         progress.watchedEpisodes,
         progress.trackableEpisodes
     )
+    is LibraryProgress.Anime -> if (totalEpisodes == null) {
+        stringResource(R.string.anime_progress_unknown, watchedEpisodes)
+    } else {
+        stringResource(R.string.anime_progress_known, watchedEpisodes, totalEpisodes)
+    }
 }
 
 private val LibraryQuery.hasActiveFilters: Boolean get() =
@@ -347,6 +350,7 @@ private fun LibraryMediaFilter.labelRes(): Int = when (this) {
     LibraryMediaFilter.ALL -> R.string.library_filter_all
     LibraryMediaFilter.MOVIES -> R.string.library_filter_movies
     LibraryMediaFilter.TV_SERIES -> R.string.library_filter_tv
+    LibraryMediaFilter.ANIME -> R.string.library_filter_anime
 }
 
 private fun LibraryStateFilter.labelRes(mediaFilter: LibraryMediaFilter): Int = when (this) {

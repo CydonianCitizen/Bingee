@@ -97,21 +97,23 @@ internal fun SearchContent(
             modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium
         )
-        when (state.credentialAvailability) {
-            SearchCredentialAvailability.CHECKING ->
+        SearchControls(
+            query = state.query,
+            category = state.category,
+            onQueryChanged = onQueryChanged,
+            onClearQuery = onClearQuery,
+            onCategoryChanged = onCategoryChanged
+        )
+        when {
+            state.category != MediaSearchCategory.ANIME &&
+                state.credentialAvailability == SearchCredentialAvailability.CHECKING ->
                 LoadingState(stringResource(R.string.search_checking_configuration))
 
-            SearchCredentialAvailability.REQUIRED ->
+            state.category != MediaSearchCategory.ANIME &&
+                state.credentialAvailability == SearchCredentialAvailability.REQUIRED ->
                 ConfigurationRequired(onOpenSettings = onOpenSettings)
 
-            SearchCredentialAvailability.AVAILABLE -> {
-                SearchControls(
-                    query = state.query,
-                    category = state.category,
-                    onQueryChanged = onQueryChanged,
-                    onClearQuery = onClearQuery,
-                    onCategoryChanged = onCategoryChanged
-                )
+            else -> {
                 state.libraryError?.let { error ->
                     LibraryActionError(error, onDismissLibraryError)
                 }
@@ -207,10 +209,10 @@ private fun SearchControls(
                 label = {
                     Text(
                         stringResource(
-                            if (item == MediaSearchCategory.MOVIES) {
-                                R.string.search_category_movies
-                            } else {
-                                R.string.search_category_tv
+                            when (item) {
+                                MediaSearchCategory.MOVIES -> R.string.search_category_movies
+                                MediaSearchCategory.TV_SERIES -> R.string.search_category_tv
+                                MediaSearchCategory.ANIME -> R.string.search_category_anime
                             }
                         )
                     )
@@ -415,6 +417,12 @@ internal fun SearchResultItem(
                 result.releaseDate?.let {
                     Text(
                         text = stringResource(R.string.search_release_year, it.year),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+                if (result.externalRef.source == com.cydoniancitizen.bingee.core.model.MediaSource.JIKAN) {
+                    Text(
+                        text = stringResource(R.string.search_provider_jikan),
                         style = MaterialTheme.typography.labelLarge
                     )
                 }

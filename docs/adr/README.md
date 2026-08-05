@@ -27,3 +27,5 @@ To add an ADR, copy `0000-template.md`, use the next available four-digit number
 | 0017 | Versioned JSON backup and transactional restore |
 | 0018 | TV Time import evidence and boundaries |
 | 0019 | TV Time JSON ZIP import implementation |
+| 0020 | Multi-provider Search UX |
+| 0021 | Anime entry, relations, and progress representation |

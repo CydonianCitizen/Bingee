@@ -7,7 +7,8 @@ enum class MediaSource {
 
 enum class MediaType {
     MOVIE,
-    SERIES
+    SERIES,
+    ANIME
 }
 
 data class ExternalMediaRef(val source: MediaSource, val externalId: String) {

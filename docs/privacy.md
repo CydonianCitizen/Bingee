@@ -14,6 +14,11 @@ The experimental TV Time importer accepts only the documented JSON ZIP profile d
 
 TMDB is contacted only after the user starts matching and only through the existing protected TMDB clients. Matching state contains safe source titles, qualified identifiers, candidates, warnings, and review actions; it contains no token, URI, Room ID, or raw JSON. The final confirmation is additive: it may create canonical metadata, Library membership, source-provenance references, required season/episode metadata, missing progress, and release-event projections. It never removes local data, overwrites existing progress timestamps or ratings, resets credentials, preferences, notification state, delivery history, or calendar refresh state, and it posts no notification. Ratings, favorites, custom lists, and rewatch counters/timelines are intentionally not imported.
 
+
+## Anime search privacy
+
+Anime search sends only the current query/page and anime detail refresh sends only the requested Jikan/MAL ID to Jikan's HTTPS API. Jikan is an unofficial, read-only MyAnimeList API. Bingee sends no TMDB credential, Library membership, watched count, local rating, TV Time data, or viewing history. Details and relations may be cached locally for offline use; Bingee accesses no MyAnimeList account and submits no rating.
+
 ## Current network behavior
 
 Bingee calls TMDB's `GET /3/authentication` endpoint when the user explicitly validates or retries a credential. Search uses separate `GET /3/search/movie` and `GET /3/search/tv` requests after a 350 ms debounce. Details use `GET /3/movie/{movie_id}` or `GET /3/tv/{series_id}` only when cache policy or manual refresh requires it. Expanding or manually refreshing a TV season may call `GET /3/tv/{series_id}/season/{season_number}`. Home never performs automatic network work; its explicit refresh action calls the same protected detail and season repositories for active Library titles with bounded concurrency. Bingee does not validate on every startup and performs no background credential checks.
@@ -34,7 +39,7 @@ Cached metadata and progress may belong to Library members or non-members and re
 
 Settings can save or share a versioned plaintext JSON backup through Android's Storage Access Framework and system Sharesheet. It may contain Library membership, watched timestamps, ratings, title metadata, and selected notification categories. It is not encrypted or password protected. The TMDB credential, encrypted credential material, Keystore aliases, device permission/enablement state, WorkManager state, notification-delivery history, internal Room IDs, raw provider responses, search text, and file URI are excluded.
 
-Restore accepts only supported Bingee format v1 files. The complete document is bounded, parsed, and semantically validated before any database write. The replace restore runs in one Room transaction; an invalid file or failed transaction leaves existing portable state unchanged. Restored release events are locally rebuilt; restore performs no network call and posts no notification. A later Room migration does not implicitly change the public backup format.
+Restore accepts supported Bingee v1 and v2 files. V2 may contain Jikan identity, cached anime metadata, relations, membership, entry-level progress, and local ratings, but no credential, freshness, request state, or raw response. The complete document is bounded and semantically validated before one replace transaction; failures leave prior portable state unchanged. Release events are rebuilt locally without network calls or notifications.
 
 ## TMDB attribution
 

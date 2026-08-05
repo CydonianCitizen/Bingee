@@ -356,6 +356,77 @@ class BingeeDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migrateEightToNinePreservesVersionEightDataAndCreatesEmptyAnimeTables() {
+        helper.createDatabase(V8_TO_V9_DB, 8).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
+                    "release_date, created_at, metadata_updated_at) VALUES(1, 'MOVIE', 'Movie', NULL, NULL, NULL, " +
+                    "'2026-01-01', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
+            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-01-02T00:00:00Z')")
+            execSQL(
+                "INSERT INTO import_provenance_refs(namespace, external_id, target_type, local_media_id, " +
+                    "local_season_id, local_episode_id) VALUES('tvtime:movie', 'source-1', 'MEDIA', 1, NULL, NULL)"
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(V8_TO_V9_DB, 9, true, MIGRATION_8_9)
+
+        assertEquals(1, migrated.count("media_entries"))
+        assertEquals(1, migrated.count("external_refs"))
+        assertEquals(1, migrated.count("library_entries"))
+        assertEquals(1, migrated.count("import_provenance_refs"))
+        assertEquals(0, migrated.count("anime_details"))
+        assertEquals(0, migrated.count("anime_relations"))
+        assertEquals(0, migrated.count("anime_progress"))
+
+        migrated.execSQL(
+            "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
+                "release_date, created_at, metadata_updated_at) VALUES(2, 'ANIME', 'Anime', NULL, NULL, NULL, " +
+                "NULL, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        )
+        migrated.execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'JIKAN', '42')")
+        assertEquals(2, migrated.count("external_refs"))
+        migrated.close()
+    }
+
+    @Test
+    fun migrateOneThroughNinePreservesCanonicalRowsAndValidatesFinalSchema() {
+        helper.createDatabase(V1_TO_V9_DB, 1).apply {
+            execSQL(
+                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
+                    "release_date, created_at, metadata_updated_at) VALUES(1, 'MOVIE', 'Movie', NULL, NULL, NULL, " +
+                    "'2026-01-01', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+            )
+            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            V1_TO_V9_DB,
+            9,
+            true,
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9
+        )
+
+        assertEquals(1, migrated.count("media_entries"))
+        assertEquals(1, migrated.count("external_refs"))
+        assertEquals(0, migrated.count("anime_details"))
+        assertEquals(0, migrated.count("anime_relations"))
+        assertEquals(0, migrated.count("anime_progress"))
+        migrated.close()
+    }
+
     private fun androidx.sqlite.db.SupportSQLiteDatabase.insertVersionTwoFixture() {
         execSQL(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
@@ -413,5 +484,7 @@ class BingeeDatabaseMigrationTest {
         const val V6_TO_V7_DB = "bingee-migration-6-7"
         const val V1_TO_V7_DB = "bingee-migration-1-7"
         const val V7_TO_V8_DB = "bingee-migration-7-8"
+        const val V8_TO_V9_DB = "bingee-migration-8-9"
+        const val V1_TO_V9_DB = "bingee-migration-1-9"
     }
 }

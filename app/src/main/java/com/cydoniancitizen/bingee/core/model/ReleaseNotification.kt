@@ -21,6 +21,7 @@ data class ReleaseNotificationPreferences(
         ReleaseEventType.MOVIE_RELEASE -> movieReleases
         ReleaseEventType.SEASON_PREMIERE -> seasonPremieres
         ReleaseEventType.EPISODE_AIRING -> episodeAirings
+        ReleaseEventType.ANIME_PREMIERE -> false
     }
 }
 

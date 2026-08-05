@@ -10,6 +10,7 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.repository.AnimeDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
@@ -32,6 +33,7 @@ import kotlinx.coroutines.sync.withPermit
 internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val detailsRepository: MediaDetailsRepository,
+    private val animeDetailsRepository: AnimeDetailsRepository,
     private val seriesRepository: SeriesRepository,
     private val calendarRepository: ReleaseCalendarRepository,
     private val credentialRepository: TmdbCredentialRepository,
@@ -50,23 +52,14 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     override suspend fun refresh(targets: List<BackgroundRefreshTarget>): CalendarRefreshSummary {
         val entries = targets.distinctBy { it.mediaRef to it.mediaType }
         if (entries.isEmpty()) return noWorkSummary()
-        if (!credentialRepository.status.value.canRefresh()) {
-            return CalendarRefreshSummary(
-                outcome = CalendarRefreshOutcome.CREDENTIAL_REQUIRED,
-                titlesConsidered = entries.size,
-                operationsSucceeded = 0,
-                operationsFailed = 0,
-                operationsSkipped = entries.size
-            )
-        }
-
+        val tmdbAvailable = credentialRepository.status.value.canRefresh()
         val semaphore = Semaphore(REMOTE_CONCURRENCY_LIMIT)
         val counts = supervisorScope {
             entries.map { entry ->
                 async {
                     semaphore.withPermit {
                         try {
-                            refreshEntry(entry)
+                            refreshEntry(entry, tmdbAvailable)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Throwable) {
@@ -81,8 +74,12 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         return finalized.toSummary(entries.size)
     }
 
-    private suspend fun refreshEntry(entry: BackgroundRefreshTarget): RefreshCounts {
+    private suspend fun refreshEntry(entry: BackgroundRefreshTarget, tmdbAvailable: Boolean): RefreshCounts {
+        if (entry.mediaRef.source == MediaSource.JIKAN && entry.mediaType == MediaType.ANIME) {
+            return animeDetailsRepository.refreshDetails(entry.mediaRef, force = true).toCounts()
+        }
         if (entry.mediaRef.source != MediaSource.TMDB) return RefreshCounts(skipped = 1)
+        if (!tmdbAvailable) return RefreshCounts(skipped = 1, error = AppError.Unauthorized)
         if (entry.mediaType == MediaType.MOVIE) {
             return detailsRepository.refreshDetails(entry.mediaRef, MediaType.MOVIE, force = true).toCounts()
         }
@@ -190,7 +187,7 @@ private data class RefreshCounts(
 
     fun toSummary(titles: Int): CalendarRefreshSummary = CalendarRefreshSummary(
         outcome = when {
-            succeeded > 0 && failed == 0 -> CalendarRefreshOutcome.COMPLETE_SUCCESS
+            succeeded > 0 && failed == 0 && skipped == 0 -> CalendarRefreshOutcome.COMPLETE_SUCCESS
             succeeded > 0 -> CalendarRefreshOutcome.PARTIAL_SUCCESS
             error == AppError.Unauthorized -> CalendarRefreshOutcome.CREDENTIAL_REQUIRED
             failed > 0 -> CalendarRefreshOutcome.COMPLETE_FAILURE

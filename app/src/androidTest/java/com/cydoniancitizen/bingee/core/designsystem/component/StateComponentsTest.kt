@@ -32,6 +32,13 @@ class StateComponentsTest {
                     "Loading library"
                 )
             ).assertIsDisplayed()
+        composeRule
+            .onNode(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.LiveRegion,
+                    LiveRegionMode.Polite
+                )
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -66,6 +73,23 @@ class StateComponentsTest {
         composeRule.onNodeWithText("Retry").performClick()
 
         assertTrue(retried.get())
+    }
+
+    @Test
+    fun errorStateUsesPoliteLiveRegion() {
+        composeRule.setContent {
+            BingeeTheme {
+                ErrorState(title = "Unable to load", message = "Try again.")
+            }
+        }
+
+        composeRule
+            .onNode(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.LiveRegion,
+                    LiveRegionMode.Polite
+                )
+            ).assertIsDisplayed()
     }
 
     @Test
