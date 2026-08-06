@@ -35,7 +35,8 @@ data class SeriesProgress(
     val trackableEpisodes: Int,
     val completedSeasons: Int,
     val trackableSeasons: Int,
-    val isComplete: Boolean
+    val isComplete: Boolean,
+    val watchedDate: LocalDate? = null
 ) {
     init {
         require(watchedEpisodes in 0..trackableEpisodes) { "Invalid series episode counts" }
@@ -48,14 +49,14 @@ data class SeriesProgress(
     val fraction: Float get() = if (trackableEpisodes == 0) 0f else watchedEpisodes.toFloat() / trackableEpisodes
 
     companion object {
-        val EMPTY = SeriesProgress(0, 0, 0, 0, false)
+        val EMPTY = SeriesProgress(0, 0, 0, 0, false, null)
     }
 }
 
 sealed interface MovieWatchState {
     data object Unwatched : MovieWatchState
 
-    data class Watched(val watchedAt: Instant) : MovieWatchState
+    data class Watched(val watchedAt: Instant, val watchedDate: LocalDate? = null) : MovieWatchState
 }
 
 sealed interface LibraryProgress {

@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryQuery
+import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
@@ -15,6 +18,8 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
+import com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository
+import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
 import java.time.Instant
@@ -156,7 +161,9 @@ class HomeViewModelTest {
             repository,
             FakeCoordinator(success()),
             dates,
-            ReleaseCalendarWindow()
+            ReleaseCalendarWindow(),
+            FakeFeaturedRepo(),
+            FakeLibraryRepo()
         ).also(createdViewModels::add)
         runCurrent()
         assertEquals(LocalDate.of(2026, 7, 27), repository.requestedFrom)
@@ -194,9 +201,55 @@ class HomeViewModelTest {
         0
     )
 
-    private fun viewModel(repository: ReleaseCalendarRepository, coordinator: CalendarRefreshCoordinator) =
-        HomeViewModel(repository, coordinator, FakeDateSource(today), ReleaseCalendarWindow())
-            .also(createdViewModels::add)
+    private fun viewModel(
+        repository: ReleaseCalendarRepository,
+        coordinator: CalendarRefreshCoordinator,
+        featuredRepository: com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository =
+            FakeFeaturedRepo(),
+        libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository = FakeLibraryRepo()
+    ) = HomeViewModel(
+        repository,
+        coordinator,
+        FakeDateSource(today),
+        ReleaseCalendarWindow(),
+        featuredRepository,
+        libraryRepository
+    ).also(createdViewModels::add)
+
+    private class FakeFeaturedRepo : FeaturedReleasesRepository {
+        override suspend fun getFeaturedReleases(): AppResult<List<MediaSearchResult>> = AppResult.Success(emptyList())
+    }
+
+    private class FakeLibraryRepo : LibraryRepository {
+        override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
+            MutableStateFlow(AppResult.Success(emptyList()))
+
+        override fun observeEntryCount(): Flow<AppResult<Int>> = MutableStateFlow(AppResult.Success(0))
+
+        override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
+            MutableStateFlow(AppResult.Success(null))
+
+        override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
+            MutableStateFlow(AppResult.Success(emptySet()))
+
+        override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> =
+            AppResult.Failure(AppError.Unknown)
+
+        override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> = AppResult.Failure(AppError.Unknown)
+
+        override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = AppResult.Success(Unit)
+
+        override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> = AppResult.Success(false)
+
+        override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+            AppResult.Success(Unit)
+
+        override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
+            AppResult.Success(Unit)
+
+        override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
+            AppResult.Success(Unit)
+    }
 
     private class FakeDateSource(initial: LocalDate) : CalendarDateSource {
         private val dates = MutableStateFlow(initial)

@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.data.library.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -15,33 +16,38 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 internal abstract class LibraryDao {
     internal data class LibraryProgressRow(
-        @androidx.room.ColumnInfo(name = "local_media_id") val localMediaId: Long,
-        @androidx.room.ColumnInfo(name = "media_type") val mediaType: MediaType,
-        @androidx.room.ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
-        @androidx.room.ColumnInfo(name = "anime_watched_episodes") val animeWatchedEpisodes: Int,
-        @androidx.room.ColumnInfo(name = "anime_episode_total") val animeEpisodeTotal: Int?,
-        @androidx.room.ColumnInfo(name = "anime_completed_at") val animeCompletedAt: Instant?,
-        @androidx.room.ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
-        @androidx.room.ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
-        @androidx.room.ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
-        @androidx.room.ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int
+        @ColumnInfo(name = "local_media_id") val localMediaId: Long,
+        @ColumnInfo(name = "media_type") val mediaType: MediaType,
+        @ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
+        @ColumnInfo(name = "movie_watched_date") val movieWatchedDate: LocalDate?,
+        @ColumnInfo(name = "series_watched_date") val seriesWatchedDate: LocalDate?,
+        @ColumnInfo(name = "anime_watched_episodes") val animeWatchedEpisodes: Int,
+        @ColumnInfo(name = "anime_episode_total") val animeEpisodeTotal: Int?,
+        @ColumnInfo(name = "anime_completed_at") val animeCompletedAt: Instant?,
+        @ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
+        @ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
+        @ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
+        @ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int
     )
 
     @Transaction
     @Query(
         """
-        SELECT media_entries.*, library_entries.added_at AS membership_added_at
+        SELECT media_entries.*,
+               library_entries.added_at AS membership_added_at,
+               CASE WHEN library_entries.local_media_id IS NOT NULL THEN 1 ELSE 0 END AS in_library
         FROM media_entries
-        INNER JOIN library_entries USING(local_media_id)
+        LEFT JOIN library_entries USING(local_media_id)
         LEFT JOIN anime_details USING(local_media_id)
-        WHERE (:mediaType IS NULL OR media_entries.media_type = :mediaType)
+        WHERE (library_entries.local_media_id IS NOT NULL OR media_entries.is_favorite = 1)
+          AND (:mediaType IS NULL OR media_entries.media_type = :mediaType)
           AND (
               LOWER(media_entries.title) LIKE :searchPattern ESCAPE '\'
               OR LOWER(COALESCE(media_entries.original_title, '')) LIKE :searchPattern ESCAPE '\'
               OR LOWER(COALESCE(anime_details.english_title, '')) LIKE :searchPattern ESCAPE '\'
               OR LOWER(COALESCE(anime_details.japanese_title, '')) LIKE :searchPattern ESCAPE '\'
           )
-        ORDER BY library_entries.added_at DESC,
+        ORDER BY COALESCE(library_entries.added_at, media_entries.created_at) DESC,
                  LOWER(media_entries.title) ASC,
                  media_entries.local_media_id ASC
         """
@@ -67,10 +73,12 @@ internal abstract class LibraryDao {
     @Transaction
     @Query(
         """
-        SELECT media_entries.*, library_entries.added_at AS membership_added_at
+        SELECT media_entries.*,
+               library_entries.added_at AS membership_added_at,
+               CASE WHEN library_entries.local_media_id IS NOT NULL THEN 1 ELSE 0 END AS in_library
         FROM media_entries
-        INNER JOIN library_entries USING(local_media_id)
         INNER JOIN external_refs USING(local_media_id)
+        LEFT JOIN library_entries USING(local_media_id)
         WHERE external_refs.source = :source AND external_refs.external_id = :externalId
         LIMIT 1
         """
@@ -111,6 +119,8 @@ internal abstract class LibraryDao {
         SELECT media_entries.local_media_id,
                media_entries.media_type,
                movie_watch_progress.watched_at AS movie_watched_at,
+               movie_watch_progress.watched_date AS movie_watched_date,
+               series_watch_progress.watched_date AS series_watched_date,
                COALESCE(anime_progress.watched_episode_count, 0) AS anime_watched_episodes,
                anime_details.episode_count AS anime_episode_total,
                anime_progress.completed_at AS anime_completed_at,
@@ -161,8 +171,9 @@ internal abstract class LibraryDao {
                      )
                ) AS trackable_seasons
         FROM media_entries
-        INNER JOIN library_entries USING(local_media_id)
+        LEFT JOIN library_entries USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
+        LEFT JOIN series_watch_progress USING(local_media_id)
         LEFT JOIN anime_progress USING(local_media_id)
         LEFT JOIN anime_details USING(local_media_id)
         """
@@ -192,6 +203,18 @@ internal abstract class LibraryDao {
     )
     abstract suspend fun isInLibrary(source: MediaSource, externalId: String): Boolean
 
+    @Query(
+        """
+        UPDATE media_entries
+        SET is_favorite = :isFavorite
+        WHERE local_media_id = (
+            SELECT local_media_id FROM external_refs
+            WHERE source = :source AND external_id = :externalId
+        )
+        """
+    )
+    abstract suspend fun updateFavoriteState(source: MediaSource, externalId: String, isFavorite: Boolean): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     protected abstract suspend fun insertMedia(media: MediaEntity): Long
 
@@ -207,9 +230,11 @@ internal abstract class LibraryDao {
     @Transaction
     @Query(
         """
-        SELECT media_entries.*, library_entries.added_at AS membership_added_at
+        SELECT media_entries.*,
+               library_entries.added_at AS membership_added_at,
+               CASE WHEN library_entries.local_media_id IS NOT NULL THEN 1 ELSE 0 END AS in_library
         FROM media_entries
-        INNER JOIN library_entries USING(local_media_id)
+        LEFT JOIN library_entries USING(local_media_id)
         WHERE media_entries.local_media_id = :localMediaId
         LIMIT 1
         """
@@ -253,7 +278,8 @@ internal abstract class LibraryDao {
                 updateMedia(
                     candidate.copy(
                         localMediaId = existing.localMediaId,
-                        createdAt = existing.createdAt
+                        createdAt = existing.createdAt,
+                        isFavorite = existing.isFavorite
                     )
                 )
                 existing.localMediaId
@@ -262,6 +288,28 @@ internal abstract class LibraryDao {
         insertMembership(LibraryMembershipEntity(localMediaId, addedAt))
         return checkNotNull(getLibraryItem(localMediaId)) {
             "Library transaction completed without a readable membership"
+        }
+    }
+
+    @Transaction
+    open suspend fun ensureMediaAndSetFavorite(
+        candidate: MediaEntity,
+        source: MediaSource,
+        externalId: String,
+        isFavorite: Boolean
+    ) {
+        val existing = getMediaByExternalRef(source, externalId)
+        if (existing == null) {
+            val insertedId = insertMedia(candidate.copy(isFavorite = isFavorite))
+            insertExternalRef(
+                ExternalRefEntity(
+                    localMediaId = insertedId,
+                    source = source,
+                    externalId = externalId
+                )
+            )
+        } else {
+            updateMedia(existing.copy(isFavorite = isFavorite))
         }
     }
 

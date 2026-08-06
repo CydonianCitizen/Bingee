@@ -34,7 +34,7 @@ internal object BackupValidator {
     fun validate(document: BackupDocument): BackupValidationResult = try {
         require(document.formatId == BACKUP_FORMAT_ID, BackupFailureKind.WRONG_FORMAT)
         require(
-            document.schemaVersion in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION,
+            document.schemaVersion == BACKUP_SCHEMA_VERSION,
             BackupFailureKind.UNSUPPORTED_VERSION
         )
         val data = document.data
@@ -52,9 +52,6 @@ internal object BackupValidator {
             checkUrl(media.posterUrl)
             val expectedSource = if (media.mediaType == MediaType.ANIME) MediaSource.JIKAN else MediaSource.TMDB
             require(media.primaryRef.source == expectedSource, BackupFailureKind.CONFLICTING_REFERENCE)
-            if (document.schemaVersion == BACKUP_SCHEMA_VERSION_V1) {
-                require(media.mediaType != MediaType.ANIME, BackupFailureKind.VALIDATION)
-            }
             require(
                 media.externalRefs.all { it.source == expectedSource },
                 BackupFailureKind.CONFLICTING_REFERENCE
@@ -156,7 +153,34 @@ internal object BackupValidator {
         data.movieProgress.forEach { progress ->
             val media = mediaByRef[progress.mediaRef.key()] ?: missing()
             require(media.mediaType == MediaType.MOVIE, BackupFailureKind.CONFLICTING_REFERENCE)
+            if (progress.watchedDate != null) {
+                val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
+                    progress.watchedDate,
+                    media.releaseDate
+                )
+                require(
+                    validation is com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult.Valid,
+                    BackupFailureKind.VALIDATION
+                )
+            }
             require(movieProgressRefs.add(progress.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+        }
+
+        val seriesProgressRefs = hashSetOf<String>()
+        data.seriesProgress.forEach { progress ->
+            val media = mediaByRef[progress.mediaRef.key()] ?: missing()
+            require(media.mediaType == MediaType.SERIES, BackupFailureKind.CONFLICTING_REFERENCE)
+            if (progress.watchedDate != null) {
+                val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
+                    progress.watchedDate,
+                    media.releaseDate
+                )
+                require(
+                    validation is com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult.Valid,
+                    BackupFailureKind.VALIDATION
+                )
+            }
+            require(seriesProgressRefs.add(progress.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
         val episodeProgressRefs = hashSetOf<String>()
@@ -171,11 +195,6 @@ internal object BackupValidator {
             require(rating.rating in 1..10, BackupFailureKind.VALIDATION)
             require(!rating.updatedAt.isBefore(rating.ratedAt), BackupFailureKind.VALIDATION)
             require(ratingRefs.add(rating.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
-        }
-
-        if (document.schemaVersion < BACKUP_SCHEMA_VERSION_V3) {
-            require(data.mediaLinkGroups.isEmpty(), BackupFailureKind.VALIDATION)
-            require(data.mediaLinkAudit.isEmpty(), BackupFailureKind.VALIDATION)
         }
 
         val availableMediaIdentities = buildSet {

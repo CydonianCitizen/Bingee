@@ -9,7 +9,7 @@ class TopLevelDestinationTest {
     @Test
     fun routesRemainStableAndOrdered() {
         assertEquals(
-            listOf("home", "search", "library", "settings"),
+            listOf("home", "search", "profile"),
             TopLevelDestination.entries.map(TopLevelDestination::route)
         )
     }

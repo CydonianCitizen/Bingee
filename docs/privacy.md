@@ -42,7 +42,7 @@ Cached metadata and progress may belong to Library members or non-members and re
 
 Settings can save or share a versioned plaintext JSON backup through Android's Storage Access Framework and system Sharesheet. It may contain Library membership, watched timestamps, ratings, title metadata, and selected notification categories. It is not encrypted or password protected. The TMDB credential, encrypted credential material, Keystore aliases, device permission/enablement state, WorkManager state, notification-delivery history, internal Room IDs, raw provider responses, search text, and file URI are excluded.
 
-Restore accepts supported Bingee v1 and v2 files. V2 may contain Jikan identity, cached anime metadata, relations, membership, entry-level progress, and local ratings, but no credential, freshness, request state, or raw response. The complete document is bounded and semantically validated before one replace transaction; failures leave prior portable state unchanged. Release events are rebuilt locally without network calls or notifications.
+Restore accepts canonical Bingee v1 files. V1 may contain TMDB and Jikan identity, cached metadata, relations, membership, progress, ratings, and media link groups/audit records, but no credential, freshness, request state, or raw response. The complete document is bounded and semantically validated before one replace transaction; failures leave prior portable state unchanged. Release events are rebuilt locally without network calls or notifications.
 
 ## TMDB attribution
 

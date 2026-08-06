@@ -13,6 +13,7 @@ import com.cydoniancitizen.bingee.data.library.local.MovieProgressRow
 import com.cydoniancitizen.bingee.data.library.local.MovieWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
 import java.time.Clock
 import java.time.Instant
@@ -122,8 +123,16 @@ class DefaultWatchProgressRepositoryTest {
         override suspend fun markMovieWatched(
             source: MediaSource,
             externalId: String,
-            watchedAt: Instant
-        ): ProgressWriteOutcome = record(at = watchedAt)
+            watchedAt: Instant,
+            watchedDate: LocalDate?
+        ): ProgressWriteOutcome = record(date = watchedDate, at = watchedAt)
+
+        override suspend fun setMediaWatchedDate(
+            source: MediaSource,
+            externalId: String,
+            watchedDate: LocalDate?,
+            now: Instant
+        ): ProgressWriteOutcome = record(date = watchedDate, at = now)
 
         override suspend fun markMovieUnwatched(source: MediaSource, externalId: String): ProgressWriteOutcome =
             record()
@@ -139,6 +148,10 @@ class DefaultWatchProgressRepositoryTest {
         override suspend fun getSeason(source: MediaSource, externalId: String): SeasonEntity? = null
         override suspend fun getMedia(source: MediaSource, externalId: String): MediaEntity? = null
         override suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long> = emptyList()
+        override suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity? = null
+        override suspend fun getSeriesProgressByMediaId(localMediaId: Long): SeriesWatchProgressEntity? = null
+        override suspend fun insertSeriesProgress(progress: SeriesWatchProgressEntity): Long = 1
+        override suspend fun deleteSeriesProgress(localMediaId: Long) = Unit
         override suspend fun insertEpisodeProgress(progress: EpisodeWatchProgressEntity): Long = 1
         override suspend fun insertEpisodeProgress(progress: List<EpisodeWatchProgressEntity>) = Unit
         override suspend fun insertMovieProgress(progress: MovieWatchProgressEntity): Long = 1

@@ -36,6 +36,7 @@ import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -423,6 +424,12 @@ class MediaDetailsViewModelTest {
         }
         override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> =
             AppResult.Success(entry.value != null)
+        override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+            AppResult.Success(Unit)
+        override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
+            AppResult.Success(Unit)
+        override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
+            AppResult.Success(Unit)
 
         companion object {
             fun libraryEntry() = LibraryEntry(

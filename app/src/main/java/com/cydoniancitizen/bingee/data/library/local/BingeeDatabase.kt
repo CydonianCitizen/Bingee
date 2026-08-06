@@ -15,6 +15,7 @@ import androidx.room.TypeConverters
         EpisodeEntity::class,
         EpisodeWatchProgressEntity::class,
         MovieWatchProgressEntity::class,
+        SeriesWatchProgressEntity::class,
         MediaRatingEntity::class,
         ReleaseEventEntity::class,
         CalendarRefreshStateEntity::class,

@@ -141,5 +141,28 @@ internal data class MovieWatchProgressEntity(
     @ColumnInfo(name = "local_media_id")
     val localMediaId: Long,
     @ColumnInfo(name = "watched_at")
-    val watchedAt: Instant
+    val watchedAt: Instant,
+    @ColumnInfo(name = "watched_date")
+    val watchedDate: LocalDate? = null
+)
+
+@Entity(
+    tableName = "series_watch_progress",
+    foreignKeys = [
+        ForeignKey(
+            entity = MediaEntity::class,
+            parentColumns = ["local_media_id"],
+            childColumns = ["local_media_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ]
+)
+internal data class SeriesWatchProgressEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "local_media_id")
+    val localMediaId: Long,
+    @ColumnInfo(name = "watched_date")
+    val watchedDate: LocalDate? = null,
+    @ColumnInfo(name = "completed_at")
+    val completedAt: Instant
 )

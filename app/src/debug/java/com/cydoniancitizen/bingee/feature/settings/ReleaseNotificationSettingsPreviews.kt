@@ -3,21 +3,21 @@ package com.cydoniancitizen.bingee.feature.settings
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.feature.notifications.NotificationsContent
 
 @Preview(showBackground = true)
 @Composable
-private fun NotificationsDisabledPreview() = PreviewSettings(
+private fun NotificationsDisabledPreview() = PreviewNotifications(
     ReleaseNotificationSettingsUiState()
 )
 
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, fontScale = 2f)
 @Composable
-private fun NotificationsEnabledLargeDarkPreview() = PreviewSettings(
+private fun NotificationsEnabledLargeDarkPreview() = PreviewNotifications(
     ReleaseNotificationSettingsUiState(
         preferences = ReleaseNotificationPreferences(
             enabled = true,
@@ -31,7 +31,7 @@ private fun NotificationsEnabledLargeDarkPreview() = PreviewSettings(
 
 @Preview(showBackground = true)
 @Composable
-private fun NotificationsBlockedPreview() = PreviewSettings(
+private fun NotificationsBlockedPreview() = PreviewNotifications(
     ReleaseNotificationSettingsUiState(
         capability = NotificationCapabilityStatus.CHANNEL_BLOCKED,
         permanentlyDenied = true
@@ -39,17 +39,17 @@ private fun NotificationsBlockedPreview() = PreviewSettings(
 )
 
 @Composable
-private fun PreviewSettings(notificationState: ReleaseNotificationSettingsUiState, darkTheme: Boolean = false) {
+private fun PreviewNotifications(notificationState: ReleaseNotificationSettingsUiState, darkTheme: Boolean = false) {
     BingeeTheme(darkTheme = darkTheme) {
-        SettingsContent(
-            state = SettingsUiState(credentialStatus = TmdbCredentialStatus.NotConfigured),
-            onInputChanged = {},
-            onSubmit = {},
-            onRetry = {},
-            onRequestRemoval = {},
-            onDismissRemoval = {},
-            onConfirmRemoval = {},
-            notificationState = notificationState
+        NotificationsContent(
+            state = notificationState,
+            onBack = {},
+            onNotificationEnabledChanged = {},
+            onLeadTimeChanged = {},
+            onMovieReleasesChanged = {},
+            onSeasonPremieresChanged = {},
+            onEpisodeAiringsChanged = {},
+            onOpenSystemSettings = {}
         )
     }
 }

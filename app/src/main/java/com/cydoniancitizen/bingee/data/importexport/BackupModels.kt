@@ -12,9 +12,7 @@ import java.time.LocalDate
 
 internal const val BACKUP_FORMAT_ID = "bingee-backup"
 internal const val BACKUP_SCHEMA_VERSION_V1 = 1
-internal const val BACKUP_SCHEMA_VERSION_V2 = 2
-internal const val BACKUP_SCHEMA_VERSION_V3 = 3
-internal const val BACKUP_SCHEMA_VERSION = 3
+internal const val BACKUP_SCHEMA_VERSION = 1
 internal const val BACKUP_MIME_TYPE = "application/json"
 internal const val MAX_BACKUP_BYTES = 50 * 1024 * 1024
 
@@ -55,7 +53,8 @@ internal data class BackupMedia(
     val originalTitle: String?,
     val overview: String?,
     val posterUrl: String?,
-    val releaseDate: LocalDate?
+    val releaseDate: LocalDate?,
+    val isFavorite: Boolean = false
 )
 
 internal data class BackupSeason(
@@ -82,7 +81,17 @@ internal data class BackupEpisode(
 
 internal data class BackupLibraryEntry(val mediaRef: BackupRef, val addedAt: Instant)
 
-internal data class BackupMovieProgress(val mediaRef: BackupRef, val watchedAt: Instant)
+internal data class BackupMovieProgress(
+    val mediaRef: BackupRef,
+    val watchedAt: Instant,
+    val watchedDate: LocalDate? = null
+)
+
+internal data class BackupSeriesProgress(
+    val mediaRef: BackupRef,
+    val completedAt: Instant,
+    val watchedDate: LocalDate? = null
+)
 
 internal data class BackupEpisodeProgress(val episodeRef: BackupRef, val watchedAt: Instant)
 
@@ -141,7 +150,8 @@ internal data class BackupData(
     val animeRelations: List<BackupAnimeRelation> = emptyList(),
     val animeProgress: List<BackupAnimeProgress> = emptyList(),
     val mediaLinkGroups: List<BackupMediaLinkGroup> = emptyList(),
-    val mediaLinkAudit: List<BackupMediaLinkAudit> = emptyList()
+    val mediaLinkAudit: List<BackupMediaLinkAudit> = emptyList(),
+    val seriesProgress: List<BackupSeriesProgress> = emptyList()
 )
 
 internal data class BackupDocument(

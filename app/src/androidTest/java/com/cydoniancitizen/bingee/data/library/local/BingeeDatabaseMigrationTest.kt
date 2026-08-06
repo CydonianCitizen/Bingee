@@ -14,7 +14,6 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.data.importexport.BACKUP_FORMAT_ID
 import com.cydoniancitizen.bingee.data.importexport.BACKUP_SCHEMA_VERSION
-import com.cydoniancitizen.bingee.data.importexport.BACKUP_SCHEMA_VERSION_V3
 import com.cydoniancitizen.bingee.data.importexport.BackupAnimeDetails
 import com.cydoniancitizen.bingee.data.importexport.BackupAnimeProgress
 import com.cydoniancitizen.bingee.data.importexport.BackupData
@@ -85,6 +84,7 @@ class BingeeDatabaseMigrationTest {
             "episodes",
             "episode_watch_progress",
             "movie_watch_progress",
+            "series_watch_progress",
             "media_ratings",
             "release_events",
             "calendar_refresh_state",
@@ -108,6 +108,63 @@ class BingeeDatabaseMigrationTest {
 
         db.close()
         validated.close()
+    }
+
+    @Test
+    fun versionOneBaselinePersistsFavoritesAndWatchedDates() = runBlocking {
+        val movieMediaId = database.portableSnapshotDao().insertMedia(
+            MediaEntity(
+                mediaType = MediaType.MOVIE,
+                title = "Favorite Movie",
+                originalTitle = null,
+                overview = null,
+                posterUrl = null,
+                releaseDate = LocalDate.parse("2026-01-01"),
+                createdAt = clock.instant(),
+                metadataUpdatedAt = clock.instant(),
+                isFavorite = true
+            )
+        )
+        database.portableSnapshotDao().insertExternalRef(
+            ExternalRefEntity(localMediaId = movieMediaId, source = MediaSource.TMDB, externalId = "1001")
+        )
+        database.watchProgressDao().setMediaWatchedDate(
+            source = MediaSource.TMDB,
+            externalId = "1001",
+            watchedDate = LocalDate.parse("2026-06-01"),
+            now = clock.instant()
+        )
+
+        val seriesMediaId = database.portableSnapshotDao().insertMedia(
+            MediaEntity(
+                mediaType = MediaType.SERIES,
+                title = "Watched Series",
+                originalTitle = null,
+                overview = null,
+                posterUrl = null,
+                releaseDate = LocalDate.parse("2026-01-01"),
+                createdAt = clock.instant(),
+                metadataUpdatedAt = clock.instant(),
+                isFavorite = false
+            )
+        )
+        database.portableSnapshotDao().insertExternalRef(
+            ExternalRefEntity(localMediaId = seriesMediaId, source = MediaSource.TMDB, externalId = "1002")
+        )
+        database.watchProgressDao().setMediaWatchedDate(
+            source = MediaSource.TMDB,
+            externalId = "1002",
+            watchedDate = LocalDate.parse("2026-07-01"),
+            now = clock.instant()
+        )
+
+        val storedMovie = database.portableSnapshotDao().readSnapshot().media.first { it.localMediaId == movieMediaId }
+        val storedSeries = database.portableSnapshotDao().readSnapshot().media.first {
+            it.localMediaId == seriesMediaId
+        }
+
+        assertEquals(true, storedMovie.isFavorite)
+        assertEquals(false, storedSeries.isFavorite)
     }
 
     @Test
@@ -300,7 +357,7 @@ class BingeeDatabaseMigrationTest {
         assertEquals(1, exported.mediaLinkGroups.size)
         assertEquals(1, exported.mediaLinkAudit.size)
 
-        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, clock.instant(), exported)
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, clock.instant(), exported)
         val plan = ValidatedBackupPlan(doc)
 
         backupDataStore.restore(plan)

@@ -6,7 +6,12 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 import com.google.gson.Gson
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -34,7 +39,7 @@ class TmdbSeasonClientTest {
             .addConverterFactory(GsonConverterFactory.create(Gson()))
             .build()
             .create(TmdbSeasonService::class.java)
-        client = TmdbSeasonClient(FakeCredentialStore(), service)
+        client = TmdbSeasonClient(FakeCredentialStore(), service, FakeAppearancePreferences())
     }
 
     @After
@@ -80,7 +85,7 @@ class TmdbSeasonClientTest {
         )
         assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("bad"), 1))
         assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("1"), -1))
-        val noCredential = TmdbSeasonClient(FakeCredentialStore(null), service())
+        val noCredential = TmdbSeasonClient(FakeCredentialStore(null), service(), FakeAppearancePreferences())
         assertEquals(AppResult.Failure(AppError.Unauthorized), noCredential.load(tmdb("1"), 1))
         assertEquals(0, server.requestCount)
     }
@@ -111,5 +116,13 @@ class TmdbSeasonClientTest {
         const val SUCCESS_BODY =
             """{"id":90,"season_number":0,"name":"Specials","episodes":[{"id":101,"season_number":0,"episode_number":1,"name":"Special","air_date":null}]}"""
         const val EMPTY_BODY = """{"id":91,"season_number":1,"name":"Season 1","episodes":[]}"""
+    }
+
+    private class FakeAppearancePreferences : AppearancePreferences {
+        override fun observeTheme(): Flow<AppTheme> = flowOf(AppTheme.SYSTEM_DEFAULT)
+        override suspend fun setTheme(theme: AppTheme) {}
+        override fun observeLanguage(): Flow<AppLanguage> = flowOf(AppLanguage.ENGLISH)
+        override suspend fun setLanguage(language: AppLanguage) {}
+        override suspend fun getEffectiveTmdbLanguage(): String = "en-US"
     }
 }

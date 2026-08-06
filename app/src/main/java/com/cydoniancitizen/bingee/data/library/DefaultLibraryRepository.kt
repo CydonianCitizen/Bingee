@@ -14,7 +14,9 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
+import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
+import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Clock
 import java.time.Instant
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.map
 @Singleton
 internal class DefaultLibraryRepository @Inject constructor(
     private val libraryDao: LibraryDao,
+    private val watchProgressDao: WatchProgressDao,
     private val ratingDao: RatingDao,
     private val clock: Clock,
     private val animeAvailability: AnimeFeatureAvailability
@@ -100,43 +103,30 @@ internal class DefaultLibraryRepository @Inject constructor(
                     media = result.toMediaEntity(now),
                     addedAt = now
                 )
-            } catch (cancelled: CancellationException) {
-                throw cancelled
             } catch (_: IllegalArgumentException) {
                 return AppResult.Failure(AppError.InvalidInput)
-            } catch (_: Exception) {
-                return AppResult.Failure(AppError.Unknown)
             }
-        return try {
-            val row =
-                libraryDao.addToLibrary(
-                    candidate = prepared.media,
-                    source = prepared.ref.source,
-                    externalId = prepared.ref.externalId,
-                    addedAt = prepared.addedAt
-                )
-            AppResult.Success(row.toDomain(preferredRef = prepared.ref))
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: IllegalArgumentException) {
-            AppResult.Failure(AppError.CorruptedData)
-        } catch (_: IllegalStateException) {
-            AppResult.Failure(AppError.CorruptedData)
-        } catch (_: SQLiteException) {
-            AppResult.Failure(AppError.LocalStorageFailure)
-        } catch (_: Exception) {
-            AppResult.Failure(AppError.Unknown)
+        return persistenceRead {
+            val row = libraryDao.addToLibrary(
+                prepared.media,
+                prepared.ref.source,
+                prepared.ref.externalId,
+                prepared.addedAt
+            )
+            row.toDomain(preferredRef = prepared.ref)
         }
     }
 
     override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> =
         withNormalizedExternalId(ref) { externalId ->
+            val now = clock.instant()
             try {
-                val row = libraryDao.addExistingToLibrary(ref.source, externalId, clock.instant())
-                    ?: return@withNormalizedExternalId AppResult.Failure(AppError.MissingData)
-                AppResult.Success(row.toDomain(preferredRef = ExternalMediaRef(ref.source, externalId)))
-            } catch (cancelled: CancellationException) {
-                throw cancelled
+                val existingItem = libraryDao.addExistingToLibrary(ref.source, externalId, now)
+                if (existingItem != null) {
+                    AppResult.Success(existingItem.toDomain(preferredRef = ExternalMediaRef(ref.source, externalId)))
+                } else {
+                    AppResult.Failure(AppError.MissingData)
+                }
             } catch (_: IllegalArgumentException) {
                 AppResult.Failure(AppError.CorruptedData)
             } catch (_: IllegalStateException) {
@@ -158,6 +148,44 @@ internal class DefaultLibraryRepository @Inject constructor(
     override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> =
         withNormalizedExternalId(ref) { externalId ->
             persistenceRead { libraryDao.isInLibrary(ref.source, externalId) }
+        }
+
+    override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+        withNormalizedExternalId(ref) { externalId ->
+            persistenceRead {
+                val updated = libraryDao.updateFavoriteState(ref.source, externalId, isFavorite)
+                if (updated == 0) {
+                    throw IllegalStateException("Media entity not found for favorite state update")
+                }
+            }
+        }
+
+    override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
+        withNormalizedExternalId(result.externalRef) { externalId ->
+            persistenceRead {
+                val now = clock.instant()
+                libraryDao.ensureMediaAndSetFavorite(
+                    candidate = result.toMediaEntity(now),
+                    source = result.externalRef.source,
+                    externalId = externalId,
+                    isFavorite = isFavorite
+                )
+            }
+        }
+
+    override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
+        withNormalizedExternalId(ref) { externalId ->
+            persistenceRead {
+                val outcome = watchProgressDao.setMediaWatchedDate(
+                    source = ref.source,
+                    externalId = externalId,
+                    watchedDate = watchedDate,
+                    now = clock.instant()
+                )
+                if (outcome == ProgressWriteOutcome.NOT_FOUND) {
+                    throw IllegalStateException("Media entity not found for watched date update")
+                }
+            }
         }
 }
 

@@ -48,6 +48,7 @@ class AnimeLibraryRepositoryTest {
         database = Room.inMemoryDatabaseBuilder(context, BingeeDatabase::class.java).build()
         repository = DefaultLibraryRepository(
             database.libraryDao(),
+            database.watchProgressDao(),
             database.ratingDao(),
             Clock.fixed(now, ZoneOffset.UTC),
             TestingAnimeFeatureAvailability(isAvailable = true)

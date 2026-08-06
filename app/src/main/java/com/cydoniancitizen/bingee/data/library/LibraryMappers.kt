@@ -42,6 +42,10 @@ internal fun LibraryItemWithRefs.toDomain(
         preferredRef?.takeIf(refs::contains)
             ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
     }
+    val domainProgress = progressRow.toDomainProgress(media.mediaType)
+    val domainWatchedDate = progressRow?.let {
+        if (media.mediaType == MediaType.MOVIE) it.movieWatchedDate else it.seriesWatchedDate
+    }
     return LibraryEntry(
         mediaRef = selectedRef,
         mediaType = media.mediaType,
@@ -50,16 +54,19 @@ internal fun LibraryItemWithRefs.toDomain(
         posterUrl = media.posterUrl,
         releaseDate = media.releaseDate,
         overview = media.overview,
-        addedAt = addedAt,
-        progress = progressRow.toDomainProgress(media.mediaType),
-        personalRating = rating?.let { PersonalRating(it.ratingValue) }
+        addedAt = addedAt ?: media.createdAt,
+        progress = domainProgress,
+        personalRating = rating?.let { PersonalRating(it.ratingValue) },
+        isFavorite = media.isFavorite,
+        watchedDate = domainWatchedDate,
+        inLibrary = inLibrary
     )
 }
 
 private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType): LibraryProgress = when {
     this == null -> LibraryProgress.Unavailable
     mediaType == MediaType.MOVIE -> LibraryProgress.Movie(
-        movieWatchedAt?.let(MovieWatchState::Watched) ?: MovieWatchState.Unwatched
+        movieWatchedAt?.let { MovieWatchState.Watched(it, movieWatchedDate) } ?: MovieWatchState.Unwatched
     )
     mediaType == MediaType.ANIME -> LibraryProgress.Anime(
         watchedEpisodes = animeWatchedEpisodes,
@@ -76,7 +83,8 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
             trackableEpisodes = trackableEpisodes,
             completedSeasons = completedSeasons,
             trackableSeasons = trackableSeasons,
-            isComplete = watchedEpisodes == trackableEpisodes
+            isComplete = watchedEpisodes == trackableEpisodes,
+            watchedDate = seriesWatchedDate
         )
     )
 }

@@ -195,7 +195,7 @@ class BackupLinkRestoreTest {
         assertEquals(1, exportedData.mediaLinkAudit.size)
         assertEquals(2, exportedData.media.size) // Both linked members included in media snapshot!
 
-        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, clock.instant(), exportedData)
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, clock.instant(), exportedData)
         val plan = ValidatedBackupPlan(doc)
 
         backupDataStore.restore(plan)
@@ -216,7 +216,7 @@ class BackupLinkRestoreTest {
         linkRepository.createLink(first, second, preferredPresentation = first)
 
         val exportedData = backupDataStore.readPortableData()
-        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, clock.instant(), exportedData)
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, clock.instant(), exportedData)
         val plan = ValidatedBackupPlan(doc)
 
         for (targetStage in listOf(

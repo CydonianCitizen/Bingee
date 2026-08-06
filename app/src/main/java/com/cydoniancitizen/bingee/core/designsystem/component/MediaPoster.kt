@@ -16,7 +16,8 @@ import com.cydoniancitizen.bingee.R
 
 @Composable
 fun MediaPoster(title: String, posterUrl: String?, modifier: Modifier = Modifier) {
-    val posterModifier = modifier.width(96.dp).height(144.dp).clip(MaterialTheme.shapes.medium)
+    val baseModifier = if (modifier == Modifier) Modifier.width(96.dp).height(144.dp) else modifier
+    val posterModifier = baseModifier.clip(MaterialTheme.shapes.medium)
     val placeholder = painterResource(R.drawable.poster_placeholder)
     if (posterUrl == null) {
         Image(

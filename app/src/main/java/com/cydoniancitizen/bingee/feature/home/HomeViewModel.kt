@@ -48,7 +48,10 @@ internal data class HomeUiState(
     val content: HomeContentState = HomeContentState.Loading,
     val refresh: HomeRefreshState = HomeRefreshState.Idle,
     val lastSuccessfulRefreshAt: Instant? = null,
-    val today: LocalDate
+    val today: LocalDate,
+    val featuredReleases: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
+    val libraryMemberships: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet(),
+    val addingToWatchlist: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet()
 )
 
 @HiltViewModel
@@ -57,7 +60,9 @@ internal class HomeViewModel @Inject constructor(
     private val calendarRepository: ReleaseCalendarRepository,
     private val refreshCoordinator: CalendarRefreshCoordinator,
     private val dateSource: CalendarDateSource,
-    private val window: ReleaseCalendarWindow
+    private val window: ReleaseCalendarWindow,
+    private val featuredRepository: com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository,
+    private val libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(HomeUiState(today = dateSource.currentDate()))
     private val localRetry = MutableStateFlow(0)
@@ -65,6 +70,8 @@ internal class HomeViewModel @Inject constructor(
 
     init {
         observeLocalCalendar()
+        observeLibraryMemberships()
+        loadFeaturedReleases()
         runLocalBackfill()
     }
 
@@ -90,12 +97,34 @@ internal class HomeViewModel @Inject constructor(
                 )
             }
             mutableUiState.update { it.copy(refresh = summary.toUiState()) }
+            loadFeaturedReleases()
+        }
+    }
+
+    fun addToWatchlist(item: com.cydoniancitizen.bingee.core.model.MediaSearchResult) {
+        val ref = item.externalRef
+        if (ref in mutableUiState.value.libraryMemberships || ref in mutableUiState.value.addingToWatchlist) return
+        mutableUiState.update { it.copy(addingToWatchlist = it.addingToWatchlist + ref) }
+        viewModelScope.launch {
+            val result = libraryRepository.add(item)
+            mutableUiState.update { state ->
+                val nextMemberships = if (result is AppResult.Success) {
+                    state.libraryMemberships + ref
+                } else {
+                    state.libraryMemberships
+                }
+                state.copy(
+                    addingToWatchlist = state.addingToWatchlist - ref,
+                    libraryMemberships = nextMemberships
+                )
+            }
         }
     }
 
     fun retryLocal() {
         localRetry.update { it + 1 }
         runLocalBackfill()
+        loadFeaturedReleases()
     }
 
     fun dismissRefreshFeedback() {
@@ -144,6 +173,29 @@ internal class HomeViewModel @Inject constructor(
             val result = calendarRepository.backfill()
             if (result is AppResult.Failure && mutableUiState.value.content !is HomeContentState.Events) {
                 mutableUiState.update { it.copy(content = HomeContentState.Error(result.error)) }
+            }
+        }
+    }
+
+    private fun observeLibraryMemberships() {
+        viewModelScope.launch {
+            libraryRepository.observeMembershipRefs().collect { result ->
+                if (result is AppResult.Success) {
+                    mutableUiState.update { it.copy(libraryMemberships = result.value) }
+                }
+            }
+        }
+    }
+
+    private fun loadFeaturedReleases() {
+        viewModelScope.launch {
+            when (val result = featuredRepository.getFeaturedReleases()) {
+                is AppResult.Success -> {
+                    mutableUiState.update { it.copy(featuredReleases = result.value) }
+                }
+                is AppResult.Failure -> {
+                    // Keep existing or empty
+                }
             }
         }
     }

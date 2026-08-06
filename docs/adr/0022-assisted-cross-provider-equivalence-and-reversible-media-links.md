@@ -26,9 +26,9 @@ Users may wish to group corresponding provider representations in their local Li
    - `media_link_members` (`local_group_id` FK CASCADE, `local_media_id` FK RESTRICT UNIQUE, `added_at`)
    - `media_link_audit` (`audit_id` PK, `group_uuid`, `action`, `action_timestamp`, `origin`, preferred snapshot fields)
    - `media_link_audit_members` (`audit_id` FK CASCADE, `source`, `media_type`, `external_id` PK)
-9. **Backup v1/v2 Replace Policy**: Restoring older backup formats (v1 or v2) clears active link groups and audit rows prior to replacing media rows, ensuring foreign-key integrity without dangling links.
-10. **Backup Portability (Backup Schema v3)**: Exporter emits backup schema version 3 containing active `mediaLinkGroups` and privacy-safe `mediaLinkAudit` events, exported using provider-qualified external identities (`source` + `mediaType` + `externalId`) and stable group UUIDs without exposing Room auto-increment IDs. Importer accepts schema versions 1, 2, and 3.
-11. **Audit Retention Policy**: Complete local link audit trail is preserved in backup v3 sorted deterministically by timestamp, group UUID, action, and member identity. Historical audit events for unlinked groups survive unlinking and are exported without requiring active media records.
+9. **Backup Replace Policy**: Restoring a backup clears active link groups and audit rows prior to replacing media rows, ensuring foreign-key integrity without dangling links.
+10. **Backup Portability (Backup Schema v1)**: Exporter emits backup schema version 1 containing active `mediaLinkGroups` and privacy-safe `mediaLinkAudit` events, exported using provider-qualified external identities (`source` + `mediaType` + `externalId`) and stable group UUIDs without exposing Room auto-increment IDs. Importer accepts schema version 1.
+11. **Audit Retention Policy**: Complete local link audit trail is preserved in backup v1 sorted deterministically by timestamp, group UUID, action, and member identity. Historical audit events for unlinked groups survive unlinking and are exported without requiring active media records.
 
 ## Consequences
 

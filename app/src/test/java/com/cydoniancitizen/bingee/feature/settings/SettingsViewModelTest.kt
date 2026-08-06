@@ -5,9 +5,14 @@ import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialValidator
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 import com.cydoniancitizen.bingee.testutil.FakeCredentialRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -25,7 +30,7 @@ class SettingsViewModelTest {
     @Test
     fun initialConfiguredStateAndReplacementSuccess() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeCredentialRepository(TmdbCredentialStatus.Valid)
-        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator())
+        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator(), FakeAppearancePreferences())
         runCurrent()
 
         assertEquals(TmdbCredentialStatus.Valid, viewModel.uiState.value.credentialStatus)
@@ -44,7 +49,7 @@ class SettingsViewModelTest {
     fun localErrorAndUnauthorizedResponseStaySafe() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeCredentialRepository()
         repository.validationResults += AppResult.Failure(AppError.Unauthorized)
-        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator())
+        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator(), FakeAppearancePreferences())
 
         viewModel.submit("invalid token")
         assertEquals(AppError.InvalidInput, viewModel.uiState.value.error)
@@ -65,7 +70,7 @@ class SettingsViewModelTest {
                     hasStoredCredential = true
                 )
             )
-        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator())
+        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator(), FakeAppearancePreferences())
 
         viewModel.retry("")
         advanceUntilIdle()
@@ -78,7 +83,7 @@ class SettingsViewModelTest {
     @Test
     fun deletionRequiresConfirmationAndRemovesCredential() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeCredentialRepository(TmdbCredentialStatus.Valid)
-        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator())
+        val viewModel = SettingsViewModel(repository, TmdbCredentialValidator(), FakeAppearancePreferences())
         runCurrent()
 
         viewModel.requestRemoval()
@@ -91,5 +96,36 @@ class SettingsViewModelTest {
         assertEquals(1, repository.removeCalls)
         assertEquals(TmdbCredentialStatus.NotConfigured, viewModel.uiState.value.credentialStatus)
         assertFalse(viewModel.uiState.value.showRemovalConfirmation)
+    }
+
+    @Test
+    fun sameLanguageSelectionDoesNotRewritePreference() = runTest(mainDispatcherRule.dispatcher) {
+        val preferences = FakeAppearancePreferences()
+        val viewModel = SettingsViewModel(
+            FakeCredentialRepository(),
+            TmdbCredentialValidator(),
+            preferences
+        )
+        runCurrent()
+
+        viewModel.setLanguage(AppLanguage.ENGLISH)
+        advanceUntilIdle()
+        assertTrue(preferences.languageWrites.isEmpty())
+
+        viewModel.setLanguage(AppLanguage.ITALIAN)
+        advanceUntilIdle()
+        assertEquals(listOf(AppLanguage.ITALIAN), preferences.languageWrites)
+    }
+
+    private class FakeAppearancePreferences : AppearancePreferences {
+        val languageWrites = mutableListOf<AppLanguage>()
+
+        override fun observeTheme(): Flow<AppTheme> = flowOf(AppTheme.SYSTEM_DEFAULT)
+        override suspend fun setTheme(theme: AppTheme) {}
+        override fun observeLanguage(): Flow<AppLanguage> = flowOf(AppLanguage.ENGLISH)
+        override suspend fun setLanguage(language: AppLanguage) {
+            languageWrites += language
+        }
+        override suspend fun getEffectiveTmdbLanguage(): String = "en-US"
     }
 }

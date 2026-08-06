@@ -9,7 +9,9 @@ internal data class LibraryItemWithRefs(
     @Embedded
     val media: MediaEntity,
     @ColumnInfo(name = "membership_added_at")
-    val addedAt: Instant,
+    val addedAt: Instant? = null,
+    @ColumnInfo(name = "in_library")
+    val inLibrary: Boolean = true,
     @Relation(
         parentColumn = "local_media_id",
         entityColumn = "local_media_id"

@@ -7,8 +7,12 @@ import com.cydoniancitizen.bingee.data.credential.NoBackupTmdbCredentialFile
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialCipher
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialFile
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
+import com.cydoniancitizen.bingee.data.settings.DataStoreAppearancePreferences
 import com.cydoniancitizen.bingee.data.settings.DataStoreFirstRunPreferences
+import com.cydoniancitizen.bingee.data.settings.DataStoreProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.FirstRunPreferences
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.tmdb.auth.TmdbCredentialRemoteValidator
 import com.cydoniancitizen.bingee.data.tmdb.auth.TmdbCredentialValidationClient
 import com.cydoniancitizen.bingee.domain.repository.TmdbCredentialRepository
@@ -44,4 +48,12 @@ internal abstract class CredentialModule {
 
     @Binds
     abstract fun bindFirstRunPreferences(implementation: DataStoreFirstRunPreferences): FirstRunPreferences
+
+    @Binds
+    abstract fun bindProfileDisplayModePreferences(
+        implementation: DataStoreProfileDisplayModePreferences
+    ): ProfileDisplayModePreferences
+
+    @Binds
+    abstract fun bindAppearancePreferences(implementation: DataStoreAppearancePreferences): AppearancePreferences
 }

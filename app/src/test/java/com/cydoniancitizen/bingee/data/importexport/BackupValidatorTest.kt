@@ -84,7 +84,7 @@ class BackupValidatorTest {
                 )
             )
         )
-        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, instant, data)
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, instant, data)
         val result = BackupValidator.validate(doc)
         assertTrue(result is BackupValidationResult.Failure)
         assertEquals(BackupFailureKind.MISSING_REFERENCE, (result as BackupValidationResult.Failure).failure.kind)
@@ -118,7 +118,7 @@ class BackupValidatorTest {
                 )
             )
         )
-        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, instant, data)
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, instant, data)
         val result = BackupValidator.validate(doc)
         assertTrue(result is BackupValidationResult.Failure)
         assertEquals(BackupFailureKind.VALIDATION, (result as BackupValidationResult.Failure).failure.kind)
@@ -152,7 +152,7 @@ class BackupValidatorTest {
                 )
             )
         )
-        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, instant, data)
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, instant, data)
         assertTrue(BackupValidator.validate(doc) is BackupValidationResult.Success)
     }
 

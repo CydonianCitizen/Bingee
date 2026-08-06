@@ -21,7 +21,8 @@ internal interface TmdbDetailsRemoteDataSource {
 
 internal class TmdbDetailsClient @Inject constructor(
     private val credentialStore: TmdbCredentialStore,
-    private val service: TmdbDetailsService
+    private val service: TmdbDetailsService,
+    private val appearancePreferences: com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 ) : TmdbDetailsRemoteDataSource {
     override suspend fun load(reference: ExternalMediaRef, mediaType: MediaType): AppResult<TmdbMediaDetailsPayload> {
         if (reference.source != MediaSource.TMDB) return AppResult.Failure(AppError.UnsupportedData)
@@ -32,16 +33,17 @@ internal class TmdbDetailsClient @Inject constructor(
             is AppResult.Failure -> return stored
         }
         val authorization = "Bearer ${credential.reveal()}"
+        val language = appearancePreferences.getEffectiveTmdbLanguage()
         return when (mediaType) {
             MediaType.MOVIE -> executeTmdbRequest(
                 request = {
-                    service.movieDetails(authorization, providerId, MediaSearchQuery.DEFAULT_LANGUAGE)
+                    service.movieDetails(authorization, providerId, language)
                 },
                 transform = { TmdbMediaDetailsPayload(requireNotNull(TmdbMovieDetailsMapper.map(it))) }
             )
             MediaType.SERIES -> executeTmdbRequest(
                 request = {
-                    service.tvDetails(authorization, providerId, MediaSearchQuery.DEFAULT_LANGUAGE)
+                    service.tvDetails(authorization, providerId, language)
                 },
                 transform = {
                     val details = requireNotNull(TmdbTvDetailsMapper.map(it))

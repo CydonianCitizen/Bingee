@@ -61,20 +61,11 @@ import com.cydoniancitizen.bingee.core.ui.toUiError
 internal fun LibraryScreen(
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: LibraryViewModel = hiltViewModel()
+    onOpenSettings: () -> Unit = {}
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LibraryContent(
-        state = state,
-        onSearchQueryChanged = viewModel::onSearchQueryChanged,
-        onClearSearch = viewModel::clearSearch,
-        onMediaFilterChanged = viewModel::onMediaFilterChanged,
-        onStateFilterChanged = viewModel::onStateFilterChanged,
-        onSortChanged = viewModel::onSortChanged,
-        onRetry = viewModel::retry,
-        onRemove = viewModel::remove,
+    com.cydoniancitizen.bingee.feature.profile.ProfileScreen(
+        onOpenSettings = onOpenSettings,
         onOpenDetails = onOpenDetails,
-        onDismissActionError = viewModel::clearActionError,
         modifier = modifier
     )
 }

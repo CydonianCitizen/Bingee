@@ -195,7 +195,15 @@ class HomeScreenTest {
         composeRule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
                 BingeeTheme(darkTheme = true) {
-                    HomeContent(state, {}, {}, {}, {}, { _, _ -> })
+                    HomeContent(
+                        state = state,
+                        onRefresh = {},
+                        onRetryLocal = {},
+                        onDismissFeedback = {},
+                        onOpenNotifications = {},
+                        onOpenSettings = {},
+                        onOpenDetails = { _, _ -> }
+                    )
                 }
             }
         }
@@ -224,6 +232,7 @@ class HomeScreenTest {
                     onRefresh = onRefresh,
                     onRetryLocal = {},
                     onDismissFeedback = {},
+                    onOpenNotifications = {},
                     onOpenSettings = onOpenSettings,
                     onOpenDetails = onOpenDetails
                 )

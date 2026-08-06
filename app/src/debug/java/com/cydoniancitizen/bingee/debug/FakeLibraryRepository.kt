@@ -4,12 +4,12 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
-import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.organizeLibraryEntries
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -67,4 +67,42 @@ class FakeLibraryRepository(
 
     override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> =
         AppResult.Success(entries.value.any { it.mediaRef == ref })
+
+    override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> {
+        writeFailure?.let { return AppResult.Failure(it) }
+        entries.value = entries.value.map { entry ->
+            if (entry.mediaRef == ref) entry.copy(isFavorite = isFavorite) else entry
+        }
+        return AppResult.Success(Unit)
+    }
+
+    override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> {
+        writeFailure?.let { return AppResult.Failure(it) }
+        val existing = entries.value.firstOrNull { it.mediaRef == result.externalRef }
+        val updated = if (existing != null) {
+            existing.copy(isFavorite = isFavorite)
+        } else {
+            LibraryEntry(
+                mediaRef = result.externalRef,
+                mediaType = result.mediaType,
+                title = result.title,
+                originalTitle = result.originalTitle,
+                posterUrl = result.posterUrl,
+                releaseDate = result.releaseDate,
+                overview = result.overview,
+                addedAt = now,
+                isFavorite = isFavorite
+            )
+        }
+        entries.value = entries.value.filterNot { it.mediaRef == result.externalRef } + updated
+        return AppResult.Success(Unit)
+    }
+
+    override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> {
+        writeFailure?.let { return AppResult.Failure(it) }
+        entries.value = entries.value.map { entry ->
+            if (entry.mediaRef == ref) entry.copy(watchedDate = watchedDate) else entry
+        }
+        return AppResult.Success(Unit)
+    }
 }

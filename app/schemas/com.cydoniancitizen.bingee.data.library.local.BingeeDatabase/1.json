@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "9a224aaae04dcd994ce19646405b4fe5",
+    "identityHash": "a5e0775e2e17768b85becd9971d600ed",
     "entities": [
       {
         "tableName": "media_entries",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`local_media_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `media_type` TEXT NOT NULL, `title` TEXT NOT NULL, `original_title` TEXT, `overview` TEXT, `poster_url` TEXT, `release_date` TEXT, `created_at` TEXT NOT NULL, `metadata_updated_at` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`local_media_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `media_type` TEXT NOT NULL, `title` TEXT NOT NULL, `original_title` TEXT, `overview` TEXT, `poster_url` TEXT, `release_date` TEXT, `created_at` TEXT NOT NULL, `metadata_updated_at` TEXT NOT NULL, `is_favorite` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "localMediaId",
@@ -56,6 +56,12 @@
             "fieldPath": "metadataUpdatedAt",
             "columnName": "metadata_updated_at",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isFavorite",
+            "columnName": "is_favorite",
+            "affinity": "INTEGER",
             "notNull": true
           }
         ],
@@ -566,7 +572,7 @@
       },
       {
         "tableName": "movie_watch_progress",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`local_media_id` INTEGER NOT NULL, `watched_at` TEXT NOT NULL, PRIMARY KEY(`local_media_id`), FOREIGN KEY(`local_media_id`) REFERENCES `media_entries`(`local_media_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`local_media_id` INTEGER NOT NULL, `watched_at` TEXT NOT NULL, `watched_date` TEXT, PRIMARY KEY(`local_media_id`), FOREIGN KEY(`local_media_id`) REFERENCES `media_entries`(`local_media_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "localMediaId",
@@ -577,6 +583,53 @@
           {
             "fieldPath": "watchedAt",
             "columnName": "watched_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchedDate",
+            "columnName": "watched_date",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "local_media_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "media_entries",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "local_media_id"
+            ],
+            "referencedColumns": [
+              "local_media_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "series_watch_progress",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`local_media_id` INTEGER NOT NULL, `watched_date` TEXT, `completed_at` TEXT NOT NULL, PRIMARY KEY(`local_media_id`), FOREIGN KEY(`local_media_id`) REFERENCES `media_entries`(`local_media_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "localMediaId",
+            "columnName": "local_media_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchedDate",
+            "columnName": "watched_date",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completed_at",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -1597,7 +1650,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9a224aaae04dcd994ce19646405b4fe5')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a5e0775e2e17768b85becd9971d600ed')"
     ]
   }
 }

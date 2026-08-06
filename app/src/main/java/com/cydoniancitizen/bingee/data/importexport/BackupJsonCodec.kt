@@ -111,6 +111,9 @@ internal object BackupJsonCodec {
         writer.name("movieProgress").beginArray()
         data.movieProgress.forEach { writeMovieProgress(writer, it) }
         writer.endArray()
+        writer.name("seriesProgress").beginArray()
+        data.seriesProgress.forEach { writeSeriesProgress(writer, it) }
+        writer.endArray()
         writer.name("episodeProgress").beginArray()
         data.episodeProgress.forEach { writeEpisodeProgress(writer, it) }
         writer.endArray()
@@ -199,6 +202,7 @@ internal object BackupJsonCodec {
         writeNullable(writer, "overview", media.overview)
         writeNullable(writer, "posterUrl", media.posterUrl)
         writeNullable(writer, "releaseDate", media.releaseDate?.toString())
+        writer.name("isFavorite").value(media.isFavorite)
         writer.endObject()
     }
 
@@ -243,9 +247,21 @@ internal object BackupJsonCodec {
     }
 
     private fun writeMovieProgress(writer: JsonWriter, progress: BackupMovieProgress) {
-        writer.beginObject().name("mediaRef")
+        writer.beginObject()
+        writer.name("mediaRef")
         writeRef(writer, progress.mediaRef)
-        writer.name("watchedAt").value(progress.watchedAt.toString()).endObject()
+        writer.name("watchedAt").value(progress.watchedAt.toString())
+        writeNullable(writer, "watchedDate", progress.watchedDate?.toString())
+        writer.endObject()
+    }
+
+    private fun writeSeriesProgress(writer: JsonWriter, progress: BackupSeriesProgress) {
+        writer.beginObject()
+        writer.name("mediaRef")
+        writeRef(writer, progress.mediaRef)
+        writer.name("completedAt").value(progress.completedAt.toString())
+        writeNullable(writer, "watchedDate", progress.watchedDate?.toString())
+        writer.endObject()
     }
 
     private fun writeEpisodeProgress(writer: JsonWriter, progress: BackupEpisodeProgress) {
@@ -263,14 +279,17 @@ internal object BackupJsonCodec {
     }
 
     private fun writeAnimeDetails(writer: JsonWriter, details: BackupAnimeDetails) {
-        writer.beginObject().name("mediaRef")
+        writer.beginObject()
+        writer.name("mediaRef")
         writeRef(writer, details.mediaRef)
         writer.name("format").value(details.format.name)
         writer.name("status").value(details.status.name)
         writeNullable(writer, "englishTitle", details.englishTitle)
         writeNullable(writer, "japaneseTitle", details.japaneseTitle)
         writeNullable(writer, "synopsis", details.synopsis)
-        if (details.episodeCount == null) {
+        if (details.episodeCount ==
+            null
+        ) {
             writer.name("episodeCount").nullValue()
         } else {
             writer.name("episodeCount").value(details.episodeCount)
@@ -280,7 +299,9 @@ internal object BackupJsonCodec {
         writeNullable(writer, "endDate", details.endDate?.toString())
         writeNullable(writer, "season", details.season)
         if (details.year == null) writer.name("year").nullValue() else writer.name("year").value(details.year)
-        if (details.providerScore == null) {
+        if (details.providerScore ==
+            null
+        ) {
             writer.name("providerScore").nullValue()
         } else {
             writer.name("providerScore").value(details.providerScore)
@@ -290,7 +311,8 @@ internal object BackupJsonCodec {
     }
 
     private fun writeAnimeRelation(writer: JsonWriter, relation: BackupAnimeRelation) {
-        writer.beginObject().name("mediaRef")
+        writer.beginObject()
+        writer.name("mediaRef")
         writeRef(writer, relation.mediaRef)
         writer.name("relationType").value(relation.relationType)
         writer.name("relatedRef")
@@ -301,7 +323,8 @@ internal object BackupJsonCodec {
     }
 
     private fun writeAnimeProgress(writer: JsonWriter, progress: BackupAnimeProgress) {
-        writer.beginObject().name("mediaRef")
+        writer.beginObject()
+        writer.name("mediaRef")
         writeRef(writer, progress.mediaRef)
         writer.name("watchedEpisodeCount").value(progress.watchedEpisodeCount)
         writeNullable(writer, "completedAt", progress.completedAt?.toString())
@@ -312,48 +335,65 @@ internal object BackupJsonCodec {
 
     private fun writePreferences(writer: JsonWriter, preferences: BackupPreferences) {
         writer.beginObject()
-            .name("notificationLeadDays").value(preferences.notificationLeadDays)
-            .name("notifyMovieReleases").value(preferences.notifyMovieReleases)
-            .name("notifySeasonPremieres").value(preferences.notifySeasonPremieres)
-            .name("notifyEpisodeAirings").value(preferences.notifyEpisodeAirings)
-            .endObject()
+        writer.name("notificationLeadDays").value(preferences.notificationLeadDays)
+        writer.name("notifyMovieReleases").value(preferences.notifyMovieReleases)
+        writer.name("notifySeasonPremieres").value(preferences.notifySeasonPremieres)
+        writer.name("notifyEpisodeAirings").value(preferences.notifyEpisodeAirings)
+        writer.endObject()
     }
 
-    private fun readDocument(root: JsonObject): BackupParseResult.Success {
+    private fun readDocument(root: JsonObject): BackupParseResult {
         val formatId = requiredString(root, "formatId")
-        if (formatId != BACKUP_FORMAT_ID) problem(BackupFailureKind.WRONG_FORMAT)
-        if (!root.has("schemaVersion")) problem(BackupFailureKind.MISSING_VERSION)
+        if (formatId !=
+            BACKUP_FORMAT_ID
+        ) {
+            return BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.WRONG_FORMAT))
+        }
         val schemaVersion = requiredInt(root, "schemaVersion")
-        if (schemaVersion !in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION) {
-            problem(BackupFailureKind.UNSUPPORTED_VERSION)
+        if (schemaVersion != BACKUP_SCHEMA_VERSION) {
+            return BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.UNSUPPORTED_VERSION))
         }
         val exportedAt = requiredInstant(root, "exportedAt")
-        val data = requiredObject(root, "data")
-        return BackupParseResult.Success(
-            BackupDocument(BACKUP_FORMAT_ID, schemaVersion, exportedAt, readData(data, schemaVersion))
-        )
+        val dataObj = required(root, "data").asObjectOrProblem()
+        val data = readData(dataObj)
+        return BackupParseResult.Success(BackupDocument(formatId, schemaVersion, exportedAt, data))
     }
 
-    private fun readData(data: JsonObject, schemaVersion: Int) = BackupData(
-        media = requiredArray(data, "media", BackupLimits.MAX_MEDIA).map(::readMedia),
-        seasons = requiredArray(data, "seasons", BackupLimits.MAX_SEASONS).map(::readSeason),
-        episodes = requiredArray(data, "episodes", BackupLimits.MAX_EPISODES).map(::readEpisode),
-        library = requiredArray(data, "library", BackupLimits.MAX_MEDIA).map(::readLibrary),
-        movieProgress = requiredArray(data, "movieProgress", BackupLimits.MAX_MEDIA).map(::readMovieProgress),
-        episodeProgress = requiredArray(data, "episodeProgress", BackupLimits.MAX_EPISODES).map(::readEpisodeProgress),
-        ratings = requiredArray(data, "ratings", BackupLimits.MAX_MEDIA).map(::readRating),
-        preferences = readPreferences(requiredObject(data, "preferences")),
-        animeDetails = versionedArray(data, "animeDetails", schemaVersion, minVersion = 2).map(::readAnimeDetails),
-        animeRelations = versionedArray(data, "animeRelations", schemaVersion, minVersion = 2).map(::readAnimeRelation),
-        animeProgress = versionedArray(data, "animeProgress", schemaVersion, minVersion = 2).map(::readAnimeProgress),
-        mediaLinkGroups = versionedArray(
-            data,
-            "mediaLinkGroups",
-            schemaVersion,
-            minVersion = 3
-        ).map(::readMediaLinkGroup),
-        mediaLinkAudit = versionedArray(data, "mediaLinkAudit", schemaVersion, minVersion = 3).map(::readMediaLinkAudit)
-    )
+    private fun readData(dataObj: JsonObject): BackupData {
+        val media = readArray(dataObj, "media", BackupLimits.MAX_MEDIA, ::readMedia)
+        val seasons = readArray(dataObj, "seasons", BackupLimits.MAX_SEASONS, ::readSeason)
+        val episodes = readArray(dataObj, "episodes", BackupLimits.MAX_EPISODES, ::readEpisode)
+        val library = readArray(dataObj, "library", BackupLimits.MAX_MEDIA, ::readLibrary)
+        val movieProgress = readArray(dataObj, "movieProgress", BackupLimits.MAX_MEDIA, ::readMovieProgress)
+        val episodeProgress = readArray(dataObj, "episodeProgress", BackupLimits.MAX_EPISODES, ::readEpisodeProgress)
+        val ratings = readArray(dataObj, "ratings", BackupLimits.MAX_MEDIA, ::readRating)
+        val preferences = readPreferences(required(dataObj, "preferences").asObjectOrProblem())
+
+        val animeDetails = readOptionalArray(dataObj, "animeDetails", BackupLimits.MAX_MEDIA, ::readAnimeDetails)
+        val animeRelations = readOptionalArray(dataObj, "animeRelations", BackupLimits.MAX_MEDIA, ::readAnimeRelation)
+        val animeProgress = readOptionalArray(dataObj, "animeProgress", BackupLimits.MAX_MEDIA, ::readAnimeProgress)
+        val mediaLinkGroups =
+            readOptionalArray(dataObj, "mediaLinkGroups", BackupLimits.MAX_MEDIA, ::readMediaLinkGroup)
+        val mediaLinkAudit = readOptionalArray(dataObj, "mediaLinkAudit", BackupLimits.MAX_MEDIA, ::readMediaLinkAudit)
+        val seriesProgress = readOptionalArray(dataObj, "seriesProgress", BackupLimits.MAX_MEDIA, ::readSeriesProgress)
+
+        return BackupData(
+            media = media,
+            seasons = seasons,
+            episodes = episodes,
+            library = library,
+            movieProgress = movieProgress,
+            episodeProgress = episodeProgress,
+            ratings = ratings,
+            preferences = preferences,
+            animeDetails = animeDetails,
+            animeRelations = animeRelations,
+            animeProgress = animeProgress,
+            mediaLinkGroups = mediaLinkGroups,
+            mediaLinkAudit = mediaLinkAudit,
+            seriesProgress = seriesProgress
+        )
+    }
 
     private fun readMediaIdentity(value: JsonElement): BackupMediaIdentity {
         val objectValue = value.asObjectOrProblem()
@@ -429,7 +469,8 @@ internal object BackupJsonCodec {
             originalTitle = nullableString(objectValue, "originalTitle"),
             overview = nullableString(objectValue, "overview"),
             posterUrl = nullableString(objectValue, "posterUrl"),
-            releaseDate = nullableDate(objectValue, "releaseDate")
+            releaseDate = nullableDate(objectValue, "releaseDate"),
+            isFavorite = booleanOrDefault(objectValue, "isFavorite", false)
         )
     }
 
@@ -469,8 +510,18 @@ internal object BackupJsonCodec {
     private fun readMovieProgress(value: JsonElement): BackupMovieProgress {
         val objectValue = value.asObjectOrProblem()
         return BackupMovieProgress(
-            readRef(required(objectValue, "mediaRef")),
-            requiredInstant(objectValue, "watchedAt")
+            mediaRef = readRef(required(objectValue, "mediaRef")),
+            watchedAt = requiredInstant(objectValue, "watchedAt"),
+            watchedDate = nullableDate(objectValue, "watchedDate")
+        )
+    }
+
+    private fun readSeriesProgress(value: JsonElement): BackupSeriesProgress {
+        val objectValue = value.asObjectOrProblem()
+        return BackupSeriesProgress(
+            mediaRef = readRef(required(objectValue, "mediaRef")),
+            completedAt = requiredInstant(objectValue, "completedAt"),
+            watchedDate = nullableDate(objectValue, "watchedDate")
         )
     }
 
@@ -565,90 +616,127 @@ internal object BackupJsonCodec {
         problem(BackupFailureKind.INVALID_STRUCTURE)
     }
 
-    private fun required(objectValue: JsonObject, name: String): JsonElement =
-        objectValue.get(name) ?: problem(BackupFailureKind.INVALID_STRUCTURE)
-
-    private fun requiredString(objectValue: JsonObject, name: String): String {
-        val value = required(objectValue, name)
-        if (!value.isJsonPrimitive || !value.asJsonPrimitive.isString) problem(BackupFailureKind.INVALID_STRUCTURE)
-        return value.asString
+    private fun <T> readArray(obj: JsonObject, key: String, maxCount: Int, parseItem: (JsonElement) -> T): List<T> {
+        val jsonArray = requiredArray(obj, key, maxCount)
+        return jsonArray.map(parseItem)
     }
 
-    private fun nullableString(objectValue: JsonObject, name: String): String? {
-        if (!objectValue.has(name) || objectValue.get(name).isJsonNull) return null
-        return requiredString(objectValue, name)
+    private fun <T> readOptionalArray(
+        obj: JsonObject,
+        key: String,
+        maxCount: Int,
+        parseItem: (JsonElement) -> T
+    ): List<T> {
+        val elem = obj.get(key)
+        if (elem == null || elem.isJsonNull) return emptyList()
+        if (!elem.isJsonArray) problem(BackupFailureKind.INVALID_STRUCTURE)
+        val array = elem.asJsonArray
+        if (array.size() > maxCount) problem(BackupFailureKind.TOO_LARGE)
+        return array.map(parseItem)
     }
 
-    private fun requiredInt(objectValue: JsonObject, name: String): Int {
-        val value = required(objectValue, name)
-        if (!value.isJsonPrimitive || !value.asJsonPrimitive.isNumber ||
-            !value.asString.matches(Regex("-?(0|[1-9][0-9]*)"))
-        ) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-        return value.asInt
+    private fun requiredArray(obj: JsonObject, key: String, maxCount: Int): JsonArray {
+        val elem = required(obj, key)
+        if (!elem.isJsonArray) problem(BackupFailureKind.INVALID_STRUCTURE)
+        val array = elem.asJsonArray
+        if (array.size() > maxCount) problem(BackupFailureKind.TOO_LARGE)
+        return array
     }
 
-    private fun nullableInt(objectValue: JsonObject, name: String): Int? =
-        if (!objectValue.has(name) || objectValue.get(name).isJsonNull) null else requiredInt(objectValue, name)
-
-    private fun nullableDouble(objectValue: JsonObject, name: String): Double? {
-        if (!objectValue.has(name) || objectValue.get(name).isJsonNull) return null
-        val value = required(objectValue, name)
-        if (!value.isJsonPrimitive || !value.asJsonPrimitive.isNumber) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-        return value.asDouble.takeIf(Double::isFinite)
-            ?: problem(BackupFailureKind.INVALID_STRUCTURE)
+    private fun required(obj: JsonObject, key: String): JsonElement {
+        val value = obj.get(key)
+        if (value == null || value.isJsonNull) problem(BackupFailureKind.INVALID_STRUCTURE)
+        return value
     }
 
-    private fun requiredBoolean(objectValue: JsonObject, name: String): Boolean {
-        val value = required(objectValue, name)
-        if (!value.isJsonPrimitive || !value.asJsonPrimitive.isBoolean) problem(BackupFailureKind.INVALID_STRUCTURE)
-        return value.asBoolean
+    private fun requiredString(obj: JsonObject, key: String): String {
+        val elem = required(obj, key)
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isString) problem(BackupFailureKind.INVALID_STRUCTURE)
+        val value = elem.asString
+        if (value.length > BackupLimits.MAX_STRING) problem(BackupFailureKind.TOO_LARGE)
+        return value
     }
 
-    private fun requiredInstant(objectValue: JsonObject, name: String): Instant {
-        val value = requiredString(objectValue, name)
-        if (!value.endsWith("Z")) problem(BackupFailureKind.INVALID_STRUCTURE)
+    private fun requiredInt(obj: JsonObject, key: String): Int {
+        val elem = required(obj, key)
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
         return try {
-            Instant.parse(value)
+            elem.asInt
         } catch (_: Exception) {
             problem(BackupFailureKind.INVALID_STRUCTURE)
         }
     }
 
-    private fun nullableInstant(objectValue: JsonObject, name: String): Instant? {
-        if (!objectValue.has(name) || objectValue.get(name).isJsonNull) return null
-        return requiredInstant(objectValue, name)
+    private fun requiredBoolean(obj: JsonObject, key: String): Boolean {
+        val elem = required(obj, key)
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isBoolean) problem(BackupFailureKind.INVALID_STRUCTURE)
+        return elem.asBoolean
     }
 
-    private fun nullableDate(objectValue: JsonObject, name: String): LocalDate? {
-        val value = nullableString(objectValue, name) ?: return null
+    private fun booleanOrDefault(obj: JsonObject, key: String, default: Boolean): Boolean {
+        val elem = obj.get(key)
+        if (elem == null || elem.isJsonNull) return default
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isBoolean) problem(BackupFailureKind.INVALID_STRUCTURE)
+        return elem.asBoolean
+    }
+
+    private fun requiredInstant(obj: JsonObject, key: String): Instant = try {
+        Instant.parse(requiredString(obj, key))
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
+    private fun nullableString(obj: JsonObject, key: String): String? {
+        val elem = obj.get(key)
+        if (elem == null || elem.isJsonNull) return null
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isString) problem(BackupFailureKind.INVALID_STRUCTURE)
+        val value = elem.asString
+        if (value.length > BackupLimits.MAX_STRING) problem(BackupFailureKind.TOO_LARGE)
+        return value
+    }
+
+    private fun nullableInt(obj: JsonObject, key: String): Int? {
+        val elem = obj.get(key)
+        if (elem == null || elem.isJsonNull) return null
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
         return try {
-            LocalDate.parse(value)
+            elem.asInt
         } catch (_: Exception) {
             problem(BackupFailureKind.INVALID_STRUCTURE)
         }
     }
 
-    private fun requiredObject(objectValue: JsonObject, name: String): JsonObject =
-        required(objectValue, name).asObjectOrProblem()
-
-    private fun requiredArray(objectValue: JsonObject, name: String, max: Int): JsonArray {
-        val value = required(objectValue, name)
-        if (!value.isJsonArray || value.asJsonArray.size() > max) problem(BackupFailureKind.TOO_LARGE)
-        return value.asJsonArray
-    }
-    private fun versionedArray(data: JsonObject, name: String, schemaVersion: Int, minVersion: Int = 2): JsonArray =
-        if (schemaVersion < minVersion) {
-            JsonArray()
-        } else {
-            requiredArray(data, name, BackupLimits.MAX_MEDIA)
+    private fun nullableDouble(obj: JsonObject, key: String): Double? {
+        val elem = obj.get(key)
+        if (elem == null || elem.isJsonNull) return null
+        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
+        return try {
+            elem.asDouble
+        } catch (_: Exception) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
         }
+    }
 
-    private fun JsonElement.asObjectOrProblem(): JsonObject =
-        if (isJsonObject) asJsonObject else problem(BackupFailureKind.INVALID_STRUCTURE)
+    private fun nullableDate(obj: JsonObject, key: String): LocalDate? = nullableString(obj, key)?.let { raw ->
+        try {
+            LocalDate.parse(raw)
+        } catch (_: Exception) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
+    }
+
+    private fun nullableInstant(obj: JsonObject, key: String): Instant? = nullableString(obj, key)?.let { raw ->
+        try {
+            Instant.parse(raw)
+        } catch (_: Exception) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
+    }
+
+    private fun JsonElement.asObjectOrProblem(): JsonObject {
+        if (!isJsonObject) problem(BackupFailureKind.INVALID_STRUCTURE)
+        return asJsonObject
+    }
 
     private fun problem(kind: BackupFailureKind): Nothing = throw BackupParseFailure(kind)
 }

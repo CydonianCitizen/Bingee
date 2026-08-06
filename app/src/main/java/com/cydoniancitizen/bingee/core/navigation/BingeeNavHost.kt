@@ -23,8 +23,9 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.feature.details.AnimeDetailsScreen
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
-import com.cydoniancitizen.bingee.feature.library.LibraryScreen
+import com.cydoniancitizen.bingee.feature.notifications.NotificationsScreen
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingRoute
+import com.cydoniancitizen.bingee.feature.profile.ProfileScreen
 import com.cydoniancitizen.bingee.feature.search.SearchScreen
 import com.cydoniancitizen.bingee.feature.settings.SettingsScreen
 import com.cydoniancitizen.bingee.feature.tvtimeimport.TvTimeImportScreen
@@ -50,6 +51,7 @@ fun BingeeNavHost(
         }
         composable(TopLevelDestination.HOME.route) {
             HomeScreen(
+                onOpenNotifications = { navController.navigate(AppRoute.NOTIFICATIONS) },
                 onOpenSettings = onOpenSettings,
                 onOpenDetails = { reference, mediaType ->
                     navController.navigate(DetailRoute.create(reference, mediaType))
@@ -64,15 +66,35 @@ fun BingeeNavHost(
                 }
             )
         }
-        composable(TopLevelDestination.LIBRARY.route) {
-            LibraryScreen(
+        composable(TopLevelDestination.PROFILE.route) {
+            ProfileScreen(
+                onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
+                onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
+                onOpenDetails = { reference, mediaType ->
+                    navController.navigate(DetailRoute.create(reference, mediaType))
+                },
+                onNavigateToSearch = {
+                    navController.navigate(TopLevelDestination.SEARCH.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+        }
+        composable(AppRoute.STATISTICS) {
+            com.cydoniancitizen.bingee.feature.profile.StatisticsScreen(
+                onBack = navController::popBackStack,
                 onOpenDetails = { reference, mediaType ->
                     navController.navigate(DetailRoute.create(reference, mediaType))
                 }
             )
         }
-        composable(TopLevelDestination.SETTINGS.route) {
+        composable(AppRoute.SETTINGS) {
             SettingsScreen(onOpenTvTimeImport = { navController.navigate(AppRoute.TV_TIME_IMPORT) })
+        }
+        composable(AppRoute.NOTIFICATIONS) {
+            NotificationsScreen(onBack = navController::popBackStack)
         }
         composable(AppRoute.TV_TIME_IMPORT) {
             TvTimeImportScreen(onBack = navController::popBackStack)

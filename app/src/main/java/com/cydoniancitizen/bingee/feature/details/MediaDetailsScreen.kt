@@ -11,24 +11,34 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,8 +56,13 @@ import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
+import com.cydoniancitizen.bingee.core.model.WatchedDateChoice
+import com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult
+import com.cydoniancitizen.bingee.core.model.isValid
+import com.cydoniancitizen.bingee.core.model.validateWatchedDate
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.ui.toUiError
+import java.time.LocalDate
 
 @Composable
 internal fun MediaDetailsScreen(
@@ -63,6 +78,8 @@ internal fun MediaDetailsScreen(
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
         onToggleLibrary = viewModel::toggleLibrary,
+        onToggleFavorite = viewModel::toggleFavorite,
+        onSetWatchedDate = viewModel::setWatchedDate,
         onToggleMovieWatched = viewModel::toggleMovieWatched,
         onToggleSeasonExpanded = viewModel::toggleSeasonExpanded,
         onRetrySeason = viewModel::retrySeason,
@@ -86,6 +103,8 @@ internal fun MediaDetailsContent(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onToggleLibrary: () -> Unit,
+    onToggleFavorite: () -> Unit = {},
+    onSetWatchedDate: (LocalDate?) -> Unit = {},
     onToggleMovieWatched: () -> Unit = {},
     onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
     onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
@@ -113,6 +132,22 @@ internal fun MediaDetailsContent(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleLarge
             )
+            IconButton(
+                onClick = onToggleFavorite,
+                enabled = !state.favoriteUpdating && state.isInLibrary != null
+            ) {
+                Icon(
+                    imageVector = if (state.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = stringResource(
+                        if (state.isFavorite) R.string.favorite_remove else R.string.favorite_add
+                    ),
+                    tint = if (state.isFavorite) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
             if (state.refresh == DetailRefreshState.Refreshing) {
                 CircularProgressIndicator(modifier = Modifier.padding(BingeeDimensions.elementSpacing))
             } else if (state.content is DetailContentState.Content) {
@@ -133,6 +168,9 @@ internal fun MediaDetailsContent(
                 isInLibrary = state.isInLibrary,
                 isLibraryUpdating = state.libraryAction == DetailLibraryActionState.UPDATING,
                 libraryError = state.libraryError,
+                watchedDate = state.watchedDate,
+                watchedDateUpdating = state.watchedDateUpdating,
+                onSetWatchedDate = onSetWatchedDate,
                 onToggleLibrary = onToggleLibrary,
                 movieProgress = state.movieProgress,
                 series = state.series,
@@ -183,6 +221,9 @@ private fun DetailBody(
     isInLibrary: Boolean?,
     isLibraryUpdating: Boolean,
     libraryError: AppError?,
+    watchedDate: LocalDate?,
+    watchedDateUpdating: Boolean,
+    onSetWatchedDate: (LocalDate?) -> Unit,
     movieProgress: MovieProgressState,
     series: SeriesDetailUiState,
     progressError: AppError?,
@@ -302,6 +343,13 @@ private fun DetailBody(
                     onOpenSettings = onOpenSettings
                 )
             }
+            WatchedDateSection(
+                watchedDate = watchedDate,
+                isUpdating = watchedDateUpdating,
+                releaseDate = details.releaseDate,
+                mediaType = details.mediaType,
+                onSetWatchedDate = onSetWatchedDate
+            )
             if (details.genres.isNotEmpty()) {
                 DetailField(R.string.detail_genres, details.genres.joinToString { it.name })
             }
@@ -367,4 +415,185 @@ private fun statusString(status: ProductionStatus): Int = when (status) {
     ProductionStatus.CANCELED -> R.string.detail_status_canceled
     ProductionStatus.PILOT -> R.string.detail_status_pilot
     ProductionStatus.UNKNOWN -> R.string.detail_status_unknown
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WatchedDateSection(
+    watchedDate: LocalDate?,
+    isUpdating: Boolean,
+    releaseDate: LocalDate?,
+    mediaType: MediaType,
+    onSetWatchedDate: (LocalDate?) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val labelRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
+    val editRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_edit else R.string.completion_date_edit
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+    ) {
+        Text(
+            text = stringResource(labelRes),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleLarge
+        )
+        if (watchedDate != null) {
+            Text(watchedDate.toString())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+            Button(
+                onClick = { showDialog = true },
+                enabled = !isUpdating
+            ) {
+                Text(stringResource(editRes))
+            }
+            if (watchedDate != null) {
+                TextButton(
+                    onClick = { onSetWatchedDate(null) },
+                    enabled = !isUpdating
+                ) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            }
+        }
+    }
+    if (showDialog) {
+        WatchedDateDialog(
+            currentDate = watchedDate,
+            releaseDate = releaseDate,
+            mediaType = mediaType,
+            onConfirm = { date ->
+                onSetWatchedDate(date)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun WatchedDateDialog(
+    currentDate: LocalDate?,
+    releaseDate: LocalDate?,
+    mediaType: MediaType = MediaType.MOVIE,
+    onConfirm: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val today = LocalDate.now()
+    var selectedChoice by remember { mutableStateOf(WatchedDateChoice.TODAY) }
+    var customDate by remember { mutableStateOf(currentDate ?: today) }
+    var showCustomDatePicker by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    val resolvedDate = when (selectedChoice) {
+        WatchedDateChoice.TODAY -> today
+        WatchedDateChoice.RELEASE_DATE -> releaseDate ?: today
+        WatchedDateChoice.CUSTOM_DATE -> customDate
+    }
+
+    val titleRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(titleRes)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+                WatchedDateChoice.entries.forEach { choice ->
+                    if (choice == WatchedDateChoice.RELEASE_DATE && releaseDate == null) return@forEach
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selectedChoice == choice,
+                                onClick = {
+                                    selectedChoice = choice
+                                    validationError = null
+                                    if (choice == WatchedDateChoice.CUSTOM_DATE) {
+                                        showCustomDatePicker = true
+                                    }
+                                },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedChoice == choice, onClick = null)
+                        Text(
+                            text = when (choice) {
+                                WatchedDateChoice.TODAY -> stringResource(R.string.watched_date_today)
+                                WatchedDateChoice.RELEASE_DATE -> stringResource(R.string.watched_date_release_date) +
+                                    ": $releaseDate"
+                                WatchedDateChoice.CUSTOM_DATE -> stringResource(R.string.watched_date_custom) +
+                                    ": $customDate"
+                            },
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+                if (selectedChoice == WatchedDateChoice.CUSTOM_DATE) {
+                    TextButton(onClick = { showCustomDatePicker = true }) {
+                        Text(stringResource(R.string.watched_date_custom) + " ($customDate)")
+                    }
+                }
+                validationError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val result = validateWatchedDate(resolvedDate, releaseDate, today)
+                if (result.isValid()) {
+                    onConfirm(resolvedDate)
+                } else {
+                    validationError = when (result) {
+                        is WatchedDateValidationResult.FutureDateRejected ->
+                            "Date cannot be in the future (today is $today)"
+                        is WatchedDateValidationResult.DatePrecedesReleaseRejected ->
+                            "Date cannot be before release date ($releaseDate)"
+                        else -> null
+                    }
+                }
+            }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+
+    if (showCustomDatePicker) {
+        val initialEpochMillis = customDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        val datePickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = initialEpochMillis
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { showCustomDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        customDate = java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toLocalDate()
+                    }
+                    showCustomDatePicker = false
+                }) {
+                    Text(stringResource(R.string.action_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomDatePicker = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        ) {
+            androidx.compose.material3.DatePicker(state = datePickerState)
+        }
+    }
 }

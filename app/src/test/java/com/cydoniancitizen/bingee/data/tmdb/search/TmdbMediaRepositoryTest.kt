@@ -7,7 +7,12 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 import com.google.gson.Gson
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -39,7 +44,7 @@ class TmdbMediaRepositoryTest {
                 .create(TmdbSearchService::class.java)
         repository =
             DefaultMediaRepository(
-                TmdbSearchClient(FakeCredentialStore(), service)
+                TmdbSearchClient(FakeCredentialStore(), service, FakeAppearancePreferences())
             )
     }
 
@@ -190,5 +195,13 @@ class TmdbMediaRepositoryTest {
 
     private companion object {
         const val TEST_CREDENTIAL = "unit_test_credential_not_secret"
+    }
+
+    private class FakeAppearancePreferences : AppearancePreferences {
+        override fun observeTheme(): Flow<AppTheme> = flowOf(AppTheme.SYSTEM_DEFAULT)
+        override suspend fun setTheme(theme: AppTheme) {}
+        override fun observeLanguage(): Flow<AppLanguage> = flowOf(AppLanguage.ENGLISH)
+        override suspend fun setLanguage(language: AppLanguage) {}
+        override suspend fun getEffectiveTmdbLanguage(): String = "en-US"
     }
 }

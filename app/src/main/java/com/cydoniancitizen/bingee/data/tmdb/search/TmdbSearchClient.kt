@@ -11,7 +11,8 @@ import javax.inject.Inject
 
 internal class TmdbSearchClient @Inject constructor(
     private val credentialStore: TmdbCredentialStore,
-    private val service: TmdbSearchService
+    private val service: TmdbSearchService,
+    private val appearancePreferences: com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 ) {
     suspend fun search(query: MediaSearchQuery, year: Int? = null): AppResult<MediaSearchPage> {
         if (query.category == MediaSearchCategory.ANIME) return AppResult.Failure(AppError.UnsupportedData)
@@ -20,6 +21,11 @@ internal class TmdbSearchClient @Inject constructor(
             is AppResult.Failure -> return stored
         }
         val authorization = "Bearer ${credential.reveal()}"
+        val effectiveLanguage = if (query.language == MediaSearchQuery.DEFAULT_LANGUAGE) {
+            appearancePreferences.getEffectiveTmdbLanguage()
+        } else {
+            query.language
+        }
         return when (query.category) {
             MediaSearchCategory.MOVIES -> executeTmdbRequest(
                 request = {
@@ -27,7 +33,7 @@ internal class TmdbSearchClient @Inject constructor(
                         authorization = authorization,
                         query = query.query,
                         includeAdult = false,
-                        language = query.language,
+                        language = effectiveLanguage,
                         page = query.page,
                         primaryReleaseYear = year
                     )
@@ -41,7 +47,7 @@ internal class TmdbSearchClient @Inject constructor(
                         authorization = authorization,
                         query = query.query,
                         includeAdult = false,
-                        language = query.language,
+                        language = effectiveLanguage,
                         page = query.page,
                         firstAirDateYear = year
                     )
@@ -61,13 +67,14 @@ internal class TmdbSearchClient @Inject constructor(
             is AppResult.Success -> stored.value ?: return AppResult.Failure(AppError.Unauthorized)
             is AppResult.Failure -> return stored
         }
+        val language = appearancePreferences.getEffectiveTmdbLanguage()
         return executeTmdbRequest(
             request = {
                 service.findByExternalId(
                     authorization = "Bearer ${credential.reveal()}",
                     externalId = externalId,
                     externalSource = externalSource,
-                    language = MediaSearchQuery.DEFAULT_LANGUAGE
+                    language = language
                 )
             },
             transform = TmdbFindMapper::map

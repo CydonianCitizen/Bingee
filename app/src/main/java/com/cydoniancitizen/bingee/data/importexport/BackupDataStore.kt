@@ -24,6 +24,7 @@ import com.cydoniancitizen.bingee.data.library.local.PortablePreferencesEntity
 import com.cydoniancitizen.bingee.data.library.local.PortableSnapshotDao
 import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,6 +42,7 @@ internal enum class RestoreStage {
     EPISODES,
     LIBRARY_MEMBERSHIP,
     MOVIE_PROGRESS,
+    SERIES_PROGRESS,
     EPISODE_PROGRESS,
     RATINGS,
     PORTABLE_PREFERENCES,
@@ -145,9 +147,11 @@ internal class BackupDataStore @Inject constructor(
                 addAll(rows.memberships.map { it.localMediaId })
                 addAll(rows.ratings.map { it.localMediaId })
                 addAll(rows.movieProgress.map { it.localMediaId })
+                addAll(rows.seriesProgress.map { it.localMediaId })
                 addAll(episodeMediaIds)
                 addAll(rows.animeProgress.map { it.localMediaId })
                 addAll(activeLinkMemberMediaIds)
+                addAll(rows.media.filter { it.isFavorite }.map { it.localMediaId })
             }
             val media = rows.media.filter { it.localMediaId in portableMediaIds }
             val refsByMedia = rows.refs.groupBy { it.localMediaId }
@@ -168,7 +172,8 @@ internal class BackupDataStore @Inject constructor(
                     originalTitle = entity.originalTitle,
                     overview = entity.overview,
                     posterUrl = entity.posterUrl,
-                    releaseDate = entity.releaseDate
+                    releaseDate = entity.releaseDate,
+                    isFavorite = entity.isFavorite
                 )
             }.sortedWith(compareBy({ it.primaryRef.source.name }, { it.primaryRef.externalId }, { it.mediaType.name }))
 
@@ -234,7 +239,12 @@ internal class BackupDataStore @Inject constructor(
                     .map { BackupLibraryEntry(mediaRefById.getValue(it.localMediaId), it.addedAt) }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 movieProgress = rows.movieProgress.filter { it.localMediaId in portableMediaIds }
-                    .map { BackupMovieProgress(mediaRefById.getValue(it.localMediaId), it.watchedAt) }
+                    .map { BackupMovieProgress(mediaRefById.getValue(it.localMediaId), it.watchedAt, it.watchedDate) }
+                    .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
+                seriesProgress = rows.seriesProgress.filter { it.localMediaId in portableMediaIds }
+                    .map {
+                        BackupSeriesProgress(mediaRefById.getValue(it.localMediaId), it.completedAt, it.watchedDate)
+                    }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 episodeProgress = rows.episodeProgress.filter { it.localEpisodeId in episodeRefById }
                     .map { BackupEpisodeProgress(episodeRefById.getValue(it.localEpisodeId), it.watchedAt) }
@@ -328,6 +338,7 @@ internal class BackupDataStore @Inject constructor(
             snapshotDao.deleteAnimeRelations()
             snapshotDao.deleteAnimeDetails()
             snapshotDao.deleteMovieProgress()
+            snapshotDao.deleteSeriesProgress()
             snapshotDao.deleteRatings()
             snapshotDao.deleteMemberships()
             snapshotDao.deleteEpisodes()
@@ -351,7 +362,8 @@ internal class BackupDataStore @Inject constructor(
                         posterUrl = media.posterUrl,
                         releaseDate = media.releaseDate,
                         createdAt = exportedAt,
-                        metadataUpdatedAt = exportedAt
+                        metadataUpdatedAt = exportedAt,
+                        isFavorite = media.isFavorite
                     )
                 )
                 mediaIds[media.primaryRef.key()] = localId
@@ -467,18 +479,36 @@ internal class BackupDataStore @Inject constructor(
                 )
             }
             failureInjector.check(RestoreStage.LIBRARY_MEMBERSHIP)
+
             data.movieProgress.forEach { progress ->
                 snapshotDao.insertMovieProgress(
-                    MovieWatchProgressEntity(checkNotNull(mediaIds[progress.mediaRef.key()]), progress.watchedAt)
+                    MovieWatchProgressEntity(
+                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key()]),
+                        watchedAt = progress.watchedAt,
+                        watchedDate = progress.watchedDate
+                    )
                 )
             }
             failureInjector.check(RestoreStage.MOVIE_PROGRESS)
+
+            data.seriesProgress.forEach { progress ->
+                snapshotDao.insertSeriesProgress(
+                    SeriesWatchProgressEntity(
+                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key()]),
+                        watchedDate = progress.watchedDate,
+                        completedAt = progress.completedAt
+                    )
+                )
+            }
+            failureInjector.check(RestoreStage.SERIES_PROGRESS)
+
             data.episodeProgress.forEach { progress ->
                 snapshotDao.insertEpisodeProgress(
                     EpisodeWatchProgressEntity(checkNotNull(episodeIds[progress.episodeRef.key()]), progress.watchedAt)
                 )
             }
             failureInjector.check(RestoreStage.EPISODE_PROGRESS)
+
             data.ratings.forEach { rating ->
                 snapshotDao.insertRating(
                     MediaRatingEntity(
@@ -490,6 +520,7 @@ internal class BackupDataStore @Inject constructor(
                 )
             }
             failureInjector.check(RestoreStage.RATINGS)
+
             snapshotDao.replacePreferences(
                 PortablePreferencesEntity(
                     notificationLeadDays = data.preferences.notificationLeadDays,
@@ -500,6 +531,7 @@ internal class BackupDataStore @Inject constructor(
                 )
             )
             failureInjector.check(RestoreStage.PORTABLE_PREFERENCES)
+
             releaseEventDao.backfill(exportedAt)
             failureInjector.check(RestoreStage.ANIME_RELEASE_EVENTS)
             failureInjector.check(RestoreStage.RELEASE_EVENTS)
@@ -518,23 +550,23 @@ internal class BackupDataStore @Inject constructor(
                     updatedAt = group.updatedAt
                 )
                 val localGroupId = mediaLinkDao.insertGroup(groupEntity)
-                failureInjector.check(RestoreStage.ACTIVE_LINK_GROUPS)
 
                 val memberEntities = group.members.map { member ->
-                    val memberKey = "${member.source.name}:${member.mediaType.name}:${member.externalId}"
-                    val memberLocalId = checkNotNull(mediaIdsByIdentityKey[memberKey]) {
-                        "Missing local media ID for member $memberKey"
+                    val identityKey = "${member.source.name}:${member.mediaType.name}:${member.externalId}"
+                    val localMediaId = checkNotNull(mediaIdsByIdentityKey[identityKey]) {
+                        "Missing local media ID for link member $identityKey"
                     }
                     MediaLinkMemberEntity(
                         localGroupId = localGroupId,
-                        localMediaId = memberLocalId,
+                        localMediaId = localMediaId,
                         addedAt = group.createdAt
                     )
                 }
                 mediaLinkDao.insertMembers(memberEntities)
-                failureInjector.check(RestoreStage.ACTIVE_LINK_MEMBERS)
-                failureInjector.check(RestoreStage.PREFERRED_PRESENTATION)
             }
+            failureInjector.check(RestoreStage.ACTIVE_LINK_GROUPS)
+            failureInjector.check(RestoreStage.ACTIVE_LINK_MEMBERS)
+            failureInjector.check(RestoreStage.PREFERRED_PRESENTATION)
 
             data.mediaLinkAudit.forEach { audit ->
                 val auditEntity = MediaLinkAuditEntity(
@@ -547,7 +579,6 @@ internal class BackupDataStore @Inject constructor(
                     preferredExternalId = audit.preferredPresentation?.externalId
                 )
                 val auditId = mediaLinkDao.insertAudit(auditEntity)
-                failureInjector.check(RestoreStage.LINK_AUDIT)
 
                 val auditMemberEntities = audit.members.map { member ->
                     MediaLinkAuditMemberEntity(
@@ -558,30 +589,23 @@ internal class BackupDataStore @Inject constructor(
                     )
                 }
                 mediaLinkDao.insertAuditMembers(auditMemberEntities)
-                failureInjector.check(RestoreStage.LINK_AUDIT_MEMBERS)
             }
+            failureInjector.check(RestoreStage.LINK_AUDIT)
+            failureInjector.check(RestoreStage.LINK_AUDIT_MEMBERS)
         }
+    }
+
+    suspend fun createPortableBackup(): ByteArray = withContext(Dispatchers.IO) {
+        val document = BackupDocument(
+            formatId = BACKUP_FORMAT_ID,
+            schemaVersion = BACKUP_SCHEMA_VERSION,
+            exportedAt =
+            database.withTransaction { snapshotDao.readSnapshot() }.media.maxOfOrNull { it.metadataUpdatedAt }
+                ?: java.time.Instant.now(),
+            data = readPortableData()
+        )
+        BackupJsonCodec.encode(document)
     }
 
     private fun BackupRef.key(): String = "${source.name}:$externalId"
-}
-
-internal data class ExportedBackup(val bytes: ByteArray, val filename: String)
-
-@Singleton
-internal class BackupExporter @Inject constructor(
-    private val dataStore: BackupDataStore,
-    private val clock: java.time.Clock
-) {
-    suspend fun export(): ExportedBackup {
-        val exportedAt = clock.instant()
-        val document = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, dataStore.readPortableData())
-        return withContext(Dispatchers.Default) {
-            check(BackupValidator.validate(document) is BackupValidationResult.Success)
-            ExportedBackup(
-                bytes = BackupJsonCodec.encode(document),
-                filename = "bingee-backup-${exportedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate()}.json"
-            )
-        }
-    }
 }

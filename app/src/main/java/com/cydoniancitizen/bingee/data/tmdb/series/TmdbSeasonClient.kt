@@ -15,7 +15,8 @@ internal interface TmdbSeasonRemoteDataSource {
 
 internal class TmdbSeasonClient @Inject constructor(
     private val credentialStore: TmdbCredentialStore,
-    private val service: TmdbSeasonService
+    private val service: TmdbSeasonService,
+    private val appearancePreferences: com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 ) : TmdbSeasonRemoteDataSource {
     override suspend fun load(seriesRef: ExternalMediaRef, seasonNumber: Int): AppResult<TmdbSeasonPayload> {
         if (seriesRef.source != MediaSource.TMDB) return AppResult.Failure(AppError.UnsupportedData)
@@ -26,13 +27,14 @@ internal class TmdbSeasonClient @Inject constructor(
             is AppResult.Success -> stored.value ?: return AppResult.Failure(AppError.Unauthorized)
             is AppResult.Failure -> return stored
         }
+        val language = appearancePreferences.getEffectiveTmdbLanguage()
         return executeTmdbRequest(
             request = {
                 service.seasonDetails(
                     authorization = "Bearer ${credential.reveal()}",
                     seriesId = seriesId,
                     seasonNumber = seasonNumber,
-                    language = MediaSearchQuery.DEFAULT_LANGUAGE
+                    language = language
                 )
             },
             transform = {

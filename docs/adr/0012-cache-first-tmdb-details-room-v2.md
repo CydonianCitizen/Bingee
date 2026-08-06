@@ -21,7 +21,7 @@ Official sources verified on 2026-08-03:
 
 Use separate TMDB movie and TV DTOs and explicit mappers into the shared `MediaDetails` domain model. Request only base `GET /3/movie/{movie_id}` and `GET /3/tv/{series_id}` responses with the same `en-US` policy as Search. Do not append or request seasons, episodes, credits, videos, recommendations, or providers.
 
-Room `bingee.db` advances from version 1 to 2 through explicit `MIGRATION_1_2`. Add:
+Room `bingee.db` uses version 1. Add:
 
 - `media_details`, keyed by `local_media_id`, for normalized detail-only fields plus ISO UTC `details_fetched_at`;
 - `media_genres`, keyed by (`local_media_id`, `genre_order`), for deterministic ordered names.

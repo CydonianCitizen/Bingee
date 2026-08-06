@@ -77,14 +77,23 @@ internal abstract class WatchProgressDao {
     )
     protected abstract suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long>
 
+    @Query("SELECT * FROM movie_watch_progress WHERE local_media_id = :localMediaId")
+    protected abstract suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity?
+
+    @Query("SELECT * FROM series_watch_progress WHERE local_media_id = :localMediaId")
+    protected abstract suspend fun getSeriesProgressByMediaId(localMediaId: Long): SeriesWatchProgressEntity?
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun insertEpisodeProgress(progress: EpisodeWatchProgressEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun insertEpisodeProgress(progress: List<EpisodeWatchProgressEntity>)
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun insertMovieProgress(progress: MovieWatchProgressEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertSeriesProgress(progress: SeriesWatchProgressEntity): Long
 
     @Query("DELETE FROM episode_watch_progress WHERE local_episode_id = :localEpisodeId")
     protected abstract suspend fun deleteEpisodeProgress(localEpisodeId: Long)
@@ -101,6 +110,9 @@ internal abstract class WatchProgressDao {
 
     @Query("DELETE FROM movie_watch_progress WHERE local_media_id = :localMediaId")
     protected abstract suspend fun deleteMovieProgress(localMediaId: Long)
+
+    @Query("DELETE FROM series_watch_progress WHERE local_media_id = :localMediaId")
+    protected abstract suspend fun deleteSeriesProgress(localMediaId: Long)
 
     @Transaction
     open suspend fun markEpisodeWatched(
@@ -147,11 +159,14 @@ internal abstract class WatchProgressDao {
     open suspend fun markMovieWatched(
         source: MediaSource,
         externalId: String,
-        watchedAt: Instant
+        watchedAt: Instant,
+        watchedDate: LocalDate? = null
     ): ProgressWriteOutcome {
         val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.MOVIE) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
-        insertMovieProgress(MovieWatchProgressEntity(media.localMediaId, watchedAt))
+        val existing = getMovieProgressByMediaId(media.localMediaId)
+        val finalDate = watchedDate ?: existing?.watchedDate
+        insertMovieProgress(MovieWatchProgressEntity(media.localMediaId, watchedAt, finalDate))
         return ProgressWriteOutcome.SUCCESS
     }
 
@@ -160,6 +175,34 @@ internal abstract class WatchProgressDao {
         val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.MOVIE) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         deleteMovieProgress(media.localMediaId)
+        return ProgressWriteOutcome.SUCCESS
+    }
+
+    @Transaction
+    open suspend fun setMediaWatchedDate(
+        source: MediaSource,
+        externalId: String,
+        watchedDate: LocalDate?,
+        now: Instant
+    ): ProgressWriteOutcome {
+        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        if (media.mediaType == MediaType.MOVIE) {
+            val existing = getMovieProgressByMediaId(media.localMediaId)
+            if (existing != null) {
+                insertMovieProgress(existing.copy(watchedDate = watchedDate))
+            } else {
+                insertMovieProgress(MovieWatchProgressEntity(media.localMediaId, now, watchedDate))
+            }
+        } else {
+            val existing = getSeriesProgressByMediaId(media.localMediaId)
+            insertSeriesProgress(
+                SeriesWatchProgressEntity(
+                    localMediaId = media.localMediaId,
+                    watchedDate = watchedDate,
+                    completedAt = existing?.completedAt ?: now
+                )
+            )
+        }
         return ProgressWriteOutcome.SUCCESS
     }
 }

@@ -101,7 +101,7 @@ private fun BingeeNavigation(
                     launchSingleTop = true
                 }
             },
-            onOpenSettings = { navController.navigateTopLevel(TopLevelDestination.SETTINGS) },
+            onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
             modifier = Modifier.padding(innerPadding)
         )
     }

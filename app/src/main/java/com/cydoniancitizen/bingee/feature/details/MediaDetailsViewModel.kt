@@ -105,6 +105,10 @@ internal data class MediaDetailsUiState(
     val content: DetailContentState = DetailContentState.Resolving,
     val refresh: DetailRefreshState = DetailRefreshState.Idle,
     val isInLibrary: Boolean? = null,
+    val isFavorite: Boolean = false,
+    val watchedDate: java.time.LocalDate? = null,
+    val favoriteUpdating: Boolean = false,
+    val watchedDateUpdating: Boolean = false,
     val libraryAction: DetailLibraryActionState = DetailLibraryActionState.IDLE,
     val libraryError: AppError? = null,
     val movieProgress: MovieProgressState = MovieProgressState.NotApplicable,
@@ -371,10 +375,45 @@ internal class MediaDetailsViewModel @Inject constructor(
             libraryRepository.observeEntry(args.reference).collectLatest { result ->
                 mutableUiState.update {
                     when (result) {
-                        is AppResult.Success -> it.copy(isInLibrary = result.value != null)
+                        is AppResult.Success -> it.copy(
+                            isInLibrary = result.value != null,
+                            isFavorite = result.value?.isFavorite ?: false,
+                            watchedDate = result.value?.watchedDate
+                        )
                         is AppResult.Failure -> it.copy(libraryError = result.error)
                     }
                 }
+            }
+        }
+    }
+
+    fun toggleFavorite() {
+        val args = routeArgs ?: return
+        val state = mutableUiState.value
+        if (state.favoriteUpdating) return
+        mutableUiState.update { it.copy(favoriteUpdating = true) }
+        viewModelScope.launch {
+            val result = libraryRepository.setFavorite(args.reference, !state.isFavorite)
+            mutableUiState.update {
+                it.copy(
+                    favoriteUpdating = false,
+                    libraryError = (result as? AppResult.Failure)?.error
+                )
+            }
+        }
+    }
+
+    fun setWatchedDate(date: java.time.LocalDate?) {
+        val args = routeArgs ?: return
+        if (mutableUiState.value.watchedDateUpdating) return
+        mutableUiState.update { it.copy(watchedDateUpdating = true) }
+        viewModelScope.launch {
+            val result = libraryRepository.setWatchedDate(args.reference, date)
+            mutableUiState.update {
+                it.copy(
+                    watchedDateUpdating = false,
+                    progressError = (result as? AppResult.Failure)?.error
+                )
             }
         }
     }

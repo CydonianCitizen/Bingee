@@ -47,6 +47,7 @@ class DefaultLibraryRepositoryTest {
         repository =
             DefaultLibraryRepository(
                 database.libraryDao(),
+                database.watchProgressDao(),
                 database.ratingDao(),
                 Clock.fixed(now, ZoneOffset.UTC),
                 TestingAnimeFeatureAvailability(isAvailable = true)

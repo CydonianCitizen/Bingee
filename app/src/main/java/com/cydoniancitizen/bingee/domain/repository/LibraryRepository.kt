@@ -5,6 +5,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.result.AppResult
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 interface LibraryRepository {
@@ -23,4 +24,10 @@ interface LibraryRepository {
     suspend fun remove(ref: ExternalMediaRef): AppResult<Unit>
 
     suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean>
+
+    suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit>
+
+    suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit>
+
+    suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit>
 }

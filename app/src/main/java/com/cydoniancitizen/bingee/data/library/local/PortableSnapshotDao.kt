@@ -17,6 +17,7 @@ internal data class PortableSnapshotRows(
     val episodes: List<EpisodeEntity>,
     val episodeProgress: List<EpisodeWatchProgressEntity>,
     val movieProgress: List<MovieWatchProgressEntity>,
+    val seriesProgress: List<SeriesWatchProgressEntity>,
     val ratings: List<MediaRatingEntity>,
     val animeDetails: List<AnimeDetailsEntity>,
     val animeRelations: List<AnimeRelationEntity>,
@@ -52,6 +53,9 @@ internal abstract class PortableSnapshotDao {
 
     @Query("SELECT * FROM movie_watch_progress ORDER BY local_media_id")
     protected abstract suspend fun getMovieProgress(): List<MovieWatchProgressEntity>
+
+    @Query("SELECT * FROM series_watch_progress ORDER BY local_media_id")
+    protected abstract suspend fun getSeriesProgress(): List<SeriesWatchProgressEntity>
 
     @Query("SELECT * FROM media_ratings ORDER BY local_media_id")
     protected abstract suspend fun getRatings(): List<MediaRatingEntity>
@@ -93,6 +97,9 @@ internal abstract class PortableSnapshotDao {
     abstract suspend fun insertMovieProgress(progress: MovieWatchProgressEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertSeriesProgress(progress: SeriesWatchProgressEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertRating(rating: MediaRatingEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -130,6 +137,9 @@ internal abstract class PortableSnapshotDao {
 
     @Query("DELETE FROM movie_watch_progress")
     abstract suspend fun deleteMovieProgress()
+
+    @Query("DELETE FROM series_watch_progress")
+    abstract suspend fun deleteSeriesProgress()
 
     @Query("DELETE FROM anime_progress")
     abstract suspend fun deleteAnimeProgress()
@@ -175,8 +185,9 @@ internal abstract class PortableSnapshotDao {
         media = getMedia(), refs = getRefs(), memberships = getMemberships(),
         details = getDetails(), genres = getGenres(), seasons = getSeasons(),
         episodes = getEpisodes(), episodeProgress = getEpisodeProgress(),
-        movieProgress = getMovieProgress(), ratings = getRatings(),
-        animeDetails = getAnimeDetails(), animeRelations = getAnimeRelations(),
-        animeProgress = getAnimeProgress(), preferences = getPreferences()
+        movieProgress = getMovieProgress(), seriesProgress = getSeriesProgress(),
+        ratings = getRatings(), animeDetails = getAnimeDetails(),
+        animeRelations = getAnimeRelations(), animeProgress = getAnimeProgress(),
+        preferences = getPreferences()
     )
 }

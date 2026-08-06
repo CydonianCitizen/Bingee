@@ -13,7 +13,10 @@ data class LibraryEntry(
     val overview: String? = null,
     val addedAt: Instant,
     val progress: LibraryProgress = LibraryProgress.Unavailable,
-    val personalRating: PersonalRating? = null
+    val personalRating: PersonalRating? = null,
+    val isFavorite: Boolean = false,
+    val watchedDate: LocalDate? = null,
+    val inLibrary: Boolean = true
 ) {
     init {
         require(title.isNotBlank()) { "Library title must not be blank" }

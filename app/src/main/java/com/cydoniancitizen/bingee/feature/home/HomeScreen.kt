@@ -2,22 +2,27 @@ package com.cydoniancitizen.bingee.feature.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -26,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +42,7 @@ import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseDateCategory
 import com.cydoniancitizen.bingee.core.model.ReleaseDateGroup
@@ -50,7 +57,8 @@ import java.util.Locale
 
 @Composable
 internal fun HomeScreen(
-    onOpenSettings: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
@@ -61,87 +69,180 @@ internal fun HomeScreen(
         onRefresh = viewModel::refresh,
         onRetryLocal = viewModel::retryLocal,
         onDismissFeedback = viewModel::dismissRefreshFeedback,
+        onOpenNotifications = onOpenNotifications,
         onOpenSettings = onOpenSettings,
         onOpenDetails = onOpenDetails,
+        onAddToWatchlist = viewModel::addToWatchlist,
         modifier = modifier
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeContent(
     state: HomeUiState,
     onRefresh: () -> Unit,
     onRetryLocal: () -> Unit,
     onDismissFeedback: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
+    onAddToWatchlist: (MediaSearchResult) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(BingeeDimensions.screenPadding),
-        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
+    PullToRefreshBox(
+        isRefreshing = state.refresh == HomeRefreshState.Refreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.fillMaxSize().padding(BingeeDimensions.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
         ) {
-            Text(
-                text = stringResource(R.string.home_title),
-                modifier = Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.headlineMedium
-            )
-            IconButton(
-                onClick = onRefresh,
-                enabled = state.refresh != HomeRefreshState.Refreshing
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Refresh, stringResource(R.string.home_refresh))
+                Text(
+                    text = stringResource(R.string.home_title),
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                IconButton(onClick = onOpenNotifications) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = stringResource(R.string.notifications_title)
+                    )
+                }
             }
-        }
-        state.lastSuccessfulRefreshAt?.let {
-            Text(
-                stringResource(R.string.home_last_updated, it.localized()),
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
-        RefreshFeedback(
-            refresh = state.refresh,
-            onRetry = onRefresh,
-            onSettings = onOpenSettings,
-            onDismiss = onDismissFeedback
-        )
-        when (val content = state.content) {
-            HomeContentState.Loading -> LoadingState(stringResource(R.string.home_loading))
-            HomeContentState.Empty -> EmptyState(
-                title = stringResource(R.string.home_empty_title),
-                body = stringResource(R.string.home_empty_body)
-            )
-            is HomeContentState.Error -> {
-                val error = content.error.toUiError()
-                ErrorState(
-                    title = stringResource(R.string.home_local_error_title),
-                    message = stringResource(error.messageRes),
-                    retryLabel = stringResource(R.string.action_retry),
-                    onRetry = onRetryLocal
+            state.lastSuccessfulRefreshAt?.let {
+                Text(
+                    stringResource(R.string.home_last_updated, it.localized()),
+                    style = MaterialTheme.typography.labelMedium
                 )
             }
-            is HomeContentState.Events -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+            RefreshFeedback(
+                refresh = state.refresh,
+                onRetry = onRefresh,
+                onSettings = onOpenSettings,
+                onDismiss = onDismissFeedback
+            )
+
+            // Featured Releases Section
+            if (state.featuredReleases.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.home_featured_releases),
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
+                    contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    content.groups.forEach { group ->
-                        stickyHeader(key = "date:${group.date}") {
-                            DateHeader(group)
-                        }
-                        items(group.events, key = ReleaseEvent::stableKey) { event ->
-                            ReleaseEventCard(
-                                event = event,
-                                category = group.category,
-                                onClick = { onOpenDetails(event.mediaRef, event.mediaType) }
-                            )
+                    items(
+                        items = state.featuredReleases,
+                        key = { "${it.externalRef.source}:${it.externalRef.externalId}" }
+                    ) { item ->
+                        FeaturedReleaseCard(
+                            item = item,
+                            inWatchlist = item.externalRef in state.libraryMemberships,
+                            isAdding = item.externalRef in state.addingToWatchlist,
+                            onAddToWatchlist = { onAddToWatchlist(item) },
+                            onClick = { onOpenDetails(item.externalRef, item.mediaType) }
+                        )
+                    }
+                }
+            }
+
+            // Events Content
+            when (val content = state.content) {
+                HomeContentState.Loading -> LoadingState(stringResource(R.string.home_loading))
+                HomeContentState.Empty -> EmptyState(
+                    title = stringResource(R.string.home_empty_title),
+                    body = stringResource(R.string.home_empty_body)
+                )
+                is HomeContentState.Error -> {
+                    val error = content.error.toUiError()
+                    ErrorState(
+                        title = stringResource(R.string.home_local_error_title),
+                        message = stringResource(error.messageRes),
+                        retryLabel = stringResource(R.string.action_retry),
+                        onRetry = onRetryLocal
+                    )
+                }
+                is HomeContentState.Events -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+                    ) {
+                        content.groups.forEach { group ->
+                            stickyHeader(key = "date:${group.date}") {
+                                DateHeader(group)
+                            }
+                            items(group.events, key = ReleaseEvent::stableKey) { event ->
+                                ReleaseEventCard(
+                                    event = event,
+                                    category = group.category,
+                                    onClick = { onOpenDetails(event.mediaRef, event.mediaType) }
+                                )
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeaturedReleaseCard(
+    item: MediaSearchResult,
+    inWatchlist: Boolean,
+    isAdding: Boolean,
+    onAddToWatchlist: () -> Unit,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .size(width = 200.dp, height = 300.dp)
+            .semantics { contentDescription = item.title }
+    ) {
+        Column(
+            modifier = Modifier.padding(BingeeDimensions.elementSpacing),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            MediaPoster(
+                title = item.title,
+                posterUrl = item.posterUrl,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            item.releaseDate?.let {
+                Text(
+                    text = stringResource(R.string.search_release_year, it.year),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Button(
+                onClick = onAddToWatchlist,
+                enabled = !inWatchlist && !isAdding,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = stringResource(
+                        if (inWatchlist) R.string.action_in_watchlist else R.string.action_add_to_watchlist
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

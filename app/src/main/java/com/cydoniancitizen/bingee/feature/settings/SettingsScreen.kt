@@ -1,83 +1,70 @@
 package com.cydoniancitizen.bingee.feature.settings
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
-import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
-import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
 import com.cydoniancitizen.bingee.data.importexport.BACKUP_MIME_TYPE
 import com.cydoniancitizen.bingee.data.importexport.BackupFailureKind
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
 import com.cydoniancitizen.bingee.feature.credential.CredentialEditor
 import java.time.Clock
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 @Composable
 internal fun SettingsScreen(
     modifier: Modifier = Modifier,
     onOpenTvTimeImport: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
-    notificationViewModel: ReleaseNotificationSettingsViewModel = hiltViewModel(),
     backupViewModel: BackupViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val notificationState by notificationViewModel.uiState.collectAsStateWithLifecycle()
     val backupState by backupViewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        val permanentlyDenied = !granted && context.findActivity()?.let { activity ->
-            !ActivityCompat.shouldShowRequestPermissionRationale(
-                activity,
-                Manifest.permission.POST_NOTIFICATIONS
-            )
-        } == true
-        notificationViewModel.onPermissionResult(granted, permanentlyDenied)
-    }
     val createBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(BACKUP_MIME_TYPE)
     ) { uri -> uri?.let(backupViewModel::saveTo) }
@@ -92,21 +79,8 @@ internal fun SettingsScreen(
         onRequestRemoval = viewModel::requestRemoval,
         onDismissRemoval = viewModel::dismissRemoval,
         onConfirmRemoval = viewModel::confirmRemoval,
-        notificationState = notificationState,
-        onNotificationEnabledChanged = { enabled ->
-            if (!enabled) {
-                notificationViewModel.disableNotifications()
-            } else if (notificationViewModel.onEnableRequested()) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        },
-        onLeadTimeChanged = notificationViewModel::setLeadTime,
-        onMovieReleasesChanged = notificationViewModel::setMovieReleases,
-        onSeasonPremieresChanged = notificationViewModel::setSeasonPremieres,
-        onEpisodeAiringsChanged = notificationViewModel::setEpisodeAirings,
-        onOpenNotificationSettings = {
-            notificationViewModel.openSystemSettings()
-        },
+        onSetTheme = viewModel::setTheme,
+        onSetLanguage = viewModel::setLanguage,
         backupState = backupState,
         onSaveBackup = {
             createBackupLauncher.launch("bingee-backup-${LocalDate.now(Clock.systemUTC())}.json")
@@ -130,13 +104,8 @@ internal fun SettingsContent(
     onRequestRemoval: () -> Unit,
     onDismissRemoval: () -> Unit,
     onConfirmRemoval: () -> Unit,
-    notificationState: ReleaseNotificationSettingsUiState = ReleaseNotificationSettingsUiState(),
-    onNotificationEnabledChanged: (Boolean) -> Unit = {},
-    onLeadTimeChanged: (ReleaseNotificationLeadTime) -> Unit = {},
-    onMovieReleasesChanged: (Boolean) -> Unit = {},
-    onSeasonPremieresChanged: (Boolean) -> Unit = {},
-    onEpisodeAiringsChanged: (Boolean) -> Unit = {},
-    onOpenNotificationSettings: () -> Unit = {},
+    onSetTheme: (AppTheme) -> Unit = {},
+    onSetLanguage: (AppLanguage) -> Unit = {},
     backupState: BackupUiState = BackupUiState(),
     onSaveBackup: () -> Unit = {},
     onShareBackup: () -> Unit = {},
@@ -147,9 +116,10 @@ internal fun SettingsContent(
     onOpenTvTimeImport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var expandedDropdown by remember { mutableStateOf<SettingsDropdownKind?>(null) }
+
     Column(
-        modifier =
-        modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(BingeeDimensions.screenPadding),
@@ -160,6 +130,24 @@ internal fun SettingsContent(
             modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium
         )
+        AppearanceSection(
+            theme = state.theme,
+            onSetTheme = onSetTheme,
+            expanded = expandedDropdown == SettingsDropdownKind.THEME,
+            onExpandedChange = { isExpanded ->
+                expandedDropdown = if (isExpanded) SettingsDropdownKind.THEME else null
+            }
+        )
+        HorizontalDivider()
+        LanguageSection(
+            language = state.language,
+            onSetLanguage = onSetLanguage,
+            expanded = expandedDropdown == SettingsDropdownKind.LANGUAGE,
+            onExpandedChange = { isExpanded ->
+                expandedDropdown = if (isExpanded) SettingsDropdownKind.LANGUAGE else null
+            }
+        )
+        HorizontalDivider()
         CredentialEditor(
             titleRes = R.string.settings_tmdb_title,
             descriptionRes = R.string.settings_tmdb_description,
@@ -190,15 +178,7 @@ internal fun SettingsContent(
         )
         TvTimeImportSection(onOpen = onOpenTvTimeImport)
         HorizontalDivider()
-        NotificationSettingsSection(
-            state = notificationState,
-            onEnabledChanged = onNotificationEnabledChanged,
-            onLeadTimeChanged = onLeadTimeChanged,
-            onMovieReleasesChanged = onMovieReleasesChanged,
-            onSeasonPremieresChanged = onSeasonPremieresChanged,
-            onEpisodeAiringsChanged = onEpisodeAiringsChanged,
-            onOpenSystemSettings = onOpenNotificationSettings
-        )
+        OpenSourceSection()
         HorizontalDivider()
         Text(
             text = stringResource(R.string.about_title),
@@ -277,6 +257,161 @@ internal fun SettingsContent(
                 }
             }
         )
+    }
+}
+
+private enum class SettingsDropdownKind { THEME, LANGUAGE }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppearanceSection(
+    theme: AppTheme,
+    onSetTheme: (AppTheme) -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
+) {
+    val themeOptions = listOf(
+        AppTheme.SYSTEM_DEFAULT to stringResource(R.string.settings_theme_system),
+        AppTheme.LIGHT to stringResource(R.string.settings_theme_light),
+        AppTheme.DARK to stringResource(R.string.settings_theme_dark)
+    )
+    val currentThemeLabel = stringResource(
+        when (theme) {
+            AppTheme.SYSTEM_DEFAULT -> R.string.settings_theme_system
+            AppTheme.LIGHT -> R.string.settings_theme_light
+            AppTheme.DARK -> R.string.settings_theme_dark
+        }
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+        Text(
+            text = stringResource(R.string.settings_appearance_title),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Text(stringResource(R.string.settings_theme_title), style = MaterialTheme.typography.titleMedium)
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = currentThemeLabel,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { onExpandedChange(false) }
+            ) {
+                themeOptions.forEach { (optionTheme, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onSetTheme(optionTheme)
+                            onExpandedChange(false)
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LanguageSection(
+    language: AppLanguage,
+    onSetLanguage: (AppLanguage) -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
+) {
+    val languageOptions = listOf(
+        AppLanguage.ENGLISH to stringResource(R.string.settings_language_en),
+        AppLanguage.ITALIAN to stringResource(R.string.settings_language_it)
+    )
+    val currentLanguageLabel = stringResource(
+        when (language) {
+            AppLanguage.ENGLISH -> R.string.settings_language_en
+            AppLanguage.ITALIAN -> R.string.settings_language_it
+        }
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+        Text(
+            text = stringResource(R.string.settings_language_title),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineSmall
+        )
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = currentLanguageLabel,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { onExpandedChange(false) }
+            ) {
+                languageOptions.forEach { (optionLang, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onSetLanguage(optionLang)
+                            onExpandedChange(false)
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenSourceSection() {
+    val context = LocalContext.current
+    val repositoryUrl = "https://github.com/CydoniaCitizen/Bingee"
+    Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+        Text(
+            text = stringResource(R.string.settings_open_source_title),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Text(
+            text = stringResource(R.string.settings_open_source_description),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Button(
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(repositoryUrl)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    // Safe handling when no browser resolves intent
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.settings_open_source_github_action))
+        }
     }
 }
 
@@ -380,128 +515,6 @@ private fun BackupFailureKind.toStringRes(): Int = when (this) {
     BackupFailureKind.WRITE_FAILED -> R.string.backup_error_write
     BackupFailureKind.TRANSACTION_FAILED -> R.string.backup_error_transaction
     BackupFailureKind.SCHEDULING_WARNING -> R.string.backup_warning_schedule
-}
-
-@Composable
-private fun NotificationSettingsSection(
-    state: ReleaseNotificationSettingsUiState,
-    onEnabledChanged: (Boolean) -> Unit,
-    onLeadTimeChanged: (ReleaseNotificationLeadTime) -> Unit,
-    onMovieReleasesChanged: (Boolean) -> Unit,
-    onSeasonPremieresChanged: (Boolean) -> Unit,
-    onEpisodeAiringsChanged: (Boolean) -> Unit,
-    onOpenSystemSettings: () -> Unit
-) {
-    Text(
-        text = stringResource(R.string.settings_notifications_title),
-        modifier = Modifier.semantics { heading() },
-        style = MaterialTheme.typography.headlineSmall
-    )
-    SettingSwitchRow(
-        label = stringResource(R.string.settings_notifications_enable),
-        checked = state.preferences.enabled,
-        enabled = !state.isUpdating,
-        onCheckedChange = onEnabledChanged
-    )
-    Text(
-        text = stringResource(R.string.settings_notifications_approximate),
-        style = MaterialTheme.typography.bodyMedium
-    )
-    val blocked = state.permanentlyDenied ||
-        state.capability == NotificationCapabilityStatus.SYSTEM_BLOCKED ||
-        state.capability == NotificationCapabilityStatus.CHANNEL_BLOCKED
-    Text(
-        text = stringResource(
-            when {
-                state.preferences.enabled && state.capability == NotificationCapabilityStatus.AVAILABLE ->
-                    R.string.settings_notifications_permission_granted
-                blocked -> R.string.settings_notifications_permission_blocked
-                else -> R.string.settings_notifications_permission_required
-            }
-        ),
-        style = MaterialTheme.typography.bodySmall
-    )
-    if (blocked) {
-        Button(onClick = onOpenSystemSettings) {
-            Text(stringResource(R.string.settings_notifications_open_system))
-        }
-    }
-    Text(
-        stringResource(R.string.settings_notifications_lead_time),
-        modifier = Modifier.semantics { heading() },
-        style = MaterialTheme.typography.titleMedium
-    )
-    ReleaseNotificationLeadTime.entries.forEach { leadTime ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .selectable(
-                    selected = state.preferences.leadTime == leadTime,
-                    enabled = !state.isUpdating,
-                    role = Role.RadioButton,
-                    onClick = { onLeadTimeChanged(leadTime) }
-                )
-                .semantics(mergeDescendants = true) {},
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(
-                selected = state.preferences.leadTime == leadTime,
-                onClick = null,
-                enabled = !state.isUpdating
-            )
-            Text(stringResource(leadTime.labelRes()))
-        }
-    }
-    Text(
-        stringResource(R.string.settings_notifications_categories),
-        modifier = Modifier.semantics { heading() },
-        style = MaterialTheme.typography.titleMedium
-    )
-    SettingSwitchRow(
-        stringResource(R.string.settings_notifications_movies),
-        state.preferences.movieReleases,
-        !state.isUpdating,
-        onMovieReleasesChanged
-    )
-    SettingSwitchRow(
-        stringResource(R.string.settings_notifications_seasons),
-        state.preferences.seasonPremieres,
-        !state.isUpdating,
-        onSeasonPremieresChanged
-    )
-    SettingSwitchRow(
-        stringResource(R.string.settings_notifications_episodes),
-        state.preferences.episodeAirings,
-        !state.isUpdating,
-        onEpisodeAiringsChanged
-    )
-}
-
-@Composable
-private fun SettingSwitchRow(label: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                enabled = enabled,
-                role = Role.Switch,
-                onValueChange = onCheckedChange
-            )
-            .semantics(mergeDescendants = true) {},
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
-    }
-}
-
-private fun ReleaseNotificationLeadTime.labelRes(): Int = when (this) {
-    ReleaseNotificationLeadTime.SAME_DAY -> R.string.settings_notifications_same_day
-    ReleaseNotificationLeadTime.ONE_DAY -> R.string.settings_notifications_one_day
-    ReleaseNotificationLeadTime.THREE_DAYS -> R.string.settings_notifications_three_days
-    ReleaseNotificationLeadTime.SEVEN_DAYS -> R.string.settings_notifications_seven_days
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {

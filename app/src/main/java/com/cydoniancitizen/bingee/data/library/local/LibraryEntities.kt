@@ -31,7 +31,9 @@ internal data class MediaEntity(
     @ColumnInfo(name = "created_at")
     val createdAt: Instant,
     @ColumnInfo(name = "metadata_updated_at")
-    val metadataUpdatedAt: Instant
+    val metadataUpdatedAt: Instant,
+    @ColumnInfo(name = "is_favorite")
+    val isFavorite: Boolean = false
 ) {
     init {
         require(localMediaId >= 0) { "Local media ID must not be negative" }

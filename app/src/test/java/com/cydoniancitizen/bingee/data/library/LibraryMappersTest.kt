@@ -42,7 +42,12 @@ class LibraryMappersTest {
         val media = mediaEntity()
         val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
         val jikan = ExternalRefEntity(7, MediaSource.JIKAN, "84")
-        val row = LibraryItemWithRefs(media, now, listOf(jikan, tmdb))
+        val row = LibraryItemWithRefs(
+            media = media,
+            addedAt = now,
+            inLibrary = true,
+            externalRefs = listOf(jikan, tmdb)
+        )
 
         val entry = row.toDomain(preferredRef = tmdb.toDomain())
 
@@ -54,7 +59,12 @@ class LibraryMappersTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun relationWithoutExternalIdentityFailsSafely() {
-        LibraryItemWithRefs(mediaEntity(), now, emptyList()).toDomain()
+        LibraryItemWithRefs(
+            media = mediaEntity(),
+            addedAt = now,
+            inLibrary = true,
+            externalRefs = emptyList()
+        ).toDomain()
     }
 
     private fun mediaEntity() = MediaEntity(
