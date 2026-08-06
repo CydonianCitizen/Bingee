@@ -42,7 +42,8 @@ internal data class BackupUiState(
     val operation: BackupOperation = BackupOperation.IDLE,
     val preview: BackupPreview? = null,
     val failure: BackupFailureKind? = null,
-    val schedulingWarning: Boolean = false
+    val schedulingWarning: Boolean = false,
+    val hasAnimePreserved: Boolean = false
 )
 
 @HiltViewModel
@@ -164,11 +165,19 @@ internal class BackupViewModel @Inject constructor(
                 } catch (_: Exception) {
                     warning = true
                 }
+                val data = plan.document.data
+                val containsAnime = data.animeDetails.isNotEmpty() ||
+                    data.animeProgress.isNotEmpty() ||
+                    data.media.any {
+                        it.primaryRef.source == com.cydoniancitizen.bingee.core.model.MediaSource.JIKAN ||
+                            it.mediaType == com.cydoniancitizen.bingee.core.model.MediaType.ANIME
+                    }
                 mutableUiState.update {
                     it.copy(
                         operation = BackupOperation.SUCCESS,
                         preview = null,
                         schedulingWarning = warning,
+                        hasAnimePreserved = containsAnime,
                         failure = if (warning) BackupFailureKind.SCHEDULING_WARNING else null
                     )
                 }

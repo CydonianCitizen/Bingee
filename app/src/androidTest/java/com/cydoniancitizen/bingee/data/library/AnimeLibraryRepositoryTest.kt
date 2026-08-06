@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.AnimeFormat
 import com.cydoniancitizen.bingee.core.model.AnimeStatus
 import com.cydoniancitizen.bingee.core.model.AnimeWatchProgress
@@ -48,7 +49,8 @@ class AnimeLibraryRepositoryTest {
         repository = DefaultLibraryRepository(
             database.libraryDao(),
             database.ratingDao(),
-            Clock.fixed(now, ZoneOffset.UTC)
+            Clock.fixed(now, ZoneOffset.UTC),
+            TestingAnimeFeatureAvailability(isAvailable = true)
         )
     }
 

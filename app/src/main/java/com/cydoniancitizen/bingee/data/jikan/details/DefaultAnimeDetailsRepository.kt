@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.data.jikan.details
 
 import android.database.sqlite.SQLiteException
+import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedAnimeDetails
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -25,7 +26,8 @@ internal class DefaultAnimeDetailsRepository @Inject constructor(
     private val client: JikanDetailsClient,
     private val store: AnimeMetadataStore,
     private val freshnessPolicy: CacheFreshnessPolicy,
-    private val clock: Clock
+    private val clock: Clock,
+    private val availability: AnimeFeatureAvailability
 ) : AnimeDetailsRepository {
     override fun observeDetails(reference: ExternalMediaRef): Flow<AppResult<CachedAnimeDetails?>> {
         if (!reference.validAnime()) return flowOf(AppResult.Failure(AppError.InvalidInput))
@@ -40,6 +42,7 @@ internal class DefaultAnimeDetailsRepository @Inject constructor(
     }
 
     override suspend fun refreshDetails(reference: ExternalMediaRef, force: Boolean): AppResult<Unit> {
+        if (!availability.isAvailable) return AppResult.Failure(AppError.FeatureUnavailable)
         if (!reference.validAnime()) return AppResult.Failure(AppError.InvalidInput)
         val cached = try {
             animeDao.getAnime(reference.externalId)?.toCachedDomain(reference, freshnessPolicy)

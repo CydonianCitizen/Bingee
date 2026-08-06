@@ -17,7 +17,7 @@ class BackupJsonCodecTest {
         val json = BackupJsonCodec.encode(fullDocument()).toString(Charsets.UTF_8)
 
         assertTrue(json.contains("\"formatId\": \"bingee-backup\""))
-        assertTrue(json.contains("\"schemaVersion\": 2"))
+        assertTrue(json.contains("\"schemaVersion\": 3"))
         assertTrue(json.contains("\"exportedAt\": \"2026-08-04T10:00:00Z\""))
         assertTrue(json.contains("\"mediaType\": \"MOVIE\""))
         assertTrue(json.contains("\"releaseDate\": \"2026-01-02\""))
@@ -56,6 +56,27 @@ class BackupJsonCodecTest {
     }
 
     @Test
+    fun committedV3FixturesRemainAccepted() {
+        val fixtureNames =
+            listOf("valid-linked-v3.json", "valid-unlinked-audit-v3.json", "valid-numeric-collision-v3.json")
+        for (name in fixtureNames) {
+            val fixture = listOf(
+                Path.of("docs", "backup", "fixtures", name),
+                Path.of("..", "docs", "backup", "fixtures", name)
+            ).first { Files.isRegularFile(it) }
+            val parsed = BackupJsonCodec.parse(Files.readAllBytes(fixture))
+
+            assertTrue("Fixture $name should parse successfully", parsed is BackupParseResult.Success)
+            val document = (parsed as BackupParseResult.Success).document
+            assertEquals(BACKUP_SCHEMA_VERSION_V3, document.schemaVersion)
+            assertTrue(
+                "Fixture $name should validate successfully",
+                BackupValidator.validate(document) is BackupValidationResult.Success
+            )
+        }
+    }
+
+    @Test
     fun rejectsMalformedWrongFormatMissingAndNewerVersion() {
         assertEquals(
             BackupFailureKind.MALFORMED_JSON,
@@ -74,7 +95,7 @@ class BackupJsonCodecTest {
             BackupFailureKind.MISSING_VERSION,
             (
                 BackupJsonCodec.parse(
-                    valid.replace("\"schemaVersion\": 2,\n", "").toByteArray()
+                    valid.replace("\"schemaVersion\": 3,\n", "").toByteArray()
                 ) as BackupParseResult.Failure
                 ).failure.kind
         )
@@ -82,7 +103,7 @@ class BackupJsonCodecTest {
             BackupFailureKind.UNSUPPORTED_VERSION,
             (
                 BackupJsonCodec.parse(
-                    valid.replace("\"schemaVersion\": 2", "\"schemaVersion\": 3").toByteArray()
+                    valid.replace("\"schemaVersion\": 3", "\"schemaVersion\": 4").toByteArray()
                 ) as BackupParseResult.Failure
                 ).failure.kind
         )

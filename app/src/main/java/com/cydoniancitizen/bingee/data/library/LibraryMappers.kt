@@ -29,13 +29,19 @@ internal fun MediaSearchResult.toMediaEntity(now: Instant): MediaEntity = MediaE
 internal fun LibraryItemWithRefs.toDomain(
     preferredRef: ExternalMediaRef? = null,
     progressRow: LibraryDao.LibraryProgressRow? = null,
-    rating: MediaRatingEntity? = null
+    rating: MediaRatingEntity? = null,
+    animeAvailable: Boolean = true
 ): LibraryEntry {
     val refs = externalRefs.map(ExternalRefEntity::toDomain)
     require(refs.isNotEmpty()) { "Persisted library item has no external reference" }
-    val selectedRef =
+    val selectedRef = if (!animeAvailable) {
+        refs.firstOrNull { it.source == com.cydoniancitizen.bingee.core.model.MediaSource.TMDB }
+            ?: preferredRef?.takeIf(refs::contains)
+            ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
+    } else {
         preferredRef?.takeIf(refs::contains)
             ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
+    }
     return LibraryEntry(
         mediaRef = selectedRef,
         mediaType = media.mediaType,

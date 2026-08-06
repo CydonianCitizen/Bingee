@@ -13,6 +13,11 @@ import com.cydoniancitizen.bingee.data.library.local.EpisodeWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryMembershipEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaLinkAuditEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaLinkAuditMemberEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaLinkDao
+import com.cydoniancitizen.bingee.data.library.local.MediaLinkGroupEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaLinkMemberEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaRatingEntity
 import com.cydoniancitizen.bingee.data.library.local.MovieWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.PortablePreferencesEntity
@@ -40,7 +45,12 @@ internal enum class RestoreStage {
     RATINGS,
     PORTABLE_PREFERENCES,
     RELEASE_EVENTS,
-    ANIME_RELEASE_EVENTS
+    ANIME_RELEASE_EVENTS,
+    ACTIVE_LINK_GROUPS,
+    ACTIVE_LINK_MEMBERS,
+    PREFERRED_PRESENTATION,
+    LINK_AUDIT,
+    LINK_AUDIT_MEMBERS
 }
 
 internal fun interface RestoreFailureInjector {
@@ -52,7 +62,8 @@ internal class BackupDataStore @Inject constructor(
     private val database: BingeeDatabase,
     private val snapshotDao: PortableSnapshotDao,
     private val releaseEventDao: ReleaseEventDao,
-    private val notificationPreferences: DataStoreReleaseNotificationPreferences
+    private val notificationPreferences: DataStoreReleaseNotificationPreferences,
+    private val mediaLinkDao: MediaLinkDao = database.mediaLinkDao()
 ) {
     suspend fun readPortableData(): BackupData {
         notificationPreferences.preferences.first()
@@ -64,12 +75,79 @@ internal class BackupDataStore @Inject constructor(
                 .filter { it.localEpisodeId in watchedEpisodeIds }
                 .mapNotNull { episode -> seasonById[episode.localSeasonId]?.localMediaId }
                 .toSet()
+
+            val linkGroupEntities = mediaLinkDao.getGroupEntities()
+            val activeLinkMemberMediaIds = hashSetOf<Long>()
+            val backupLinkGroups = linkGroupEntities.map { groupEntity ->
+                val membersWithIdentity = mediaLinkDao.findMembersWithIdentityByGroupId(groupEntity.localGroupId)
+                val memberIdentities = membersWithIdentity.map { m ->
+                    activeLinkMemberMediaIds.add(m.localMediaId)
+                    BackupMediaIdentity(m.source, m.mediaType, m.externalId)
+                }.sortedWith(compareBy({ it.source.name }, { it.mediaType.name }, { it.externalId }))
+
+                val preferredMember =
+                    membersWithIdentity.firstOrNull { it.localMediaId == groupEntity.preferredPresentationMediaId }
+                        ?: error("Preferred presentation member not found for group ${groupEntity.groupUuid}")
+
+                BackupMediaLinkGroup(
+                    groupId = groupEntity.groupUuid,
+                    members = memberIdentities,
+                    preferredPresentation = BackupMediaIdentity(
+                        preferredMember.source,
+                        preferredMember.mediaType,
+                        preferredMember.externalId
+                    ),
+                    createdAt = groupEntity.createdAt,
+                    updatedAt = groupEntity.updatedAt
+                )
+            }.sortedBy { it.groupId }
+
+            val auditEntities = mediaLinkDao.getAuditTrail()
+            val backupLinkAudits = auditEntities.map { auditEntity ->
+                val auditMembers = mediaLinkDao.getAuditMembers(auditEntity.auditId)
+                val memberIdentities = auditMembers.map { m ->
+                    BackupMediaIdentity(m.source, m.mediaType, m.externalId)
+                }.sortedWith(compareBy({ it.source.name }, { it.mediaType.name }, { it.externalId }))
+
+                val preferredIdentity = if (auditEntity.preferredSource != null &&
+                    auditEntity.preferredMediaType != null &&
+                    auditEntity.preferredExternalId != null
+                ) {
+                    BackupMediaIdentity(
+                        auditEntity.preferredSource,
+                        auditEntity.preferredMediaType,
+                        auditEntity.preferredExternalId
+                    )
+                } else {
+                    null
+                }
+
+                BackupMediaLinkAudit(
+                    groupId = auditEntity.groupUuid,
+                    action = auditEntity.action,
+                    timestamp = auditEntity.actionTimestamp,
+                    origin = auditEntity.origin,
+                    members = memberIdentities,
+                    preferredPresentation = preferredIdentity
+                )
+            }.sortedWith(
+                compareBy(
+                    { it.timestamp },
+                    { it.groupId },
+                    { it.action.name },
+                    { it.members.firstOrNull()?.source?.name },
+                    { it.members.firstOrNull()?.mediaType?.name },
+                    { it.members.firstOrNull()?.externalId }
+                )
+            )
+
             val portableMediaIds = buildSet {
                 addAll(rows.memberships.map { it.localMediaId })
                 addAll(rows.ratings.map { it.localMediaId })
                 addAll(rows.movieProgress.map { it.localMediaId })
                 addAll(episodeMediaIds)
                 addAll(rows.animeProgress.map { it.localMediaId })
+                addAll(activeLinkMemberMediaIds)
             }
             val media = rows.media.filter { it.localMediaId in portableMediaIds }
             val refsByMedia = rows.refs.groupBy { it.localMediaId }
@@ -220,8 +298,9 @@ internal class BackupDataStore @Inject constructor(
                             updatedAt = it.updatedAt
                         )
                     }
-                    .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId }))
-
+                    .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
+                mediaLinkGroups = backupLinkGroups,
+                mediaLinkAudit = backupLinkAudits
             )
         }
     }
@@ -238,8 +317,13 @@ internal class BackupDataStore @Inject constructor(
             val data = plan.document.data
             val exportedAt = plan.document.exportedAt
             snapshotDao.deleteNotificationDeliveries()
+            snapshotDao.deleteLinkAuditMembers()
+            snapshotDao.deleteLinkAudit()
+            snapshotDao.deleteLinkMembers()
+            snapshotDao.deleteLinkGroups()
             snapshotDao.deleteReleaseEvents()
             snapshotDao.deleteEpisodeProgress()
+
             snapshotDao.deleteAnimeProgress()
             snapshotDao.deleteAnimeRelations()
             snapshotDao.deleteAnimeDetails()
@@ -256,6 +340,7 @@ internal class BackupDataStore @Inject constructor(
             snapshotDao.deletePreferences()
 
             val mediaIds = linkedMapOf<String, Long>()
+            val mediaIdsByIdentityKey = linkedMapOf<String, Long>()
             data.media.forEach { media ->
                 val localId = snapshotDao.insertMedia(
                     MediaEntity(
@@ -270,6 +355,10 @@ internal class BackupDataStore @Inject constructor(
                     )
                 )
                 mediaIds[media.primaryRef.key()] = localId
+                media.externalRefs.forEach { ref ->
+                    val identityKey = "${ref.source.name}:${media.mediaType.name}:${ref.externalId}"
+                    mediaIdsByIdentityKey[identityKey] = localId
+                }
             }
             failureInjector.check(RestoreStage.MEDIA)
 
@@ -414,6 +503,63 @@ internal class BackupDataStore @Inject constructor(
             releaseEventDao.backfill(exportedAt)
             failureInjector.check(RestoreStage.ANIME_RELEASE_EVENTS)
             failureInjector.check(RestoreStage.RELEASE_EVENTS)
+
+            data.mediaLinkGroups.forEach { group ->
+                val prefKey =
+                    "${group.preferredPresentation.source.name}:${group.preferredPresentation.mediaType.name}:${group.preferredPresentation.externalId}"
+                val preferredLocalId = checkNotNull(mediaIdsByIdentityKey[prefKey]) {
+                    "Missing local media ID for preferred presentation $prefKey"
+                }
+
+                val groupEntity = MediaLinkGroupEntity(
+                    groupUuid = group.groupId,
+                    preferredPresentationMediaId = preferredLocalId,
+                    createdAt = group.createdAt,
+                    updatedAt = group.updatedAt
+                )
+                val localGroupId = mediaLinkDao.insertGroup(groupEntity)
+                failureInjector.check(RestoreStage.ACTIVE_LINK_GROUPS)
+
+                val memberEntities = group.members.map { member ->
+                    val memberKey = "${member.source.name}:${member.mediaType.name}:${member.externalId}"
+                    val memberLocalId = checkNotNull(mediaIdsByIdentityKey[memberKey]) {
+                        "Missing local media ID for member $memberKey"
+                    }
+                    MediaLinkMemberEntity(
+                        localGroupId = localGroupId,
+                        localMediaId = memberLocalId,
+                        addedAt = group.createdAt
+                    )
+                }
+                mediaLinkDao.insertMembers(memberEntities)
+                failureInjector.check(RestoreStage.ACTIVE_LINK_MEMBERS)
+                failureInjector.check(RestoreStage.PREFERRED_PRESENTATION)
+            }
+
+            data.mediaLinkAudit.forEach { audit ->
+                val auditEntity = MediaLinkAuditEntity(
+                    groupUuid = audit.groupId,
+                    action = audit.action,
+                    actionTimestamp = audit.timestamp,
+                    origin = audit.origin,
+                    preferredSource = audit.preferredPresentation?.source,
+                    preferredMediaType = audit.preferredPresentation?.mediaType,
+                    preferredExternalId = audit.preferredPresentation?.externalId
+                )
+                val auditId = mediaLinkDao.insertAudit(auditEntity)
+                failureInjector.check(RestoreStage.LINK_AUDIT)
+
+                val auditMemberEntities = audit.members.map { member ->
+                    MediaLinkAuditMemberEntity(
+                        auditId = auditId,
+                        source = member.source,
+                        mediaType = member.mediaType,
+                        externalId = member.externalId
+                    )
+                }
+                mediaLinkDao.insertAuditMembers(auditMemberEntities)
+                failureInjector.check(RestoreStage.LINK_AUDIT_MEMBERS)
+            }
         }
     }
 

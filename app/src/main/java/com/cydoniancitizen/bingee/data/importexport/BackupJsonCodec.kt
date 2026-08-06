@@ -127,8 +127,53 @@ internal object BackupJsonCodec {
         writer.name("animeProgress").beginArray()
         data.animeProgress.forEach { writeAnimeProgress(writer, it) }
         writer.endArray()
+        writer.name("mediaLinkGroups").beginArray()
+        data.mediaLinkGroups.forEach { writeMediaLinkGroup(writer, it) }
+        writer.endArray()
+        writer.name("mediaLinkAudit").beginArray()
+        data.mediaLinkAudit.forEach { writeMediaLinkAudit(writer, it) }
+        writer.endArray()
         writer.name("preferences")
         writePreferences(writer, data.preferences)
+        writer.endObject()
+    }
+
+    private fun writeMediaIdentity(writer: JsonWriter, identity: BackupMediaIdentity) {
+        writer.beginObject()
+        writer.name("source").value(identity.source.name)
+        writer.name("mediaType").value(identity.mediaType.name)
+        writer.name("externalId").value(identity.externalId)
+        writer.endObject()
+    }
+
+    private fun writeMediaLinkGroup(writer: JsonWriter, group: BackupMediaLinkGroup) {
+        writer.beginObject()
+        writer.name("groupId").value(group.groupId)
+        writer.name("members").beginArray()
+        group.members.forEach { writeMediaIdentity(writer, it) }
+        writer.endArray()
+        writer.name("preferredPresentation")
+        writeMediaIdentity(writer, group.preferredPresentation)
+        writer.name("createdAt").value(group.createdAt.toString())
+        writer.name("updatedAt").value(group.updatedAt.toString())
+        writer.endObject()
+    }
+
+    private fun writeMediaLinkAudit(writer: JsonWriter, audit: BackupMediaLinkAudit) {
+        writer.beginObject()
+        writer.name("groupId").value(audit.groupId)
+        writer.name("action").value(audit.action.name)
+        writer.name("timestamp").value(audit.timestamp.toString())
+        writer.name("origin").value(audit.origin.name)
+        writer.name("members").beginArray()
+        audit.members.forEach { writeMediaIdentity(writer, it) }
+        writer.endArray()
+        if (audit.preferredPresentation != null) {
+            writer.name("preferredPresentation")
+            writeMediaIdentity(writer, audit.preferredPresentation)
+        } else {
+            writer.name("preferredPresentation").nullValue()
+        }
         writer.endObject()
     }
 
@@ -298,10 +343,68 @@ internal object BackupJsonCodec {
         episodeProgress = requiredArray(data, "episodeProgress", BackupLimits.MAX_EPISODES).map(::readEpisodeProgress),
         ratings = requiredArray(data, "ratings", BackupLimits.MAX_MEDIA).map(::readRating),
         preferences = readPreferences(requiredObject(data, "preferences")),
-        animeDetails = versionedArray(data, "animeDetails", schemaVersion).map(::readAnimeDetails),
-        animeRelations = versionedArray(data, "animeRelations", schemaVersion).map(::readAnimeRelation),
-        animeProgress = versionedArray(data, "animeProgress", schemaVersion).map(::readAnimeProgress)
+        animeDetails = versionedArray(data, "animeDetails", schemaVersion, minVersion = 2).map(::readAnimeDetails),
+        animeRelations = versionedArray(data, "animeRelations", schemaVersion, minVersion = 2).map(::readAnimeRelation),
+        animeProgress = versionedArray(data, "animeProgress", schemaVersion, minVersion = 2).map(::readAnimeProgress),
+        mediaLinkGroups = versionedArray(
+            data,
+            "mediaLinkGroups",
+            schemaVersion,
+            minVersion = 3
+        ).map(::readMediaLinkGroup),
+        mediaLinkAudit = versionedArray(data, "mediaLinkAudit", schemaVersion, minVersion = 3).map(::readMediaLinkAudit)
     )
+
+    private fun readMediaIdentity(value: JsonElement): BackupMediaIdentity {
+        val objectValue = value.asObjectOrProblem()
+        val source = try {
+            MediaSource.valueOf(requiredString(objectValue, "source"))
+        } catch (_: Exception) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
+        val mediaType = readMediaType(requiredString(objectValue, "mediaType"))
+        val externalId = requiredString(objectValue, "externalId")
+        return BackupMediaIdentity(source, mediaType, externalId)
+    }
+
+    private fun readMediaLinkGroup(value: JsonElement): BackupMediaLinkGroup {
+        val objectValue = value.asObjectOrProblem()
+        return BackupMediaLinkGroup(
+            groupId = requiredString(objectValue, "groupId"),
+            members = requiredArray(objectValue, "members", 2).map(::readMediaIdentity),
+            preferredPresentation = readMediaIdentity(required(objectValue, "preferredPresentation")),
+            createdAt = requiredInstant(objectValue, "createdAt"),
+            updatedAt = requiredInstant(objectValue, "updatedAt")
+        )
+    }
+
+    private fun readMediaLinkAudit(value: JsonElement): BackupMediaLinkAudit {
+        val objectValue = value.asObjectOrProblem()
+        val action = try {
+            com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction.valueOf(requiredString(objectValue, "action"))
+        } catch (_: Exception) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
+        val origin = try {
+            com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin.valueOf(requiredString(objectValue, "origin"))
+        } catch (_: Exception) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
+        val prefObj = objectValue.get("preferredPresentation")
+        val preferredPresentation = if (prefObj == null || prefObj.isJsonNull) {
+            null
+        } else {
+            readMediaIdentity(prefObj)
+        }
+        return BackupMediaLinkAudit(
+            groupId = requiredString(objectValue, "groupId"),
+            action = action,
+            timestamp = requiredInstant(objectValue, "timestamp"),
+            origin = origin,
+            members = requiredArray(objectValue, "members", 2).map(::readMediaIdentity),
+            preferredPresentation = preferredPresentation
+        )
+    }
 
     private fun readRef(value: JsonElement): BackupRef {
         val objectValue = value.asObjectOrProblem()
@@ -537,8 +640,8 @@ internal object BackupJsonCodec {
         if (!value.isJsonArray || value.asJsonArray.size() > max) problem(BackupFailureKind.TOO_LARGE)
         return value.asJsonArray
     }
-    private fun versionedArray(data: JsonObject, name: String, schemaVersion: Int): JsonArray =
-        if (schemaVersion == BACKUP_SCHEMA_VERSION_V1) {
+    private fun versionedArray(data: JsonObject, name: String, schemaVersion: Int, minVersion: Int = 2): JsonArray =
+        if (schemaVersion < minVersion) {
             JsonArray()
         } else {
             requiredArray(data, name, BackupLimits.MAX_MEDIA)

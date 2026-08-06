@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.feature.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
@@ -60,6 +61,8 @@ internal sealed interface NextPageState {
 internal data class SearchUiState(
     val query: String = "",
     val category: MediaSearchCategory = MediaSearchCategory.MOVIES,
+    val availableCategories: List<MediaSearchCategory> =
+        listOf(MediaSearchCategory.MOVIES, MediaSearchCategory.TV_SERIES),
     val credentialAvailability: SearchCredentialAvailability = SearchCredentialAvailability.CHECKING,
     val content: SearchContentState = SearchContentState.Idle,
     val libraryMembership: Set<ExternalMediaRef> = emptySet(),
@@ -72,16 +75,34 @@ internal class SearchViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val animeRepository: AnimeRepository,
     private val libraryRepository: LibraryRepository,
-    credentialRepository: TmdbCredentialRepository
+    credentialRepository: TmdbCredentialRepository,
+    private val animeAvailability: AnimeFeatureAvailability
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(SearchUiState())
-    val uiState: StateFlow<SearchUiState> = mutableUiState.asStateFlow()
+    private val mutableUiState: MutableStateFlow<SearchUiState>
+    val uiState: StateFlow<SearchUiState>
 
     private var requestGeneration = 0L
     private var initialSearchJob: Job? = null
     private var nextPageJob: Job? = null
 
     init {
+        val categories = if (animeAvailability.isAvailable) {
+            MediaSearchCategory.entries
+        } else {
+            listOf(MediaSearchCategory.MOVIES, MediaSearchCategory.TV_SERIES)
+        }
+        mutableUiState = MutableStateFlow(
+            SearchUiState(
+                availableCategories = categories,
+                category = if (!animeAvailability.isAvailable && MediaSearchCategory.ANIME !in categories) {
+                    MediaSearchCategory.MOVIES
+                } else {
+                    MediaSearchCategory.MOVIES
+                }
+            )
+        )
+        uiState = mutableUiState.asStateFlow()
+
         viewModelScope.launch {
             credentialRepository.status.collectLatest(::onCredentialStatus)
         }
@@ -115,12 +136,17 @@ internal class SearchViewModel @Inject constructor(
     }
 
     fun onCategoryChanged(category: MediaSearchCategory) {
-        if (category == mutableUiState.value.category) return
+        val targetCategory = if (!animeAvailability.isAvailable && category == MediaSearchCategory.ANIME) {
+            MediaSearchCategory.MOVIES
+        } else {
+            category
+        }
+        if (targetCategory == mutableUiState.value.category) return
         resetRequests()
         mutableUiState.update {
-            it.copy(category = category, content = SearchContentState.Idle)
+            it.copy(category = targetCategory, content = SearchContentState.Idle)
         }
-        if (normalizedQuery() != null && hasProviderFor(category)) {
+        if (normalizedQuery() != null && hasProviderFor(targetCategory)) {
             startInitialSearch(0)
         }
     }

@@ -51,11 +51,27 @@ sealed interface AppError {
         override val isRetryable = false
     }
 
+    data object FeatureUnavailable : AppError {
+        override val isRetryable = false
+    }
+
     data object MediaTypeMismatch : AppError {
         override val isRetryable = false
     }
 
     data object Unknown : AppError {
         override val isRetryable = false
+    }
+
+    sealed interface LinkError : AppError {
+        override val isRetryable: Boolean get() = false
+
+        data object SelfLinkProhibited : LinkError
+        data object MediaNotFound : LinkError
+        data object AlreadyLinked : LinkError
+        data object LinkConflict : LinkError
+        data object InvalidPreferredMember : LinkError
+        data object LinkGroupNotFound : LinkError
+        data object CorruptedGroup : LinkError
     }
 }

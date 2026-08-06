@@ -42,7 +42,8 @@ class SearchViewModelTest {
                 missingRepository,
                 RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                FakeCredentialRepository(TmdbCredentialStatus.NotConfigured)
+                FakeCredentialRepository(TmdbCredentialStatus.NotConfigured),
+                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
             )
         runCurrent()
         assertEquals(SearchCredentialAvailability.REQUIRED, missing.uiState.value.credentialAvailability)
@@ -54,7 +55,8 @@ class SearchViewModelTest {
                 validRepository,
                 RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                FakeCredentialRepository(TmdbCredentialStatus.Valid)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid),
+                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
             )
         runCurrent()
         valid.onQueryChanged("   ")
@@ -312,7 +314,13 @@ class SearchViewModelTest {
                 AppResult.Success(page(query.query, 1, 1))
             }
         val viewModel =
-            SearchViewModel(repository, RecordingAnimeRepository(), FakeLibraryRepository(), credentialRepository)
+            SearchViewModel(
+                repository,
+                RecordingAnimeRepository(),
+                FakeLibraryRepository(),
+                credentialRepository,
+                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+            )
         runCurrent()
         viewModel.onQueryChanged("fixed")
         advanceTimeBy(SearchViewModel.SEARCH_DEBOUNCE_MILLIS)
@@ -336,7 +344,8 @@ class SearchViewModelTest {
                 RecordingMediaRepository(),
                 RecordingAnimeRepository(),
                 libraryRepository,
-                FakeCredentialRepository(TmdbCredentialStatus.Valid)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid),
+                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
             )
         val item = result("42")
         runCurrent()
@@ -360,7 +369,8 @@ class SearchViewModelTest {
                 RecordingMediaRepository(),
                 RecordingAnimeRepository(),
                 libraryRepository,
-                FakeCredentialRepository(TmdbCredentialStatus.Valid)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid),
+                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
             )
         val item = result("42")
         runCurrent()
@@ -381,7 +391,8 @@ class SearchViewModelTest {
             tmdb,
             anime,
             FakeLibraryRepository(),
-            FakeCredentialRepository(TmdbCredentialStatus.NotConfigured)
+            FakeCredentialRepository(TmdbCredentialStatus.NotConfigured),
+            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
         )
         runCurrent()
 
@@ -395,13 +406,42 @@ class SearchViewModelTest {
         assertTrue(viewModel.uiState.value.content is SearchContentState.Results)
     }
 
+    @Test
+    fun disabledAnimePolicyOmitsAnimeCategoryAndPreventsJikanSearch() = runTest(mainDispatcherRule.dispatcher) {
+        val tmdb = RecordingMediaRepository()
+        val anime = RecordingAnimeRepository()
+        val viewModel = SearchViewModel(
+            tmdb,
+            anime,
+            FakeLibraryRepository(),
+            FakeCredentialRepository(TmdbCredentialStatus.Valid),
+            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = false)
+        )
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.availableCategories.contains(MediaSearchCategory.ANIME))
+        assertEquals(
+            listOf(MediaSearchCategory.MOVIES, MediaSearchCategory.TV_SERIES),
+            viewModel.uiState.value.availableCategories
+        )
+
+        viewModel.onCategoryChanged(MediaSearchCategory.ANIME)
+        runCurrent()
+        assertEquals(MediaSearchCategory.MOVIES, viewModel.uiState.value.category)
+
+        performDebouncedSearch(viewModel, "Naruto")
+        assertTrue(anime.requests.isEmpty())
+        assertEquals("Naruto", tmdb.requests.single().query)
+    }
+
     private fun validViewModel(repository: MediaRepository): SearchViewModel {
         val viewModel =
             SearchViewModel(
                 repository,
                 RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                FakeCredentialRepository(TmdbCredentialStatus.Valid)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid),
+                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
             )
         return viewModel
     }
@@ -429,12 +469,16 @@ class SearchViewModelTest {
         }
     }
 
-    private class RecordingAnimeRepository : AnimeRepository {
+    private class RecordingAnimeRepository(
+        var responder: suspend (MediaSearchQuery) -> AppResult<MediaSearchPage> = { query ->
+            AppResult.Success(page(query.query, query.page, query.page, MediaType.ANIME))
+        }
+    ) : AnimeRepository {
         val requests = mutableListOf<MediaSearchQuery>()
 
         override suspend fun search(query: MediaSearchQuery): AppResult<MediaSearchPage> {
             requests += query
-            return AppResult.Success(page(query.query, query.page, query.page, MediaType.ANIME))
+            return responder(query)
         }
     }
 

@@ -380,4 +380,23 @@
     <string name="tvtime_import_episode_group">%1$s · season %2$d · %3$d watched episodes</string>
     <string name="tvtime_import_skip_season">Skip this season</string>
     <string name="tvtime_import_invalid_records_summary">%1$d invalid source records cannot be accepted.</string>
+    <string name="possible_duplicates">Possible duplicates</string>
+    <string name="possible_duplicate">Possible duplicate</string>
+    <string name="compare_versions">Compare versions</string>
+    <string name="link_versions">Link versions</string>
+    <string name="linked_versions">Linked versions</string>
+    <string name="preferred_version">Preferred version</string>
+    <string name="change_preferred_version">Change preferred version</string>
+    <string name="separate_versions">Separate versions</string>
+    <string name="linking_explanation">Linking changes how Bingee presents these titles. It does not delete or combine progress, ratings, or provider data.</string>
+    <string name="unlinking_explanation">Separating these versions removes only the link. Your Library entries, progress, and ratings remain unchanged.</string>
+    <string name="versions_linked">Versions linked</string>
+    <string name="preferred_version_updated">Preferred version updated</string>
+    <string name="linked_providers_summary">Linked: %1$s + %2$s</string>
+    <string name="preferred_explanation">Used for the main Library card and default linked-title navigation.</string>
+    <string name="review_all_candidates">Review all possible duplicates (%1$d)</string>
+    <string name="link_confirm_title">Link versions?</string>
+    <string name="unlink_confirm_title">Separate versions?</string>
+    <string name="anime_feature_unavailable">Anime support is temporarily unavailable in this version. Your saved data has been preserved.</string>
+    <string name="backup_restore_anime_preserved">Backup restored. Anime data was preserved and will become available in a future update.</string>
 </resources>

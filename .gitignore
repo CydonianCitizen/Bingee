@@ -1,5 +1,6 @@
 # Gradle and build output
 .gradle/
+.kotlin/
 **/build/
 
 # Local Android SDK and IDE state
@@ -24,8 +25,8 @@ keystore.properties
 secrets.properties
 secrets.xml
 
-# Private external-import evidence
-.local-evidence/tv-time/
+# Private local evidence
+.local-evidence/
 
 # Operating-system files
 .DS_Store

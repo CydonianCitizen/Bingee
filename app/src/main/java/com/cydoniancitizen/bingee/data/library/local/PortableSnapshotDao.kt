@@ -110,6 +110,18 @@ internal abstract class PortableSnapshotDao {
     @Query("DELETE FROM notification_deliveries")
     abstract suspend fun deleteNotificationDeliveries()
 
+    @Query("DELETE FROM media_link_audit_members")
+    abstract suspend fun deleteLinkAuditMembers()
+
+    @Query("DELETE FROM media_link_audit")
+    abstract suspend fun deleteLinkAudit()
+
+    @Query("DELETE FROM media_link_members")
+    abstract suspend fun deleteLinkMembers()
+
+    @Query("DELETE FROM media_link_groups")
+    abstract suspend fun deleteLinkGroups()
+
     @Query("DELETE FROM release_events")
     abstract suspend fun deleteReleaseEvents()
 

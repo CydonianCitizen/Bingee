@@ -129,7 +129,8 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 9; schemas 1 through 9 remain version controlled. Explicit migration 8→9 creates empty `anime_details`, `anime_relations`, and `anime_progress` structures without rewriting v8 media, TV Time provenance, ratings, progress, events, notifications, or preferences.
+- Room database `bingee.db` is version 1 initial stable schema. Future schema changes begin with `Migration(1, 2)`.
+
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
@@ -237,4 +238,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0021. ADR 0020 keeps Search provider-separated; ADR 0021 keeps every Jikan entry, cour, sequel, and relation distinct. Cross-provider linking, per-episode anime history, anime notifications, manga, accounts, recommendations, cloud sync, and other import formats remain deferred.
+Accepted decisions are recorded in ADRs 0001–0023. ADR 0020 keeps Search provider-separated; ADR 0021 keeps every Jikan entry, cour, sequel, and relation distinct; ADR 0022 governs cross-provider equivalence and reversible media links; ADR 0023 establishes multiplatform readiness without premature Android migration before `1.0.0-stable`. Backup v3 serves as the cross-platform data contract. Cross-provider linking, per-episode anime history, anime notifications, manga, accounts, recommendations, cloud sync, and other import formats remain deferred.

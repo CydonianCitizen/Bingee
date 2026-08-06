@@ -355,7 +355,12 @@ private fun BackupSection(
         }
     }
     if (state.operation == BackupOperation.SUCCESS && state.failure == null) {
-        Text(stringResource(R.string.backup_success))
+        val message = if (state.hasAnimePreserved) {
+            stringResource(R.string.backup_restore_anime_preserved)
+        } else {
+            stringResource(R.string.backup_success)
+        }
+        Text(message)
     }
 }
 

@@ -3,11 +3,15 @@ package com.cydoniancitizen.bingee.feature.details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
 import com.cydoniancitizen.bingee.core.model.CachedSeason
 import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.LinkedMediaIdentity
+import com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin
+import com.cydoniancitizen.bingee.core.model.MediaLinkGroup
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
@@ -19,8 +23,11 @@ import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.equivalence.MediaEquivalenceCandidate
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
+import com.cydoniancitizen.bingee.domain.repository.MediaEquivalenceCandidateRepository
+import com.cydoniancitizen.bingee.domain.repository.MediaLinkRepository
 import com.cydoniancitizen.bingee.domain.repository.RatingRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
@@ -103,7 +110,9 @@ internal data class MediaDetailsUiState(
     val movieProgress: MovieProgressState = MovieProgressState.NotApplicable,
     val series: SeriesDetailUiState = SeriesDetailUiState(),
     val progressError: AppError? = null,
-    val rating: DetailRatingState = DetailRatingState.Loading
+    val rating: DetailRatingState = DetailRatingState.Loading,
+    val candidate: MediaEquivalenceCandidate? = null,
+    val linkGroup: MediaLinkGroup? = null
 )
 
 @HiltViewModel
@@ -113,7 +122,10 @@ internal class MediaDetailsViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val seriesRepository: SeriesRepository,
     private val progressRepository: WatchProgressRepository,
-    private val ratingRepository: RatingRepository
+    private val ratingRepository: RatingRepository,
+    private val candidateRepository: MediaEquivalenceCandidateRepository,
+    private val linkRepository: MediaLinkRepository,
+    private val availability: AnimeFeatureAvailability
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MediaDetailsUiState())
     val uiState: StateFlow<MediaDetailsUiState> = mutableUiState.asStateFlow()
@@ -141,6 +153,7 @@ internal class MediaDetailsViewModel @Inject constructor(
                 observeDetails(args)
                 observeMembership(args)
                 observeRating(args.reference)
+                observeEquivalence(args)
                 if (args.mediaType == MediaType.MOVIE) {
                     mutableUiState.update { it.copy(movieProgress = MovieProgressState.Loading) }
                     observeMovieProgress(args.reference)
@@ -510,6 +523,46 @@ internal class MediaDetailsViewModel @Inject constructor(
                             )
                     )
                 )
+            }
+        }
+    }
+
+    fun changePreferredPresentation(newPreferred: LinkedMediaIdentity) {
+        val group = mutableUiState.value.linkGroup ?: return
+        viewModelScope.launch {
+            linkRepository.changePreferredPresentation(
+                group.groupId,
+                newPreferred,
+                MediaLinkAuditOrigin.MANUAL_USER_ACTION
+            )
+        }
+    }
+
+    fun unlink() {
+        val group = mutableUiState.value.linkGroup ?: return
+        viewModelScope.launch {
+            linkRepository.unlink(group.groupId, MediaLinkAuditOrigin.MANUAL_USER_ACTION)
+        }
+    }
+
+    private fun observeEquivalence(args: DetailRouteArgs) {
+        if (!availability.isAvailable) return
+        val identity =
+            LinkedMediaIdentity(
+                source = args.reference.source,
+                mediaType = args.mediaType,
+                externalId = args.reference.externalId
+            )
+        viewModelScope.launch {
+            candidateRepository.observeCandidatesForMedia(identity).collectLatest { candidates ->
+                mutableUiState.update { it.copy(candidate = candidates.firstOrNull()) }
+            }
+        }
+        viewModelScope.launch {
+            linkRepository.observeLinkForMedia(identity).collectLatest { result ->
+                mutableUiState.update {
+                    it.copy(linkGroup = (result as? AppResult.Success<MediaLinkGroup?>)?.value)
+                }
             }
         }
     }

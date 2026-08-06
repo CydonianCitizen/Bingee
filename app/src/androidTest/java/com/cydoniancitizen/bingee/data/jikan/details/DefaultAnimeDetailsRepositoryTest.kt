@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
 import com.cydoniancitizen.bingee.core.model.AnimeDetails
 import com.cydoniancitizen.bingee.core.model.AnimeFormat
@@ -76,7 +77,8 @@ class DefaultAnimeDetailsRepositoryTest {
             client,
             metadataStore,
             CacheFreshnessPolicy(clock),
-            clock
+            clock,
+            TestingAnimeFeatureAvailability(isAvailable = true)
         )
     }
 

@@ -104,6 +104,7 @@ internal fun LibraryContent(
         )
         LibraryControls(
             query = state.query,
+            availableMediaFilters = state.availableMediaFilters,
             onSearchQueryChanged = onSearchQueryChanged,
             onClearSearch = onClearSearch,
             onMediaFilterChanged = onMediaFilterChanged,
@@ -176,6 +177,7 @@ internal fun LibraryContent(
 @Composable
 private fun LibraryControls(
     query: LibraryQuery,
+    availableMediaFilters: List<LibraryMediaFilter>,
     onSearchQueryChanged: (String) -> Unit,
     onClearSearch: () -> Unit,
     onMediaFilterChanged: (LibraryMediaFilter) -> Unit,
@@ -198,7 +200,7 @@ private fun LibraryControls(
             null
         }
     )
-    val mediaFilters = LibraryMediaFilter.entries
+    val mediaFilters = availableMediaFilters
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         mediaFilters.forEachIndexed { index, filter ->
             SegmentedButton(

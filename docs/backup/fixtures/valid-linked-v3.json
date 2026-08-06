@@ -1,0 +1,71 @@
+{
+  "formatId": "bingee-backup",
+  "schemaVersion": 3,
+  "exportedAt": "2026-08-05T12:00:00Z",
+  "data": {
+    "media": [
+      {
+        "primaryRef": {"source": "TMDB", "externalId": "101"},
+        "externalRefs": [{"source": "TMDB", "externalId": "101"}],
+        "mediaType": "MOVIE",
+        "title": "Synthetic Movie",
+        "originalTitle": null,
+        "overview": null,
+        "posterUrl": null,
+        "releaseDate": "2026-01-01"
+      },
+      {
+        "primaryRef": {"source": "JIKAN", "externalId": "201"},
+        "externalRefs": [{"source": "JIKAN", "externalId": "201"}],
+        "mediaType": "ANIME",
+        "title": "Synthetic Anime",
+        "originalTitle": null,
+        "overview": null,
+        "posterUrl": null,
+        "releaseDate": null
+      }
+    ],
+    "seasons": [],
+    "episodes": [],
+    "library": [
+      {"mediaRef": {"source": "TMDB", "externalId": "101"}, "addedAt": "2026-01-01T00:00:00Z"}
+    ],
+    "movieProgress": [],
+    "episodeProgress": [],
+    "ratings": [],
+    "preferences": {
+      "notificationLeadDays": 1,
+      "notifyMovieReleases": true,
+      "notifySeasonPremieres": true,
+      "notifyEpisodeAirings": true
+    },
+    "animeDetails": [],
+    "animeRelations": [],
+    "animeProgress": [],
+    "mediaLinkGroups": [
+      {
+        "groupId": "group-uuid-101",
+        "members": [
+          {"source": "TMDB", "mediaType": "MOVIE", "externalId": "101"},
+          {"source": "JIKAN", "mediaType": "ANIME", "externalId": "201"}
+        ],
+        "preferredPresentation": {"source": "TMDB", "mediaType": "MOVIE", "externalId": "101"},
+        "createdAt": "2026-01-02T10:00:00Z",
+        "updatedAt": "2026-01-02T10:00:00Z"
+      }
+    ],
+    "mediaLinkAudit": [
+      {
+        "groupId": "group-uuid-101",
+        "action": "LINKED",
+        "timestamp": "2026-01-02T10:00:00Z",
+        "origin": "MANUAL_USER_ACTION",
+        "members": [
+          {"source": "TMDB", "mediaType": "MOVIE", "externalId": "101"},
+          {"source": "JIKAN", "mediaType": "ANIME", "externalId": "201"}
+        ],
+        "preferredPresentation": {"source": "TMDB", "mediaType": "MOVIE", "externalId": "101"}
+      }
+    ]
+  }
+}

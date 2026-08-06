@@ -1,11 +1,45 @@
 package com.cydoniancitizen.bingee.data.library.local
 
+import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
+import com.cydoniancitizen.bingee.core.model.AnimeFormat
+import com.cydoniancitizen.bingee.core.model.AnimeStatus
+import com.cydoniancitizen.bingee.core.model.LinkedMediaIdentity
+import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.importexport.BACKUP_FORMAT_ID
+import com.cydoniancitizen.bingee.data.importexport.BACKUP_SCHEMA_VERSION
+import com.cydoniancitizen.bingee.data.importexport.BACKUP_SCHEMA_VERSION_V3
+import com.cydoniancitizen.bingee.data.importexport.BackupAnimeDetails
+import com.cydoniancitizen.bingee.data.importexport.BackupAnimeProgress
+import com.cydoniancitizen.bingee.data.importexport.BackupData
+import com.cydoniancitizen.bingee.data.importexport.BackupDataStore
+import com.cydoniancitizen.bingee.data.importexport.BackupDocument
+import com.cydoniancitizen.bingee.data.importexport.BackupLibraryEntry
+import com.cydoniancitizen.bingee.data.importexport.BackupMedia
+import com.cydoniancitizen.bingee.data.importexport.BackupPreferences
+import com.cydoniancitizen.bingee.data.importexport.BackupRating
+import com.cydoniancitizen.bingee.data.importexport.BackupRef
+import com.cydoniancitizen.bingee.data.importexport.RestoreStage
+import com.cydoniancitizen.bingee.data.importexport.ValidatedBackupPlan
+import com.cydoniancitizen.bingee.data.link.RoomMediaLinkRepository
+import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.fail
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,471 +54,348 @@ class BingeeDatabaseMigrationTest {
         FrameworkSQLiteOpenHelperFactory()
     )
 
-    @Test
-    fun migrateOneToTwoPreservesCanonicalRowsReferencesMembershipAndAddedTimes() {
-        helper.createDatabase(TEST_DB, 1).apply {
-            execSQL(
-                "INSERT INTO media_entries(" +
-                    "local_media_id, media_type, title, original_title, overview, poster_url, " +
-                    "release_date, created_at, metadata_updated_at) " +
-                    "VALUES(1, 'MOVIE', 'Movie', NULL, 'Movie overview', NULL, '2020-01-01', '2026-08-01T10:00:00Z', '2026-08-01T10:00:00Z')"
-            )
-            execSQL(
-                "INSERT INTO media_entries(" +
-                    "local_media_id, media_type, title, original_title, overview, poster_url, " +
-                    "release_date, created_at, metadata_updated_at) " +
-                    "VALUES(2, 'SERIES', 'Series', NULL, 'Series overview', NULL, '2021-02-02', '2026-08-01T11:00:00Z', '2026-08-01T11:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '101')")
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '202')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T11:00:00Z')")
-            close()
-        }
+    private lateinit var database: BingeeDatabase
+    private val clock = Clock.fixed(Instant.parse("2026-08-06T10:00:00Z"), ZoneOffset.UTC)
 
-        val migrated = helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2)
+    @Before
+    fun setUp() {
+        database = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            BingeeDatabase::class.java
+        ).allowMainThreadQueries().build()
+    }
 
-        assertEquals(2, migrated.count("media_entries"))
-        assertEquals(2, migrated.count("external_refs"))
-        assertEquals(2, migrated.count("library_entries"))
-        assertEquals(0, migrated.count("media_details"))
-        assertEquals(0, migrated.count("media_genres"))
-        migrated.query("SELECT title, media_type FROM media_entries ORDER BY local_media_id").use { cursor ->
-            assertFalse(cursor.isAfterLast)
-            cursor.moveToFirst()
-            assertEquals("Movie", cursor.getString(0))
-            assertEquals("MOVIE", cursor.getString(1))
-            cursor.moveToNext()
-            assertEquals("Series", cursor.getString(0))
-            assertEquals("SERIES", cursor.getString(1))
-        }
-        migrated.query("SELECT added_at FROM library_entries ORDER BY local_media_id").use { cursor ->
-            cursor.moveToFirst()
-            assertEquals("2026-08-02T10:00:00Z", cursor.getString(0))
-            cursor.moveToNext()
-            assertEquals("2026-08-02T11:00:00Z", cursor.getString(0))
-        }
-        migrated.close()
+    @After
+    fun tearDown() {
+        database.close()
     }
 
     @Test
-    fun migrateTwoToThreePreservesVersionTwoDataAndCreatesEmptyProgressStructures() {
-        helper.createDatabase(V2_TO_V3_DB, 2).apply {
-            insertVersionTwoFixture()
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(V2_TO_V3_DB, 3, true, MIGRATION_2_3)
-
-        assertVersionTwoFixtureAndEmptyMilestoneSixTables(migrated)
-        migrated.close()
-    }
-
-    @Test
-    fun migrateOneThroughSixPreservesCanonicalRowsAndValidatesFinalSchema() {
-        helper.createDatabase(V1_TO_V6_DB, 1).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
-                    "overview, poster_url, release_date, created_at, metadata_updated_at) " +
-                    "VALUES(1, 'SERIES', 'Series', NULL, NULL, NULL, '2020-01-01', " +
-                    "'2026-08-01T10:00:00Z', '2026-08-01T10:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
-                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
-                    "(2, 'MOVIE', 'Movie', NULL, NULL, NULL, '2021-01-01', " +
-                    "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '303')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T11:00:00Z')")
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(
-            V1_TO_V6_DB,
-            6,
-            true,
-            MIGRATION_1_2,
-            MIGRATION_2_3,
-            MIGRATION_3_4,
-            MIGRATION_4_5,
-            MIGRATION_5_6
-        )
-
-        assertEquals(2, migrated.count("media_entries"))
-        assertEquals(2, migrated.count("external_refs"))
-        assertEquals(2, migrated.count("library_entries"))
-        assertNewMilestoneSixTablesEmpty(migrated)
-        assertEquals(0, migrated.count("media_ratings"))
-        assertEquals(1, migrated.count("release_events"))
-        assertEquals(0, migrated.count("calendar_refresh_state"))
-        assertEquals(0, migrated.count("notification_deliveries"))
-        migrated.close()
-    }
-
-    @Test
-    fun migrateFiveToSixPreservesAllVersionFiveDataAndCreatesEmptyDeliveryLedger() {
-        helper.createDatabase(V5_TO_V6_DB, 5).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                    "release_date, created_at, metadata_updated_at) VALUES" +
-                    "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, '2026-08-05', " +
-                    "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
-            execSQL(
-                "INSERT INTO media_ratings(local_media_id, rating_value, rated_at, updated_at) " +
-                    "VALUES(1, 8, '2026-08-03T11:00:00Z', '2026-08-03T11:00:00Z')"
-            )
-            execSQL("INSERT INTO movie_watch_progress(local_media_id, watched_at) VALUES(1, '2026-08-03T11:00:00Z')")
-            execSQL(
-                "INSERT INTO release_events(local_event_id, local_media_id, local_season_id, local_episode_id, " +
-                    "source, subject_type, subject_external_id, event_type, event_date, projected_at, " +
-                    "source_metadata_updated_at) VALUES(1, 1, NULL, NULL, 'TMDB', 'MEDIA', '42', " +
-                    "'MOVIE_RELEASE', '2026-08-05', '2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z')"
-            )
-            execSQL(
-                "INSERT INTO calendar_refresh_state(singleton_key, last_successful_refresh_at) " +
-                    "VALUES(1, '2026-08-03T12:00:00Z')"
-            )
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(V5_TO_V6_DB, 6, true, MIGRATION_5_6)
+    fun createDatabaseVersionOneValidatesCanonicalSchema() {
+        val db = helper.createDatabase(TEST_DB, 1)
+        val validated = helper.runMigrationsAndValidate(TEST_DB, 1, true)
 
         listOf(
             "media_entries",
             "external_refs",
             "library_entries",
-            "media_ratings",
-            "movie_watch_progress",
-            "release_events",
-            "calendar_refresh_state"
-        ).forEach { assertEquals(1, migrated.count(it)) }
-        assertEquals(0, migrated.count("notification_deliveries"))
-        migrated.close()
-    }
-
-    @Test
-    fun migrateSixToSevenCreatesPortablePreferencesWithoutDeviceEnablement() {
-        helper.createDatabase(V6_TO_V7_DB, 6).close()
-
-        val migrated = helper.runMigrationsAndValidate(V6_TO_V7_DB, 7, true, MIGRATION_6_7)
-
-        assertEquals(1, migrated.count("portable_preferences"))
-        migrated.query(
-            "SELECT notification_lead_days, notify_movie_releases, notify_season_premieres, " +
-                "notify_episode_airings, legacy_bridge_completed FROM portable_preferences"
-        ).use { cursor ->
-            cursor.moveToFirst()
-            assertEquals(1, cursor.getInt(0))
-            assertEquals(1, cursor.getInt(1))
-            assertEquals(1, cursor.getInt(2))
-            assertEquals(1, cursor.getInt(3))
-            assertEquals(0, cursor.getInt(4))
-        }
-        migrated.close()
-    }
-
-    @Test
-    fun migrateOneThroughSevenPreservesExistingRowsAndValidatesFullChain() {
-        helper.createDatabase(V1_TO_V7_DB, 1).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                    "release_date, created_at, metadata_updated_at) VALUES(1, 'MOVIE', 'Movie', NULL, NULL, NULL, " +
-                    "'2026-01-01', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '1')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-01-02T00:00:00Z')")
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(
-            V1_TO_V7_DB,
-            7,
-            true,
-            MIGRATION_1_2,
-            MIGRATION_2_3,
-            MIGRATION_3_4,
-            MIGRATION_4_5,
-            MIGRATION_5_6,
-            MIGRATION_6_7
-        )
-
-        assertEquals(1, migrated.count("media_entries"))
-        assertEquals(1, migrated.count("external_refs"))
-        assertEquals(1, migrated.count("library_entries"))
-        assertEquals(1, migrated.count("portable_preferences"))
-        migrated.close()
-    }
-
-    @Test
-    fun migrateSevenToEightCreatesEmptyImportProvenanceTable() {
-        helper.createDatabase(V7_TO_V8_DB, 7).close()
-
-        val migrated = helper.runMigrationsAndValidate(V7_TO_V8_DB, 8, true, MIGRATION_7_8)
-
-        assertEquals(0, migrated.count("import_provenance_refs"))
-        migrated.close()
-    }
-
-    @Test
-    fun migrateFourToFiveBackfillsDatedMetadataAndPreservesPersonalState() {
-        helper.createDatabase(V4_TO_V5_DB, 4).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
-                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
-                    "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, '2027-01-02', " +
-                    "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')," +
-                    "(2, 'SERIES', 'Series', NULL, NULL, NULL, NULL, " +
-                    "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '100')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T10:00:00Z')")
-            execSQL(
-                "INSERT INTO seasons(local_season_id, local_media_id, source, external_id, season_number, " +
-                    "name, overview, poster_url, air_date, episode_count, metadata_updated_at, episodes_fetched_at) " +
-                    "VALUES(10, 2, 'TMDB', '42', 0, 'Specials', NULL, NULL, '2027-01-03', 2, " +
-                    "'2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z')"
-            )
-            execSQL(
-                "INSERT INTO episodes(local_episode_id, local_season_id, source, external_id, episode_number, " +
-                    "title, overview, air_date, runtime_minutes, still_url, metadata_updated_at) VALUES" +
-                    "(20, 10, 'TMDB', '42', 1, 'Dated', NULL, '2027-01-04', NULL, NULL, " +
-                    "'2026-08-03T10:00:00Z')," +
-                    "(21, 10, 'TMDB', '43', 2, 'Undated', NULL, NULL, NULL, NULL, " +
-                    "'2026-08-03T10:00:00Z')"
-            )
-            execSQL("INSERT INTO movie_watch_progress(local_media_id, watched_at) VALUES(1, '2026-08-03T11:00:00Z')")
-            execSQL(
-                "INSERT INTO episode_watch_progress(local_episode_id, watched_at) VALUES(20, '2026-08-03T11:00:00Z')"
-            )
-            execSQL(
-                "INSERT INTO media_ratings(local_media_id, rating_value, rated_at, updated_at) " +
-                    "VALUES(1, 8, '2026-08-03T11:00:00Z', '2026-08-03T11:00:00Z')"
-            )
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(V4_TO_V5_DB, 5, true, MIGRATION_4_5)
-
-        assertEquals(3, migrated.count("release_events"))
-        assertEquals(0, migrated.count("calendar_refresh_state"))
-        assertEquals(1, migrated.count("media_ratings"))
-        assertEquals(1, migrated.count("movie_watch_progress"))
-        assertEquals(1, migrated.count("episode_watch_progress"))
-        assertEquals(2, migrated.count("library_entries"))
-        migrated.query(
-            "SELECT subject_type, event_type, event_date FROM release_events " +
-                "ORDER BY event_date"
-        ).use { cursor ->
-            cursor.moveToFirst()
-            assertEquals("MEDIA", cursor.getString(0))
-            assertEquals("MOVIE_RELEASE", cursor.getString(1))
-            assertEquals("2027-01-02", cursor.getString(2))
-            cursor.moveToNext()
-            assertEquals("SEASON", cursor.getString(0))
-            cursor.moveToNext()
-            assertEquals("EPISODE", cursor.getString(0))
-        }
-        migrated.close()
-    }
-
-    @Test
-    fun migrateThreeToFourPreservesAllVersionThreeDataAndCreatesEmptyRatings() {
-        helper.createDatabase(V3_TO_V4_DB, 3).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
-                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
-                    "(1, 'SERIES', 'Series', 'Original', 'Overview', NULL, '2020-01-01', " +
-                    "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
-                    "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
-                    "(2, 'MOVIE', 'Movie', NULL, NULL, NULL, '2021-01-01', " +
-                    "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
-            )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'TMDB', '303')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(2, '2026-08-02T11:00:00Z')")
-            execSQL(
-                "INSERT INTO media_details(local_media_id, backdrop_url, production_status, original_language, " +
-                    "runtime_minutes, episode_runtime_minutes, number_of_seasons, number_of_episodes, " +
-                    "details_fetched_at) " +
-                    "VALUES(1, NULL, 'ENDED', 'en', NULL, 50, 1, 1, '2026-08-03T10:00:00Z')"
-            )
-            execSQL("INSERT INTO media_genres(local_media_id, genre_order, name) VALUES(1, 0, 'Drama')")
-            execSQL(
-                "INSERT INTO seasons(local_season_id, local_media_id, source, external_id, season_number, name, " +
-                    "overview, poster_url, air_date, episode_count, metadata_updated_at, episodes_fetched_at) " +
-                    "VALUES(11, 1, 'TMDB', '11', 1, 'Season 1', NULL, NULL, NULL, 1, " +
-                    "'2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z')"
-            )
-            execSQL(
-                "INSERT INTO episodes(local_episode_id, local_season_id, source, external_id, episode_number, title, " +
-                    "overview, air_date, runtime_minutes, still_url, metadata_updated_at) " +
-                    "VALUES(101, 11, 'TMDB', '101', 1, 'Episode', NULL, NULL, 50, NULL, '2026-08-03T10:00:00Z')"
-            )
-            execSQL(
-                "INSERT INTO episode_watch_progress(local_episode_id, watched_at) VALUES(101, '2026-08-03T11:00:00Z')"
-            )
-            execSQL("INSERT INTO movie_watch_progress(local_media_id, watched_at) VALUES(2, '2026-08-03T11:00:00Z')")
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(V3_TO_V4_DB, 4, true, MIGRATION_3_4)
-
-        listOf("media_entries", "external_refs", "library_entries").forEach {
-            assertEquals(2, migrated.count(it))
-        }
-        listOf(
             "media_details",
             "media_genres",
             "seasons",
             "episodes",
-            "episode_watch_progress"
-        ).forEach { assertEquals(1, migrated.count(it)) }
-        assertEquals(1, migrated.count("movie_watch_progress"))
-        assertEquals(0, migrated.count("media_ratings"))
-        migrated.close()
+            "episode_watch_progress",
+            "movie_watch_progress",
+            "media_ratings",
+            "release_events",
+            "calendar_refresh_state",
+            "notification_deliveries",
+            "portable_preferences",
+            "import_provenance_refs",
+            "anime_details",
+            "anime_progress",
+            "anime_relations",
+            "media_link_groups",
+            "media_link_members",
+            "media_link_audit",
+            "media_link_audit_members"
+        ).forEach { table ->
+            val count = validated.query("SELECT COUNT(*) FROM $table").use { c ->
+                c.moveToFirst()
+                c.getInt(0)
+            }
+            assertEquals(0, count)
+        }
+
+        db.close()
+        validated.close()
     }
 
     @Test
-    fun migrateEightToNinePreservesVersionEightDataAndCreatesEmptyAnimeTables() {
-        helper.createDatabase(V8_TO_V9_DB, 8).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                    "release_date, created_at, metadata_updated_at) VALUES(1, 'MOVIE', 'Movie', NULL, NULL, NULL, " +
-                    "'2026-01-01', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    fun daoSmokeTestsOnVersionOneBaseline() = runBlocking {
+        val mediaId = database.portableSnapshotDao().insertMedia(
+            MediaEntity(
+                mediaType = MediaType.MOVIE,
+                title = "Baseline Movie",
+                originalTitle = "Baseline Original",
+                overview = "Overview",
+                posterUrl = null,
+                releaseDate = LocalDate.parse("2026-01-01"),
+                createdAt = clock.instant(),
+                metadataUpdatedAt = clock.instant()
             )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
-            execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-01-02T00:00:00Z')")
-            execSQL(
-                "INSERT INTO import_provenance_refs(namespace, external_id, target_type, local_media_id, " +
-                    "local_season_id, local_episode_id) VALUES('tvtime:movie', 'source-1', 'MEDIA', 1, NULL, NULL)"
-            )
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(V8_TO_V9_DB, 9, true, MIGRATION_8_9)
-
-        assertEquals(1, migrated.count("media_entries"))
-        assertEquals(1, migrated.count("external_refs"))
-        assertEquals(1, migrated.count("library_entries"))
-        assertEquals(1, migrated.count("import_provenance_refs"))
-        assertEquals(0, migrated.count("anime_details"))
-        assertEquals(0, migrated.count("anime_relations"))
-        assertEquals(0, migrated.count("anime_progress"))
-
-        migrated.execSQL(
-            "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                "release_date, created_at, metadata_updated_at) VALUES(2, 'ANIME', 'Anime', NULL, NULL, NULL, " +
-                "NULL, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
         )
-        migrated.execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(2, 'JIKAN', '42')")
-        assertEquals(2, migrated.count("external_refs"))
-        migrated.close()
+        database.portableSnapshotDao().insertExternalRef(
+            ExternalRefEntity(localMediaId = mediaId, source = MediaSource.TMDB, externalId = "1001")
+        )
+        database.portableSnapshotDao().insertMembership(
+            LibraryMembershipEntity(localMediaId = mediaId, addedAt = clock.instant())
+        )
+
+        val libraryItem = database.libraryDao().observeLibraryItem(MediaSource.TMDB, "1001").first()
+        assertNotNull(libraryItem)
+        assertEquals("Baseline Movie", libraryItem?.media?.title)
+
+        database.ratingDao().setRating(MediaSource.TMDB, "1001", 9, clock.instant())
+        val rating = database.ratingDao().observeRating(MediaSource.TMDB, "1001").first()
+        assertEquals(9, rating?.ratingValue)
+
+        database.portableSnapshotDao().insertAnimeDetails(
+            AnimeDetailsEntity(
+                localMediaId = mediaId,
+                format = AnimeFormat.TV,
+                providerStatus = AnimeStatus.FINISHED,
+                englishTitle = "Baseline Anime",
+                japaneseTitle = null,
+                synopsis = "Anime Overview",
+                episodeCount = 12,
+                duration = "24 min",
+                startDate = LocalDate.parse("2026-01-01"),
+                endDate = LocalDate.parse("2026-03-31"),
+                season = "WINTER",
+                year = 2026,
+                providerScore = 8.5,
+                imageUrl = null,
+                detailsUpdatedAt = clock.instant()
+            )
+        )
+        val animeRelation = database.animeDao().observeAnime("1001").first()
+        assertNotNull(animeRelation)
     }
 
     @Test
-    fun migrateOneThroughNinePreservesCanonicalRowsAndValidatesFinalSchema() {
-        helper.createDatabase(V1_TO_V9_DB, 1).apply {
-            execSQL(
-                "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                    "release_date, created_at, metadata_updated_at) VALUES(1, 'MOVIE', 'Movie', NULL, NULL, NULL, " +
-                    "'2026-01-01', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    fun backupV1RestoreAgainstVersionOneBaseline() = runBlocking {
+        val backupDataStore = createBackupDataStore()
+        val now = clock.instant()
+        val doc = BackupDocument(
+            formatId = BACKUP_FORMAT_ID,
+            schemaVersion = 1,
+            exportedAt = now,
+            data = BackupData(
+                media = listOf(
+                    BackupMedia(
+                        primaryRef = BackupRef(MediaSource.TMDB, "101"),
+                        externalRefs = listOf(BackupRef(MediaSource.TMDB, "101")),
+                        mediaType = MediaType.MOVIE,
+                        title = "V1 Backup Movie",
+                        originalTitle = null,
+                        overview = null,
+                        posterUrl = null,
+                        releaseDate = LocalDate.parse("2025-01-01")
+                    )
+                ),
+                seasons = emptyList(),
+                episodes = emptyList(),
+                library = listOf(BackupLibraryEntry(BackupRef(MediaSource.TMDB, "101"), now)),
+                movieProgress = emptyList(),
+                episodeProgress = emptyList(),
+                ratings = listOf(BackupRating(BackupRef(MediaSource.TMDB, "101"), 8, now, now)),
+                preferences = BackupPreferences(1, true, true, true),
+                animeDetails = emptyList(),
+                animeRelations = emptyList(),
+                animeProgress = emptyList()
             )
-            execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '42')")
-            close()
-        }
-
-        val migrated = helper.runMigrationsAndValidate(
-            V1_TO_V9_DB,
-            9,
-            true,
-            MIGRATION_1_2,
-            MIGRATION_2_3,
-            MIGRATION_3_4,
-            MIGRATION_4_5,
-            MIGRATION_5_6,
-            MIGRATION_6_7,
-            MIGRATION_7_8,
-            MIGRATION_8_9
         )
 
-        assertEquals(1, migrated.count("media_entries"))
-        assertEquals(1, migrated.count("external_refs"))
-        assertEquals(0, migrated.count("anime_details"))
-        assertEquals(0, migrated.count("anime_relations"))
-        assertEquals(0, migrated.count("anime_progress"))
-        migrated.close()
+        val plan = ValidatedBackupPlan(doc)
+        backupDataStore.restore(plan)
+
+        val library = database.libraryDao().observeLibraryItem(MediaSource.TMDB, "101").first()
+        assertNotNull(library)
+        assertEquals("V1 Backup Movie", library?.media?.title)
+
+        val rating = database.ratingDao().observeRating(MediaSource.TMDB, "101").first()
+        assertEquals(8, rating?.ratingValue)
     }
 
-    private fun androidx.sqlite.db.SupportSQLiteDatabase.insertVersionTwoFixture() {
-        execSQL(
-            "INSERT INTO media_entries(local_media_id, media_type, title, original_title, " +
-                "overview, poster_url, release_date, created_at, metadata_updated_at) " +
-                "VALUES(1, 'SERIES', 'Series', NULL, 'Overview', NULL, '2020-01-01', " +
-                "'2026-08-01T10:00:00Z', '2026-08-01T11:00:00Z')"
+    @Test
+    fun backupV2RestoreAgainstVersionOneBaseline() = runBlocking {
+        val backupDataStore = createBackupDataStore()
+        val now = clock.instant()
+        val animeRef = BackupRef(MediaSource.JIKAN, "5001")
+        val doc = BackupDocument(
+            formatId = BACKUP_FORMAT_ID,
+            schemaVersion = BACKUP_SCHEMA_VERSION,
+            exportedAt = now,
+            data = BackupData(
+                media = listOf(
+                    BackupMedia(
+                        primaryRef = animeRef,
+                        externalRefs = listOf(animeRef),
+                        mediaType = MediaType.ANIME,
+                        title = "V2 Anime Movie",
+                        originalTitle = null,
+                        overview = null,
+                        posterUrl = null,
+                        releaseDate = LocalDate.parse("2026-01-01")
+                    )
+                ),
+                seasons = emptyList(),
+                episodes = emptyList(),
+                library = listOf(BackupLibraryEntry(animeRef, now)),
+                movieProgress = emptyList(),
+                episodeProgress = emptyList(),
+                ratings = listOf(BackupRating(animeRef, 10, now, now)),
+                preferences = BackupPreferences(1, true, true, true),
+                animeDetails = listOf(
+                    BackupAnimeDetails(
+                        mediaRef = animeRef,
+                        format = AnimeFormat.MOVIE,
+                        status = AnimeStatus.FINISHED,
+                        englishTitle = "V2 Anime Movie English",
+                        japaneseTitle = "V2 Japanese",
+                        synopsis = "Synopsis",
+                        episodeCount = 1,
+                        duration = "120 min",
+                        startDate = LocalDate.parse("2026-01-01"),
+                        endDate = LocalDate.parse("2026-01-01"),
+                        season = null,
+                        year = 2026,
+                        providerScore = 9.0,
+                        posterUrl = null
+                    )
+                ),
+                animeRelations = emptyList(),
+                animeProgress = listOf(
+                    BackupAnimeProgress(
+                        mediaRef = animeRef,
+                        watchedEpisodeCount = 1,
+                        completedAt = now,
+                        completionOrigin = AnimeCompletionOrigin.EXPLICIT,
+                        updatedAt = now
+                    )
+                )
+            )
         )
-        execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '202')")
-        execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES(1, '2026-08-02T10:00:00Z')")
-        execSQL(
-            "INSERT INTO media_details(local_media_id, backdrop_url, production_status, " +
-                "original_language, runtime_minutes, episode_runtime_minutes, number_of_seasons, " +
-                "number_of_episodes, details_fetched_at) VALUES(1, NULL, 'ENDED', 'en', NULL, 50, 2, 10, " +
-                "'2026-08-03T10:00:00Z')"
+
+        val plan = ValidatedBackupPlan(doc)
+        backupDataStore.restore(plan)
+
+        val anime = database.animeDao().observeAnime("5001").first()
+        assertNotNull(anime)
+        assertEquals("V2 Anime Movie English", anime?.details?.englishTitle)
+        assertEquals(1, anime?.progress?.watchedEpisodeCount)
+    }
+
+    @Test
+    fun backupV3RestoreAgainstVersionOneBaseline() = runBlocking {
+        val backupDataStore = createBackupDataStore()
+        val linkRepo = RoomMediaLinkRepository(
+            database = database,
+            mediaLinkDao = database.mediaLinkDao(),
+            clock = clock,
+            uuidGenerator = { "link-uuid-v3" }
         )
-        execSQL("INSERT INTO media_genres(local_media_id, genre_order, name) VALUES(1, 0, 'Drama')")
-        execSQL("INSERT INTO media_genres(local_media_id, genre_order, name) VALUES(1, 1, 'Mystery')")
-    }
 
-    private fun assertVersionTwoFixtureAndEmptyMilestoneSixTables(database: androidx.sqlite.db.SupportSQLiteDatabase) {
-        assertEquals(1, database.count("media_entries"))
-        assertEquals(1, database.count("external_refs"))
-        assertEquals(1, database.count("library_entries"))
-        assertEquals(1, database.count("media_details"))
-        assertEquals(2, database.count("media_genres"))
-        database.query("SELECT name FROM media_genres ORDER BY genre_order").use { cursor ->
-            cursor.moveToFirst()
-            assertEquals("Drama", cursor.getString(0))
-            cursor.moveToNext()
-            assertEquals("Mystery", cursor.getString(0))
+        val tmdbMediaId = insertMediaFixture(MediaSource.TMDB, MediaType.MOVIE, "201", "Spirited Away TMDB")
+        val jikanMediaId = insertMediaFixture(MediaSource.JIKAN, MediaType.ANIME, "202", "Spirited Away JIKAN")
+
+        val first = LinkedMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, "201")
+        val second = LinkedMediaIdentity(MediaSource.JIKAN, MediaType.ANIME, "202")
+        linkRepo.createLink(first, second, preferredPresentation = first)
+
+        val exported = backupDataStore.readPortableData()
+        assertEquals(1, exported.mediaLinkGroups.size)
+        assertEquals(1, exported.mediaLinkAudit.size)
+
+        val doc = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION_V3, clock.instant(), exported)
+        val plan = ValidatedBackupPlan(doc)
+
+        backupDataStore.restore(plan)
+
+        val countGroups = database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM media_link_groups").use { c ->
+            c.moveToFirst()
+            c.getInt(0)
         }
-        assertNewMilestoneSixTablesEmpty(database)
+        assertEquals(1, countGroups)
     }
 
-    private fun assertNewMilestoneSixTablesEmpty(database: androidx.sqlite.db.SupportSQLiteDatabase) {
-        assertEquals(0, database.count("seasons"))
-        assertEquals(0, database.count("episodes"))
-        assertEquals(0, database.count("episode_watch_progress"))
-        assertEquals(0, database.count("movie_watch_progress"))
-    }
+    @Test
+    fun failedRestoreRollsBackTransactionOnVersionOneBaseline() = runBlocking {
+        val backupDataStore = createBackupDataStore()
+        insertMediaFixture(MediaSource.TMDB, MediaType.MOVIE, "301", "Pre-existing Movie")
 
-    private fun androidx.sqlite.db.SupportSQLiteDatabase.count(table: String): Int =
-        query("SELECT COUNT(*) FROM $table").use { cursor ->
-            cursor.moveToFirst()
-            cursor.getInt(0)
+        val doc = BackupDocument(
+            formatId = BACKUP_FORMAT_ID,
+            schemaVersion = 1,
+            exportedAt = clock.instant(),
+            data = BackupData(
+                media = listOf(
+                    BackupMedia(
+                        primaryRef = BackupRef(MediaSource.TMDB, "999"),
+                        externalRefs = listOf(BackupRef(MediaSource.TMDB, "999")),
+                        mediaType = MediaType.MOVIE,
+                        title = "New Movie",
+                        originalTitle = null,
+                        overview = null,
+                        posterUrl = null,
+                        releaseDate = null
+                    )
+                ),
+                seasons = emptyList(),
+                episodes = emptyList(),
+                library = emptyList(),
+                movieProgress = emptyList(),
+                episodeProgress = emptyList(),
+                ratings = emptyList(),
+                preferences = BackupPreferences(1, true, true, true),
+                animeDetails = emptyList(),
+                animeRelations = emptyList(),
+                animeProgress = emptyList()
+            )
+        )
+
+        val plan = ValidatedBackupPlan(doc)
+        try {
+            backupDataStore.restore(plan, failureInjector = { stage ->
+                if (stage == RestoreStage.EXTERNAL_REFERENCES) {
+                    throw IllegalStateException("TEST_RESTORE_FAILURE")
+                }
+            })
+            fail("Expected restore failure")
+        } catch (_: IllegalStateException) {
         }
+
+        val item = database.libraryDao().observeLibraryItem(MediaSource.TMDB, "301").first()
+        assertNotNull(item)
+        assertEquals("Pre-existing Movie", item?.media?.title)
+    }
+
+    private fun createBackupDataStore(): BackupDataStore {
+        val notificationPrefs = DataStoreReleaseNotificationPreferences(
+            ApplicationProvider.getApplicationContext(),
+            database,
+            database.portableSnapshotDao()
+        )
+
+        return BackupDataStore(
+            database = database,
+            snapshotDao = database.portableSnapshotDao(),
+            releaseEventDao = database.releaseEventDao(),
+            notificationPreferences = notificationPrefs,
+            mediaLinkDao = database.mediaLinkDao()
+        )
+    }
+
+    private suspend fun insertMediaFixture(source: MediaSource, type: MediaType, extId: String, title: String): Long {
+        val mediaId = database.portableSnapshotDao().insertMedia(
+            MediaEntity(
+                mediaType = type,
+                title = title,
+                originalTitle = null,
+                overview = null,
+                posterUrl = null,
+                releaseDate = null,
+                createdAt = clock.instant(),
+                metadataUpdatedAt = clock.instant()
+            )
+        )
+        database.portableSnapshotDao().insertExternalRef(
+            ExternalRefEntity(localMediaId = mediaId, source = source, externalId = extId)
+        )
+        return mediaId
+    }
 
     private companion object {
-        const val TEST_DB = "bingee-migration-1-2"
-        const val V2_TO_V3_DB = "bingee-migration-2-3"
-        const val V1_TO_V6_DB = "bingee-migration-1-6"
-        const val V3_TO_V4_DB = "bingee-migration-3-4"
-        const val V4_TO_V5_DB = "bingee-migration-4-5"
-        const val V5_TO_V6_DB = "bingee-migration-5-6"
-        const val V6_TO_V7_DB = "bingee-migration-6-7"
-        const val V1_TO_V7_DB = "bingee-migration-1-7"
-        const val V7_TO_V8_DB = "bingee-migration-7-8"
-        const val V8_TO_V9_DB = "bingee-migration-8-9"
-        const val V1_TO_V9_DB = "bingee-migration-1-9"
+        const val TEST_DB = "bingee-baseline-1"
     }
 }

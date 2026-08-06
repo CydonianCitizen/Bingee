@@ -100,6 +100,7 @@ internal fun SearchContent(
         SearchControls(
             query = state.query,
             category = state.category,
+            categories = state.availableCategories,
             onQueryChanged = onQueryChanged,
             onClearQuery = onClearQuery,
             onCategoryChanged = onCategoryChanged
@@ -174,6 +175,7 @@ private fun ConfigurationRequired(onOpenSettings: () -> Unit) {
 private fun SearchControls(
     query: String,
     category: MediaSearchCategory,
+    categories: List<MediaSearchCategory>,
     onQueryChanged: (String) -> Unit,
     onClearQuery: () -> Unit,
     onCategoryChanged: (MediaSearchCategory) -> Unit
@@ -199,7 +201,6 @@ private fun SearchControls(
         },
         singleLine = true
     )
-    val categories = MediaSearchCategory.entries
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         categories.forEachIndexed { index, item ->
             SegmentedButton(

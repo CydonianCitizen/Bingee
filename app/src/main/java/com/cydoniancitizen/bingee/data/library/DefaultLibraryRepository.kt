@@ -1,10 +1,13 @@
 package com.cydoniancitizen.bingee.data.library
 
 import android.database.sqlite.SQLiteException
+import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.applyLibraryStateAndSort
 import com.cydoniancitizen.bingee.core.model.normalizeLibrarySearch
 import com.cydoniancitizen.bingee.core.result.AppError
@@ -28,12 +31,20 @@ import kotlinx.coroutines.flow.map
 internal class DefaultLibraryRepository @Inject constructor(
     private val libraryDao: LibraryDao,
     private val ratingDao: RatingDao,
-    private val clock: Clock
+    private val clock: Clock,
+    private val animeAvailability: AnimeFeatureAvailability
 ) : LibraryRepository {
     override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> {
+        val effectiveQuery = if (!animeAvailability.isAvailable &&
+            query.mediaFilter == com.cydoniancitizen.bingee.core.model.LibraryMediaFilter.ANIME
+        ) {
+            query.copy(mediaFilter = com.cydoniancitizen.bingee.core.model.LibraryMediaFilter.ALL)
+        } else {
+            query
+        }
         val items = libraryDao.observeLibraryItems(
-            query.mediaFilter.mediaType,
-            query.searchQuery.toSqlLikePattern()
+            effectiveQuery.mediaFilter.mediaType,
+            effectiveQuery.searchQuery.toSqlLikePattern()
         )
         return combine(
             items,
@@ -42,19 +53,34 @@ internal class DefaultLibraryRepository @Inject constructor(
         ) { rows, progress, ratings ->
             val progressByMedia = progress.associateBy { it.localMediaId }
             val ratingsByMedia = ratings.associateBy { it.localMediaId }
-            val entries = rows.map { row ->
-                val localMediaId = row.media.localMediaId
-                row.toDomain(
-                    progressRow = progressByMedia[localMediaId],
-                    rating = ratingsByMedia[localMediaId]
-                )
+            val entries = rows.mapNotNull { row ->
+                if (!animeAvailability.isAvailable && row.media.mediaType == MediaType.ANIME) {
+                    null
+                } else {
+                    val localMediaId = row.media.localMediaId
+                    val domain = row.toDomain(
+                        progressRow = progressByMedia[localMediaId],
+                        rating = ratingsByMedia[localMediaId],
+                        animeAvailable = animeAvailability.isAvailable
+                    )
+                    if (!animeAvailability.isAvailable &&
+                        (domain.mediaRef.source == MediaSource.JIKAN || domain.mediaType == MediaType.ANIME)
+                    ) {
+                        null
+                    } else {
+                        domain
+                    }
+                }
             }
-            applyLibraryStateAndSort(entries, query)
+            applyLibraryStateAndSort(entries, effectiveQuery)
         }.asPersistenceResult { it }
     }
 
-    override fun observeEntryCount(): Flow<AppResult<Int>> =
+    override fun observeEntryCount(): Flow<AppResult<Int>> = if (!animeAvailability.isAvailable) {
+        libraryDao.observeSupportedLibraryEntryCount().asPersistenceResult { it }
+    } else {
         libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
+    }
 
     override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> = libraryDao
         .observeLibraryItem(ref.source, ref.normalizedExternalId())

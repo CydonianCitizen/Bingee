@@ -173,10 +173,91 @@ internal object BackupValidator {
             require(ratingRefs.add(rating.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
-        if (document.schemaVersion == BACKUP_SCHEMA_VERSION_V1) {
-            require(data.animeDetails.isEmpty(), BackupFailureKind.VALIDATION)
-            require(data.animeRelations.isEmpty(), BackupFailureKind.VALIDATION)
-            require(data.animeProgress.isEmpty(), BackupFailureKind.VALIDATION)
+        if (document.schemaVersion < BACKUP_SCHEMA_VERSION_V3) {
+            require(data.mediaLinkGroups.isEmpty(), BackupFailureKind.VALIDATION)
+            require(data.mediaLinkAudit.isEmpty(), BackupFailureKind.VALIDATION)
+        }
+
+        val availableMediaIdentities = buildSet {
+            data.media.forEach { media ->
+                media.externalRefs.forEach { ref ->
+                    add("${ref.source.name}:${media.mediaType.name}:${ref.externalId}")
+                }
+            }
+        }
+
+        val groupUuids = hashSetOf<String>()
+        val activeGroupMemberKeys = hashSetOf<String>()
+        data.mediaLinkGroups.forEach { group ->
+            require(group.groupId.isNotBlank(), BackupFailureKind.VALIDATION)
+            require(group.groupId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
+            require(groupUuids.add(group.groupId), BackupFailureKind.DUPLICATE_IDENTITY)
+            require(group.members.size == 2, BackupFailureKind.VALIDATION)
+            val m1 = group.members[0]
+            val m2 = group.members[1]
+            require(m1 != m2, BackupFailureKind.VALIDATION)
+            checkMediaIdentity(m1)
+            checkMediaIdentity(m2)
+            require(!group.updatedAt.isBefore(group.createdAt), BackupFailureKind.VALIDATION)
+
+            val key1 = "${m1.source.name}:${m1.mediaType.name}:${m1.externalId}"
+            val key2 = "${m2.source.name}:${m2.mediaType.name}:${m2.externalId}"
+
+            require(availableMediaIdentities.contains(key1), BackupFailureKind.MISSING_REFERENCE)
+            require(availableMediaIdentities.contains(key2), BackupFailureKind.MISSING_REFERENCE)
+
+            require(activeGroupMemberKeys.add(key1), BackupFailureKind.CONFLICTING_REFERENCE)
+            require(activeGroupMemberKeys.add(key2), BackupFailureKind.CONFLICTING_REFERENCE)
+
+            checkMediaIdentity(group.preferredPresentation)
+            val prefKey =
+                "${group.preferredPresentation.source.name}:${group.preferredPresentation.mediaType.name}:${group.preferredPresentation.externalId}"
+            require(prefKey == key1 || prefKey == key2, BackupFailureKind.VALIDATION)
+        }
+
+        val auditEventKeys = hashSetOf<String>()
+        data.mediaLinkAudit.forEach { audit ->
+            require(audit.groupId.isNotBlank(), BackupFailureKind.VALIDATION)
+            require(audit.groupId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
+            require(audit.members.size == 2, BackupFailureKind.VALIDATION)
+            val m1 = audit.members[0]
+            val m2 = audit.members[1]
+            require(m1 != m2, BackupFailureKind.VALIDATION)
+            checkMediaIdentity(m1)
+            checkMediaIdentity(m2)
+            val k1 = "${m1.source.name}:${m1.mediaType.name}:${m1.externalId}"
+            val k2 = "${m2.source.name}:${m2.mediaType.name}:${m2.externalId}"
+
+            if (audit.preferredPresentation != null) {
+                checkMediaIdentity(audit.preferredPresentation)
+                val prefK =
+                    "${audit.preferredPresentation.source.name}:${audit.preferredPresentation.mediaType.name}:${audit.preferredPresentation.externalId}"
+                require(prefK == k1 || prefK == k2, BackupFailureKind.VALIDATION)
+            }
+
+            val eventKey =
+                "${audit.groupId}|${audit.action.name}|${audit.timestamp}|${audit.origin.name}|$k1|$k2|${audit.preferredPresentation}"
+            require(auditEventKeys.add(eventKey), BackupFailureKind.DUPLICATE_IDENTITY)
+        }
+
+        val auditByGroup = data.mediaLinkAudit.groupBy { it.groupId }
+        data.mediaLinkGroups.forEach { group ->
+            val history = auditByGroup[group.groupId]
+            if (history != null) {
+                val sortedHistory = history.sortedBy { it.timestamp }
+                require(
+                    sortedHistory.any {
+                        it.action ==
+                            com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction.LINKED
+                    },
+                    BackupFailureKind.VALIDATION
+                )
+                val lastEvent = sortedHistory.last()
+                require(
+                    lastEvent.action != com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction.UNLINKED,
+                    BackupFailureKind.CONFLICTING_REFERENCE
+                )
+            }
         }
 
         val animeDetailRefs = hashSetOf<String>()
@@ -267,6 +348,19 @@ internal object BackupValidator {
             BackupFailureKind.VALIDATION
         )
         require(ref.externalId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
+    }
+
+    private fun checkMediaIdentity(identity: BackupMediaIdentity) {
+        require(
+            identity.source == MediaSource.TMDB || identity.source == MediaSource.JIKAN,
+            BackupFailureKind.VALIDATION
+        )
+        require(identity.externalId.isNotBlank(), BackupFailureKind.VALIDATION)
+        require(
+            identity.source != MediaSource.JIKAN || identity.externalId.matches(Regex("[1-9][0-9]*")),
+            BackupFailureKind.VALIDATION
+        )
+        require(identity.externalId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
     }
 
     private fun checkText(value: String?) {

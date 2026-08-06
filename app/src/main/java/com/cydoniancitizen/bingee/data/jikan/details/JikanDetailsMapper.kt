@@ -69,5 +69,22 @@ internal object JikanDetailsMapper {
         }
     }
 
+    private val IMDB_TITLE_REGEX = Regex("""\b(tt\d+)\b""")
+
+    internal fun extractImdbId(external: List<JikanExternalLinkDto>?): String? {
+        if (external.isNullOrEmpty()) return null
+        for (link in external) {
+            val nameMatches = link.name?.contains("imdb", ignoreCase = true) == true
+            val url = link.url ?: continue
+            val match = IMDB_TITLE_REGEX.find(url)
+            if (match != null) {
+                if (nameMatches || url.contains("/title/")) {
+                    return match.groupValues[1]
+                }
+            }
+        }
+        return null
+    }
+
     private fun String?.key(): String = normalizedJikanText()?.lowercase(Locale.ROOT).orEmpty()
 }

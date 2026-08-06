@@ -3,6 +3,8 @@ package com.cydoniancitizen.bingee.data.importexport
 import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
 import com.cydoniancitizen.bingee.core.model.AnimeFormat
 import com.cydoniancitizen.bingee.core.model.AnimeStatus
+import com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction
+import com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
@@ -10,7 +12,9 @@ import java.time.LocalDate
 
 internal const val BACKUP_FORMAT_ID = "bingee-backup"
 internal const val BACKUP_SCHEMA_VERSION_V1 = 1
-internal const val BACKUP_SCHEMA_VERSION = 2
+internal const val BACKUP_SCHEMA_VERSION_V2 = 2
+internal const val BACKUP_SCHEMA_VERSION_V3 = 3
+internal const val BACKUP_SCHEMA_VERSION = 3
 internal const val BACKUP_MIME_TYPE = "application/json"
 internal const val MAX_BACKUP_BYTES = 50 * 1024 * 1024
 
@@ -23,6 +27,25 @@ internal object BackupLimits {
 }
 
 internal data class BackupRef(val source: MediaSource, val externalId: String)
+
+internal data class BackupMediaIdentity(val source: MediaSource, val mediaType: MediaType, val externalId: String)
+
+internal data class BackupMediaLinkGroup(
+    val groupId: String,
+    val members: List<BackupMediaIdentity>,
+    val preferredPresentation: BackupMediaIdentity,
+    val createdAt: Instant,
+    val updatedAt: Instant
+)
+
+internal data class BackupMediaLinkAudit(
+    val groupId: String,
+    val action: MediaLinkAuditAction,
+    val timestamp: Instant,
+    val origin: MediaLinkAuditOrigin,
+    val members: List<BackupMediaIdentity>,
+    val preferredPresentation: BackupMediaIdentity? = null
+)
 
 internal data class BackupMedia(
     val primaryRef: BackupRef,
@@ -116,7 +139,9 @@ internal data class BackupData(
     val preferences: BackupPreferences,
     val animeDetails: List<BackupAnimeDetails> = emptyList(),
     val animeRelations: List<BackupAnimeRelation> = emptyList(),
-    val animeProgress: List<BackupAnimeProgress> = emptyList()
+    val animeProgress: List<BackupAnimeProgress> = emptyList(),
+    val mediaLinkGroups: List<BackupMediaLinkGroup> = emptyList(),
+    val mediaLinkAudit: List<BackupMediaLinkAudit> = emptyList()
 )
 
 internal data class BackupDocument(

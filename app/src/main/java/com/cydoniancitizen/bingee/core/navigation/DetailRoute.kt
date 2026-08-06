@@ -42,6 +42,7 @@ object DetailRoute {
     private fun isProviderMediaTypeValid(source: MediaSource, mediaType: MediaType): Boolean = when (source) {
         MediaSource.TMDB -> mediaType == MediaType.MOVIE || mediaType == MediaType.SERIES
         MediaSource.JIKAN -> mediaType == MediaType.ANIME
+        MediaSource.IMDB -> false
     }
 }
 

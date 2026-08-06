@@ -2,7 +2,8 @@ package com.cydoniancitizen.bingee.core.model
 
 enum class MediaSource {
     TMDB,
-    JIKAN
+    JIKAN,
+    IMDB
 }
 
 enum class MediaType {

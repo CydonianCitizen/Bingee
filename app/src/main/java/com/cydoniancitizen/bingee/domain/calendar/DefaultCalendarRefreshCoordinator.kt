@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.domain.calendar
 
+import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
 import com.cydoniancitizen.bingee.core.model.BackgroundRefreshTarget
 import com.cydoniancitizen.bingee.core.model.CachedSeason
@@ -38,7 +39,8 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     private val calendarRepository: ReleaseCalendarRepository,
     private val credentialRepository: TmdbCredentialRepository,
     private val clock: Clock,
-    private val window: ReleaseCalendarWindow
+    private val window: ReleaseCalendarWindow,
+    private val animeAvailability: AnimeFeatureAvailability
 ) : CalendarRefreshCoordinator {
     override suspend fun refresh(): CalendarRefreshSummary {
         val entries = when (val result = libraryRepository.observeEntries().first()) {
@@ -76,6 +78,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
 
     private suspend fun refreshEntry(entry: BackgroundRefreshTarget, tmdbAvailable: Boolean): RefreshCounts {
         if (entry.mediaRef.source == MediaSource.JIKAN && entry.mediaType == MediaType.ANIME) {
+            if (!animeAvailability.isAvailable) return RefreshCounts(skipped = 1)
             return animeDetailsRepository.refreshDetails(entry.mediaRef, force = true).toCounts()
         }
         if (entry.mediaRef.source != MediaSource.TMDB) return RefreshCounts(skipped = 1)

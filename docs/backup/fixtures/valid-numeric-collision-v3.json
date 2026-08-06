@@ -1,0 +1,57 @@
+{
+  "formatId": "bingee-backup",
+  "schemaVersion": 3,
+  "exportedAt": "2026-08-05T12:00:00Z",
+  "data": {
+    "media": [
+      {
+        "primaryRef": {"source": "TMDB", "externalId": "50"},
+        "externalRefs": [{"source": "TMDB", "externalId": "50"}],
+        "mediaType": "MOVIE",
+        "title": "TMDB Movie 50",
+        "originalTitle": null,
+        "overview": null,
+        "posterUrl": null,
+        "releaseDate": null
+      },
+      {
+        "primaryRef": {"source": "JIKAN", "externalId": "50"},
+        "externalRefs": [{"source": "JIKAN", "externalId": "50"}],
+        "mediaType": "ANIME",
+        "title": "Jikan Anime 50",
+        "originalTitle": null,
+        "overview": null,
+        "posterUrl": null,
+        "releaseDate": null
+      }
+    ],
+    "seasons": [],
+    "episodes": [],
+    "library": [],
+    "movieProgress": [],
+    "episodeProgress": [],
+    "ratings": [],
+    "preferences": {
+      "notificationLeadDays": 1,
+      "notifyMovieReleases": true,
+      "notifySeasonPremieres": true,
+      "notifyEpisodeAirings": true
+    },
+    "animeDetails": [],
+    "animeRelations": [],
+    "animeProgress": [],
+    "mediaLinkGroups": [
+      {
+        "groupId": "group-collision-50",
+        "members": [
+          {"source": "TMDB", "mediaType": "MOVIE", "externalId": "50"},
+          {"source": "JIKAN", "mediaType": "ANIME", "externalId": "50"}
+        ],
+        "preferredPresentation": {"source": "TMDB", "mediaType": "MOVIE", "externalId": "50"},
+        "createdAt": "2026-01-01T10:00:00Z",
+        "updatedAt": "2026-01-01T10:00:00Z"
+      }
+    ],
+    "mediaLinkAudit": []
+  }
+}

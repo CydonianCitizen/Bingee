@@ -9,7 +9,11 @@ import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
+import com.cydoniancitizen.bingee.core.model.LinkedMediaIdentity
 import com.cydoniancitizen.bingee.core.model.MediaDetails
+import com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin
+import com.cydoniancitizen.bingee.core.model.MediaLinkGroup
+import com.cydoniancitizen.bingee.core.model.MediaLinkGroupId
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
@@ -21,8 +25,12 @@ import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.equivalence.MediaEquivalenceCandidate
+import com.cydoniancitizen.bingee.domain.equivalence.MediaEquivalenceEvaluation
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
+import com.cydoniancitizen.bingee.domain.repository.MediaEquivalenceCandidateRepository
+import com.cydoniancitizen.bingee.domain.repository.MediaLinkRepository
 import com.cydoniancitizen.bingee.domain.repository.RatingRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
@@ -31,6 +39,7 @@ import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -273,15 +282,54 @@ class MediaDetailsViewModelTest {
         library: FakeLibraryRepository = FakeLibraryRepository(),
         series: FakeSeriesRepository = FakeSeriesRepository(),
         progress: FakeWatchProgressRepository = FakeWatchProgressRepository(),
-        rating: FakeRatingRepository = FakeRatingRepository()
+        rating: FakeRatingRepository = FakeRatingRepository(),
+        animeAvailability: com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability =
+            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
     ) = MediaDetailsViewModel(
         state,
         details,
         library,
         series,
         progress,
-        rating
+        rating,
+        FakeCandidateRepository(),
+        FakeLinkRepository(),
+        animeAvailability
     )
+
+    private class FakeCandidateRepository : MediaEquivalenceCandidateRepository {
+        override fun observeLibraryCandidates(): Flow<List<MediaEquivalenceCandidate>> = flowOf(emptyList())
+
+        override fun observeCandidatesForMedia(identity: LinkedMediaIdentity): Flow<List<MediaEquivalenceCandidate>> =
+            flowOf(emptyList())
+
+        override suspend fun evaluatePair(
+            first: LinkedMediaIdentity,
+            second: LinkedMediaIdentity
+        ): AppResult<MediaEquivalenceEvaluation> = AppResult.Failure(AppError.LinkError.MediaNotFound)
+    }
+
+    private class FakeLinkRepository : MediaLinkRepository {
+        override fun observeLinkForMedia(identity: LinkedMediaIdentity): Flow<MediaLinkGroup?> = flowOf(null)
+
+        override fun observeLinkGroup(groupId: MediaLinkGroupId): Flow<MediaLinkGroup?> = flowOf(null)
+
+        override suspend fun createLink(
+            first: LinkedMediaIdentity,
+            second: LinkedMediaIdentity,
+            preferredPresentation: LinkedMediaIdentity,
+            origin: MediaLinkAuditOrigin
+        ): AppResult<MediaLinkGroup> = AppResult.Failure(AppError.LinkError.MediaNotFound)
+
+        override suspend fun changePreferredPresentation(
+            groupId: MediaLinkGroupId,
+            preferredPresentation: LinkedMediaIdentity,
+            origin: MediaLinkAuditOrigin
+        ): AppResult<MediaLinkGroup> = AppResult.Failure(AppError.LinkError.LinkGroupNotFound)
+
+        override suspend fun unlink(groupId: MediaLinkGroupId, origin: MediaLinkAuditOrigin): AppResult<Unit> =
+            AppResult.Success(Unit)
+    }
 
     private fun args(source: MediaSource = MediaSource.TMDB, mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(
         mapOf(

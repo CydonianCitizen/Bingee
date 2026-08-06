@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project is unreleased and carries Milestone 11's partial beta-readiness status while Milestone 12B adds an experimental TV Time importer. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, offline Library organization, a Room-first Home calendar, approximate local notifications, versioned JSON backup/restore, and an additive importer for one documented TV Time JSON ZIP profile. The beta evidence and known limitations are tracked in [beta readiness](docs/beta-readiness.md).
+The project status is Bingee `1.0.0-stable`. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, offline Library organization, a Room-first Home calendar, approximate local notifications, versioned JSON backup/restore (v1, v2, v3), media equivalence links/audit, and an additive importer for documented TV Time JSON ZIP profiles. Anime catalogue features are temporarily suspended while stored Anime data remains preserved. The release details are tracked in [release notes](docs/release-notes-1.0.0-stable.md) and [roadmap](docs/roadmap.md).
 
 Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
@@ -65,11 +65,11 @@ On first run without a configured credential, Bingee offers TMDB setup or offlin
 
 WorkManager maintains a bounded batch of up to 20 followed titles approximately once per day when network is available. A separate network-free worker evaluates cached Room events for optional local notifications. Notifications are disabled by default; Settings requests Android notification permission only after the user enables them and supports same-day, one-day, three-day, or seven-day lead times plus movie, season, and episode categories. Android may delay work because of Doze, battery optimization, constraints, or device policy; Bingee promises no exact notification time.
 
-Settings → Data & backup emits backup v2, including portable anime metadata and entry-level progress, while continuing to import v1. Restore validates the complete file before one Room transaction. See [backup format v2](docs/backup-format-v2.md) and the retained [v1 contract](docs/backup-format-v1.md).
+Settings → Data & backup emits backup v3, including media history, link groups, and equivalence audit logs, while continuing to import v1 and v2. Restore validates the complete file before one Room transaction. See [backup format v3](docs/backup-format-v3.md), [backup format v2](docs/backup-format-v2.md), and the retained [v1 contract](docs/backup-format-v1.md).
 
 Settings → Data & backup also exposes an experimental `Import TV Time history` action. It supports only the role-based JSON ZIP profile derived from evidence ID `TVTIME-SAMPLE-001`. The archive is inspected locally with bounded ZIP limits, then matched conservatively through the existing TMDB credential. Ambiguous records require review or skip; confirmation applies additive, idempotent changes only. Ratings, favorites, custom lists, rewatch counters/timelines, CSV, other TV Time variants, TV Time authentication, and TV Time network access are unsupported. See [TV Time source profile](docs/imports/tv-time-source-format-v1.md) and [ADR 0019](docs/adr/0019-tv-time-import-implementation.md).
 
-Release drafts and the manual verification matrix are in [beta readiness](docs/beta-readiness.md) and [beta release notes](docs/release-notes-0.1.0-beta.md). No public release has been published from this repository.
+Release notes are available in [1.0.0-stable release notes](docs/release-notes-1.0.0-stable.md) and future enhancement plans in [roadmap](docs/roadmap.md).
 
 ## TMDB configuration and privacy
 

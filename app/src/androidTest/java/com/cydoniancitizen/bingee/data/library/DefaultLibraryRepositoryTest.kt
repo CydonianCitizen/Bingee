@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
@@ -47,7 +48,8 @@ class DefaultLibraryRepositoryTest {
             DefaultLibraryRepository(
                 database.libraryDao(),
                 database.ratingDao(),
-                Clock.fixed(now, ZoneOffset.UTC)
+                Clock.fixed(now, ZoneOffset.UTC),
+                TestingAnimeFeatureAvailability(isAvailable = true)
             )
     }
 

@@ -23,9 +23,13 @@ import androidx.room.TypeConverters
         ImportProvenanceRefEntity::class,
         AnimeDetailsEntity::class,
         AnimeProgressEntity::class,
-        AnimeRelationEntity::class
+        AnimeRelationEntity::class,
+        MediaLinkGroupEntity::class,
+        MediaLinkMemberEntity::class,
+        MediaLinkAuditEntity::class,
+        MediaLinkAuditMemberEntity::class
     ],
-    version = 9,
+    version = 1,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -51,6 +55,10 @@ internal abstract class BingeeDatabase : RoomDatabase() {
     abstract fun importProvenanceDao(): ImportProvenanceDao
 
     abstract fun animeDao(): AnimeDao
+
+    abstract fun mediaLinkDao(): MediaLinkDao
+
+    abstract fun equivalenceCandidateDao(): MediaEquivalenceCandidateDao
 
     companion object {
         const val DATABASE_NAME = "bingee.db"

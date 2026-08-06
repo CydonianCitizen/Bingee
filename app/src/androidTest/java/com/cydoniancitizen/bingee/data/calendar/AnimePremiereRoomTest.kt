@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.AnimeDetails
 import com.cydoniancitizen.bingee.core.model.AnimeFormat
 import com.cydoniancitizen.bingee.core.model.AnimeStatus
@@ -124,7 +125,8 @@ class AnimePremiereRoomTest {
 
         val calendar = DefaultReleaseCalendarRepository(
             database.releaseEventDao(),
-            Clock.fixed(now, ZoneOffset.UTC)
+            Clock.fixed(now, ZoneOffset.UTC),
+            TestingAnimeFeatureAvailability(isAvailable = true)
         )
         val result = calendar.getEvents(premiereDate, premiereDate, 20) as AppResult.Success
         assertEquals(2, result.value.size)

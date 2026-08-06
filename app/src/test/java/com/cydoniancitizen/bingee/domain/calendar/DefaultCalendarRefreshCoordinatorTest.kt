@@ -87,6 +87,27 @@ class DefaultCalendarRefreshCoordinatorTest {
     }
 
     @Test
+    fun jikanRefreshIsSkippedWhenAnimeIsDisabled() = runTest {
+        val calendar = FakeCalendarRepository()
+        val details = FakeDetailsRepository()
+        val animeRepo = FakeAnimeDetailsRepository()
+        val summary = coordinator(
+            entries = listOf(animeEntry("100")),
+            details = details,
+            series = FakeSeriesRepository(),
+            calendar = calendar,
+            anime = animeRepo,
+            animeAvailability = com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(
+                isAvailable = false
+            )
+        ).refresh()
+
+        assertEquals(0, animeRepo.calls.size)
+        assertEquals(1, summary.operationsSkipped)
+        assertEquals(0, summary.operationsFailed)
+    }
+
+    @Test
     fun seasonFailureIsPartialAndDoesNotCancelOtherSelectedSeasons() = runTest {
         val seriesRef = ref("10")
         val cached = listOf(
@@ -303,7 +324,9 @@ class DefaultCalendarRefreshCoordinatorTest {
         series: FakeSeriesRepository,
         calendar: FakeCalendarRepository,
         credential: TmdbCredentialStatus = TmdbCredentialStatus.Valid,
-        anime: AnimeDetailsRepository = FakeAnimeDetailsRepository()
+        anime: AnimeDetailsRepository = FakeAnimeDetailsRepository(),
+        animeAvailability: com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability =
+            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
     ) = DefaultCalendarRefreshCoordinator(
         libraryRepository = FakeLibraryRepository(entries),
         detailsRepository = details,
@@ -312,7 +335,8 @@ class DefaultCalendarRefreshCoordinatorTest {
         calendarRepository = calendar,
         credentialRepository = FakeCredentialRepository(credential),
         clock = clock,
-        window = ReleaseCalendarWindow()
+        window = ReleaseCalendarWindow(),
+        animeAvailability = animeAvailability
     )
 
     private fun entry(id: String, type: MediaType) = LibraryEntry(

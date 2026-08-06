@@ -21,8 +21,11 @@ internal data class JikanAnimeFullDto(
     val season: String?,
     val year: Int?,
     val score: Double?,
-    val relations: List<JikanRelationDto>?
+    val relations: List<JikanRelationDto>?,
+    val external: List<JikanExternalLinkDto>? = null
 )
+
+internal data class JikanExternalLinkDto(val name: String?, val url: String?)
 
 internal data class JikanRelationDto(val relation: String?, val entry: List<JikanRelationEntryDto>?)
 

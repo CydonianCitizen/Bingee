@@ -54,6 +54,16 @@ internal abstract class LibraryDao {
     @Query("SELECT COUNT(*) FROM library_entries")
     abstract fun observeLibraryEntryCount(): Flow<Int>
 
+    @Query(
+        """
+        SELECT COUNT(*)
+        FROM library_entries
+        INNER JOIN media_entries USING(local_media_id)
+        WHERE media_entries.media_type != 'ANIME'
+        """
+    )
+    abstract fun observeSupportedLibraryEntryCount(): Flow<Int>
+
     @Transaction
     @Query(
         """
