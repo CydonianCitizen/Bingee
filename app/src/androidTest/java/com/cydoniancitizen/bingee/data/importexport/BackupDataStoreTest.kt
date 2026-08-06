@@ -7,6 +7,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
 import com.cydoniancitizen.bingee.core.model.AnimeFormat
 import com.cydoniancitizen.bingee.core.model.AnimeStatus
+import com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction
+import com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
@@ -470,6 +472,39 @@ class BackupDataStoreTest {
                         completedAt = null,
                         completionOrigin = null,
                         updatedAt = exportedAt
+                    )
+                )
+            } else {
+                emptyList()
+            },
+            mediaLinkGroups = if (includeAnime && includeSeries) {
+                listOf(
+                    BackupMediaLinkGroup(
+                        groupId = "group-$movieId",
+                        preferredPresentation = BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId),
+                        createdAt = exportedAt,
+                        updatedAt = exportedAt,
+                        members = listOf(
+                            BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId),
+                            BackupMediaIdentity(MediaSource.JIKAN, MediaType.ANIME, "7001")
+                        )
+                    )
+                )
+            } else {
+                emptyList()
+            },
+            mediaLinkAudit = if (includeAnime && includeSeries) {
+                listOf(
+                    BackupMediaLinkAudit(
+                        groupId = "group-$movieId",
+                        action = MediaLinkAuditAction.LINKED,
+                        timestamp = exportedAt,
+                        origin = MediaLinkAuditOrigin.MANUAL_USER_ACTION,
+                        members = listOf(
+                            BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId),
+                            BackupMediaIdentity(MediaSource.JIKAN, MediaType.ANIME, "7001")
+                        ),
+                        preferredPresentation = BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId)
                     )
                 )
             } else {

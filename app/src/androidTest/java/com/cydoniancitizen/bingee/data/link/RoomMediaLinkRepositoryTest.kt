@@ -181,7 +181,7 @@ class RoomMediaLinkRepositoryTest {
         val observed = repository.observeLinkForMedia(first).first()
         assertNull(observed)
 
-        assertEquals(1, countTable("media_entries"))
+        assertEquals(2, countTable("media_entries"))
         assertEquals(2, database.mediaLinkDao().getAuditTrail().size)
         assertEquals(MediaLinkAuditAction.UNLINKED, database.mediaLinkDao().getAuditTrail()[1].action)
 

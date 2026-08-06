@@ -47,14 +47,23 @@ class LibraryScreenTest {
         val media = AtomicReference<LibraryMediaFilter>()
         val removed = AtomicReference<LibraryEntry>()
         val entry = entry()
-        setLibrary(
-            state = LibraryUiState(
+        var state by mutableStateOf(
+            LibraryUiState(
                 content = LibraryContentState.Entries(listOf(entry)),
                 resultCount = 1,
                 totalEntryCount = 1
-            ),
-            onSearch = search::set,
-            onMedia = media::set,
+            )
+        )
+        setLibraryState(
+            state = { state },
+            onSearch = {
+                search.set(it)
+                state = state.copy(query = state.query.copy(searchQuery = it))
+            },
+            onMedia = {
+                media.set(it)
+                state = state.copy(query = state.query.copy(mediaFilter = it))
+            },
             onRemove = removed::set
         )
 

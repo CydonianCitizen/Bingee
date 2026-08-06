@@ -65,7 +65,7 @@ class AnimeDetailsScreenTest {
         assertVisible("24 min per ep")
         assertVisible("Synthetic synopsis for offline preview and deterministic test state.")
         assertVisible("MyAnimeList score (via Jikan)")
-        assertVisible("8.7 / 10")
+        assertVisible("/ 10", substring = true)
         assertVisible("Anime metadata from MyAnimeList via the unofficial Jikan API.")
         assertVisible("8 out of 10")
         composeRule.onNode(

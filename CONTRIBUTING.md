@@ -4,7 +4,7 @@ Thanks for helping build Bingee. The project is early-stage, so small and well-t
 
 ## Prepare the environment
 
-1. Read `AGENTS.md`, this guide, and the relevant ADRs in `docs/adr/`.
+1. Read `README.md`, this guide, and the relevant ADRs in `docs/adr/`.
 2. Install JDK 21 and Android SDK Platform 36.1.
 3. Open the project in Android Studio or configure the Android SDK path locally.
 4. Confirm the checked-in wrapper works with `./gradlew tasks`.

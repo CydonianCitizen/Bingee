@@ -39,6 +39,7 @@ class AnimeSearchScreenTest {
             SearchUiState(
                 query = "",
                 category = MediaSearchCategory.ANIME,
+                availableCategories = MediaSearchCategory.entries,
                 credentialAvailability = SearchCredentialAvailability.REQUIRED
             )
         )

@@ -3,10 +3,12 @@ package com.cydoniancitizen.bingee.feature.library
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -53,7 +55,9 @@ class AnimeLibraryScreenTest {
 
         composeRule.onNodeWithText(tmdbCollision.title).assertIsDisplayed()
         composeRule.onNodeWithText(jikanCollision.title).assertIsDisplayed()
-        composeRule.onAllNodesWithText("Anime", useUnmergedTree = true)[0].performClick()
+        composeRule.onNode(
+            hasText("Anime") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        ).performClick()
 
         assertEquals(LibraryMediaFilter.ANIME, selected.get())
         composeRule.onNodeWithText("Library")
@@ -61,8 +65,9 @@ class AnimeLibraryScreenTest {
         composeRule.onNodeWithText(jikanCollision.title).assertIsDisplayed()
         composeRule.onNodeWithText("Synthetic Anime Movie").assertIsDisplayed()
         composeRule.onNodeWithText(tmdbCollision.title).assertDoesNotExist()
-        composeRule.onAllNodesWithText("Anime", useUnmergedTree = true)[1]
-            .performScrollTo().assertIsDisplayed()
+        composeRule.onNode(
+            hasText("Anime") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("5 of 12 episodes watched").assertIsDisplayed()
         composeRule.onNodeWithText("Personal rating: 8 out of 10").assertIsDisplayed()
     }
@@ -89,8 +94,9 @@ class AnimeLibraryScreenTest {
         }
         composeRule.onNodeWithText("5 of 12 episodes watched").assertIsDisplayed()
         composeRule.onNodeWithText("Personal rating: 8 out of 10").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Anime", useUnmergedTree = true)[1]
-            .performScrollTo().assertIsDisplayed()
+        composeRule.onNode(
+            hasText("Anime") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -119,6 +125,7 @@ class AnimeLibraryScreenTest {
         totalCount: Int = entries.size
     ) = LibraryUiState(
         query = query,
+        availableMediaFilters = LibraryMediaFilter.entries,
         content = if (entries.isEmpty()) {
             LibraryContentState.Empty
         } else {

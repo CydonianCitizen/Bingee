@@ -34,7 +34,7 @@ Chosen Option: **Option 1 — No KMP migration before a concrete second client.*
 
 ### Negative Consequences
 
-* Dual-platform business logic must be maintained separately if an iOS app is launched without a shared core (mitigated by future extraction sequence in `docs/multiplatform/future-extraction-plan.md`).
+* Dual-platform business logic must be maintained separately if an iOS app is launched without a shared core (mitigated by clean zero-Android domain separation).
 
 ## Re-evaluation Triggers
 

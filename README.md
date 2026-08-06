@@ -108,7 +108,7 @@ The project follows Semantic Versioning. While unreleased, development versions 
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and `AGENTS.md` before changing the project. Keep pull requests small, scoped, tested, and free of credentials or machine-local files.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the project. Keep pull requests small, scoped, tested, and free of credentials or machine-local files.
 
 Security reports follow [SECURITY.md](SECURITY.md).
 

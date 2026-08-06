@@ -158,6 +158,9 @@ class BingeeDatabaseMigrationTest {
                 detailsUpdatedAt = clock.instant()
             )
         )
+        database.portableSnapshotDao().insertExternalRef(
+            ExternalRefEntity(mediaId, MediaSource.JIKAN, "1001")
+        )
         val animeRelation = database.animeDao().observeAnime("1001").first()
         assertNotNull(animeRelation)
     }
@@ -302,7 +305,9 @@ class BingeeDatabaseMigrationTest {
 
         backupDataStore.restore(plan)
 
-        val countGroups = database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM media_link_groups").use { c ->
+        val countGroups = database.openHelper.readableDatabase.query(
+            "SELECT COUNT(*) FROM media_link_groups"
+        ).use { c ->
             c.moveToFirst()
             c.getInt(0)
         }
@@ -312,7 +317,10 @@ class BingeeDatabaseMigrationTest {
     @Test
     fun failedRestoreRollsBackTransactionOnVersionOneBaseline() = runBlocking {
         val backupDataStore = createBackupDataStore()
-        insertMediaFixture(MediaSource.TMDB, MediaType.MOVIE, "301", "Pre-existing Movie")
+        val mediaId = insertMediaFixture(MediaSource.TMDB, MediaType.MOVIE, "301", "Pre-existing Movie")
+        database.portableSnapshotDao().insertMembership(
+            LibraryMembershipEntity(mediaId, clock.instant())
+        )
 
         val doc = BackupDocument(
             formatId = BACKUP_FORMAT_ID,

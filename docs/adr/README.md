@@ -1,6 +1,6 @@
 # Architecture decision index
 
-This directory contains the durable architecture decisions for Bingee. Read `AGENTS.md` first; the newest applicable ADR takes precedence over older exploratory notes.
+This directory contains the durable architecture decisions for Bingee. The newest applicable ADR takes precedence over older exploratory notes.
 
 To add an ADR, copy `0000-template.md`, use the next available four-digit number, and choose one of: Proposed, Accepted, Superseded, or Rejected. Keep accepted ADRs immutable; supersede them with a new ADR instead of rewriting history.
 
