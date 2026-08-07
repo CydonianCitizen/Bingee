@@ -16,7 +16,7 @@ import org.junit.Test
 class FakeAnimeDataTest {
     @Test
     fun searchFixturesCoverSuccessEmptyAndProviderFailures() {
-        assertEquals(MediaType.ANIME, FakeAnimeData.searchResult.mediaType)
+        assertEquals(MediaType.SERIES, FakeAnimeData.searchResult.mediaType)
         assertEquals(MediaSource.JIKAN, FakeAnimeData.searchResult.externalRef.source)
         assertEquals(2, FakeAnimeData.searchPage.results.size)
         assertTrue(FakeAnimeData.emptySearch.results.isEmpty())

@@ -76,13 +76,13 @@ internal abstract class AnimeDao {
         details: AnimeDetailsEntity,
         relations: List<AnimeRelationEntity>
     ): Long {
-        require(media.mediaType == MediaType.ANIME)
+        require(media.mediaType == MediaType.ANIME || media.mediaType == MediaType.MOVIE || media.mediaType == MediaType.SERIES)
         require(externalId.toLongOrNull()?.let { it > 0 } == true)
         val existing = getMedia(MediaSource.JIKAN, externalId)
         val id = if (existing == null) {
             insertMedia(media).also { insertExternalRef(ExternalRefEntity(it, MediaSource.JIKAN, externalId)) }
         } else {
-            check(existing.mediaType == MediaType.ANIME)
+            check(existing.mediaType == media.mediaType)
             updateMedia(media.copy(localMediaId = existing.localMediaId, createdAt = existing.createdAt))
             existing.localMediaId
         }
@@ -95,7 +95,7 @@ internal abstract class AnimeDao {
     @Transaction
     open suspend fun setProgress(source: MediaSource, externalId: String, progress: AnimeWatchProgress?) {
         val media = getMedia(source, externalId) ?: error("Anime identity not found")
-        require(source == MediaSource.JIKAN && media.mediaType == MediaType.ANIME)
+        require(source == MediaSource.JIKAN)
         if (progress == null) {
             deleteProgress(media.localMediaId)
         } else {

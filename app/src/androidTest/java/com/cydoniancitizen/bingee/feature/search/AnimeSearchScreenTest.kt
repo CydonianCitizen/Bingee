@@ -100,7 +100,7 @@ class AnimeSearchScreenTest {
     }
 
     @Test
-    fun animeResultShowsProviderAttributionAndNavigatesWithJikanReference() {
+    fun animeSeriesResultShowsDetailsAndNavigatesWithJikanReference() {
         val opened = AtomicReference<Pair<ExternalMediaRef, MediaType>>()
         val item = FakeAnimeData.searchResult
         setSearchState(
@@ -122,10 +122,39 @@ class AnimeSearchScreenTest {
 
         composeRule.onNodeWithText(item.title).assertIsDisplayed()
         composeRule.onNodeWithText(item.originalTitle!!).assertIsDisplayed()
+        composeRule.onNodeWithText("Anime Series").assertIsDisplayed()
+        composeRule.onNodeWithText("Episodes: 28").assertIsDisplayed()
+        composeRule.onNodeWithText("Status: Currently Airing").assertIsDisplayed()
+        composeRule.onNodeWithText("Score: 9.1").assertIsDisplayed()
         composeRule.onNodeWithText("Anime data: Jikan / MyAnimeList").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Open details for ${item.title}").performClick()
 
-        assertEquals(item.externalRef to MediaType.ANIME, opened.get())
+        assertEquals(item.externalRef to item.mediaType, opened.get())
+        assertEquals(MediaSource.JIKAN, opened.get().first.source)
+    }
+
+    @Test
+    fun animeMovieResultRendersMovieLabelAndHidesScoreZero() {
+        val movieItem = FakeAnimeData.secondSearchResult.copy(score = 0.0)
+        setSearchState(
+            state = {
+                SearchUiState(
+                    query = "Movie",
+                    category = MediaSearchCategory.ANIME,
+                    credentialAvailability = SearchCredentialAvailability.REQUIRED,
+                    content = SearchContentState.Results(
+                        items = listOf(movieItem),
+                        currentPage = 1,
+                        totalPages = 1,
+                        nextPage = NextPageState.End
+                    )
+                )
+            }
+        )
+
+        composeRule.onNodeWithText(movieItem.title).assertIsDisplayed()
+        composeRule.onNodeWithText("Anime Movie").assertIsDisplayed()
+        composeRule.onNodeWithText("Score: 0.0").assertDoesNotExist()
     }
 
     @Test

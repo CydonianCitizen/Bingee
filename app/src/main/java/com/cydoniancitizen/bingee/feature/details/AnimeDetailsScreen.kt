@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,14 +45,18 @@ import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.component.OfflineBanner
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import com.cydoniancitizen.bingee.core.model.AnimeDetails
 import com.cydoniancitizen.bingee.core.model.AnimeFormat
 import com.cydoniancitizen.bingee.core.model.AnimeProgressState
 import com.cydoniancitizen.bingee.core.model.AnimeRelation
 import com.cydoniancitizen.bingee.core.model.AnimeWatchProgress
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.ui.toUiError
+import java.time.LocalDate
 
 @Composable
 internal fun AnimeDetailsScreen(
@@ -67,6 +72,10 @@ internal fun AnimeDetailsScreen(
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
         onToggleLibrary = viewModel::toggleLibrary,
+        onToggleFavorite = viewModel::toggleFavorite,
+        onSetWatchedDate = viewModel::setWatchedDate,
+        onToggleMovieWatched = viewModel::toggleMovieWatched,
+        onToggleSeriesWatched = viewModel::toggleSeriesWatched,
         onIncrement = viewModel::increment,
         onDecrement = viewModel::decrement,
         onSetCount = viewModel::setCount,
@@ -88,6 +97,10 @@ internal fun AnimeDetailsContent(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onToggleLibrary: () -> Unit,
+    onToggleFavorite: () -> Unit = {},
+    onSetWatchedDate: (LocalDate?) -> Unit = {},
+    onToggleMovieWatched: () -> Unit = {},
+    onToggleSeriesWatched: () -> Unit = {},
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onSetCount: (Int) -> Unit,
@@ -113,6 +126,22 @@ internal fun AnimeDetailsContent(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleLarge
             )
+            IconButton(
+                onClick = onToggleFavorite,
+                enabled = !state.favoriteUpdating && state.isInLibrary != null
+            ) {
+                Icon(
+                    imageVector = if (state.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = stringResource(
+                        if (state.isFavorite) R.string.favorite_remove else R.string.favorite_add
+                    ),
+                    tint = if (state.isFavorite) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
             if (state.refreshing) {
                 CircularProgressIndicator()
             } else {
@@ -135,11 +164,16 @@ internal fun AnimeDetailsContent(
                 refreshError = state.refreshError,
                 isInLibrary = state.isInLibrary,
                 libraryUpdating = state.libraryUpdating,
+                watchedDate = state.watchedDate,
+                watchedDateUpdating = state.watchedDateUpdating,
                 progress = state.progress,
                 progressUpdating = state.progressUpdating,
                 progressError = state.progressError,
                 rating = state.rating,
                 onToggleLibrary = onToggleLibrary,
+                onSetWatchedDate = onSetWatchedDate,
+                onToggleMovieWatched = onToggleMovieWatched,
+                onToggleSeriesWatched = onToggleSeriesWatched,
                 onIncrement = onIncrement,
                 onDecrement = onDecrement,
                 onSetCount = onSetCount,
@@ -162,11 +196,16 @@ private fun AnimeDetailBody(
     refreshError: AppError?,
     isInLibrary: Boolean?,
     libraryUpdating: Boolean,
+    watchedDate: LocalDate?,
+    watchedDateUpdating: Boolean,
     progress: AnimeWatchProgress?,
     progressUpdating: Boolean,
     progressError: AppError?,
     rating: DetailRatingState,
     onToggleLibrary: () -> Unit,
+    onSetWatchedDate: (LocalDate?) -> Unit,
+    onToggleMovieWatched: () -> Unit,
+    onToggleSeriesWatched: () -> Unit,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onSetCount: (Int) -> Unit,
@@ -242,6 +281,14 @@ private fun AnimeDetailBody(
             onSetCount,
             onComplete,
             onIncomplete
+        )
+        val mediaType = if (details.format == AnimeFormat.MOVIE) MediaType.MOVIE else MediaType.SERIES
+        AnimeWatchedDateSection(
+            watchedDate = watchedDate,
+            isUpdating = watchedDateUpdating,
+            releaseDate = details.startDate,
+            mediaType = mediaType,
+            onSetWatchedDate = onSetWatchedDate
         )
         details.synopsis?.let {
             Text(stringResource(R.string.detail_overview), fontWeight = FontWeight.Bold)
@@ -382,4 +429,59 @@ private fun AnimeProgressSection(
 private fun DetailLine(label: String, value: String) {
     Text(label, fontWeight = FontWeight.Bold)
     Text(value)
+}
+
+@Composable
+private fun AnimeWatchedDateSection(
+    watchedDate: LocalDate?,
+    isUpdating: Boolean,
+    releaseDate: LocalDate?,
+    mediaType: MediaType,
+    onSetWatchedDate: (LocalDate?) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val labelRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
+    val editRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_edit else R.string.completion_date_edit
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+    ) {
+        Text(
+            text = stringResource(labelRes),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleLarge
+        )
+        if (watchedDate != null) {
+            Text(watchedDate.toString())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+            Button(
+                onClick = { showDialog = true },
+                enabled = !isUpdating
+            ) {
+                Text(stringResource(editRes))
+            }
+            if (watchedDate != null) {
+                TextButton(
+                    onClick = { onSetWatchedDate(null) },
+                    enabled = !isUpdating
+                ) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            }
+        }
+    }
+    if (showDialog) {
+        WatchedDateDialog(
+            currentDate = watchedDate,
+            releaseDate = releaseDate,
+            mediaType = mediaType,
+            onConfirm = { date ->
+                onSetWatchedDate(date)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false }
+        )
+    }
 }

@@ -72,7 +72,7 @@ class JikanSearchClientTest {
 
     private companion object {
         val body = """
-            {"data":[{"mal_id":52991,"title":"Sousou no Frieren","images":{"jpg":{"image_url":"https://image/frieren.jpg"}}}],"pagination":{"last_visible_page":3,"has_next_page":true}}
+            {"data":[{"mal_id":52991,"title":"Sousou no Frieren","type":"TV","images":{"jpg":{"image_url":"https://image/frieren.jpg"}}}],"pagination":{"last_visible_page":3,"has_next_page":true}}
         """.trimIndent()
     }
 }

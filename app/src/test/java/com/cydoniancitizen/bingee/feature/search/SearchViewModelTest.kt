@@ -434,6 +434,41 @@ class SearchViewModelTest {
         assertEquals("Naruto", tmdb.requests.single().query)
     }
 
+    @Test
+    fun animeSearchSupportsPaginationAndRetry() = runTest(mainDispatcherRule.dispatcher) {
+        var failPage2 = true
+        val anime = RecordingAnimeRepository { query ->
+            if (query.page == 2 && failPage2) {
+                AppResult.Failure(AppError.RemoteServiceFailure)
+            } else {
+                AppResult.Success(page(query.query, query.page, 2, MediaType.SERIES))
+            }
+        }
+        val viewModel = SearchViewModel(
+            RecordingMediaRepository(),
+            anime,
+            FakeLibraryRepository(),
+            FakeCredentialRepository(TmdbCredentialStatus.Valid),
+            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+        )
+        runCurrent()
+
+        viewModel.onCategoryChanged(MediaSearchCategory.ANIME)
+        performDebouncedSearch(viewModel, "Frieren")
+
+        viewModel.loadNextPage()
+        runCurrent()
+        assertTrue((viewModel.uiState.value.content as SearchContentState.Results).nextPage is NextPageState.Error)
+
+        failPage2 = false
+        viewModel.retryNextPage()
+        runCurrent()
+        val content = viewModel.uiState.value.content as SearchContentState.Results
+        assertEquals(2, content.currentPage)
+        assertEquals(NextPageState.End, content.nextPage)
+        assertEquals(listOf(1, 2, 2), anime.requests.map { it.page })
+    }
+
     private fun validViewModel(repository: MediaRepository): SearchViewModel {
         val viewModel =
             SearchViewModel(

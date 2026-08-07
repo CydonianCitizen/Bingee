@@ -8,6 +8,8 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.LocalDate
 
+import com.cydoniancitizen.bingee.domain.model.AnimeFormatClassifier
+
 internal object JikanSearchMapper {
     fun map(response: JikanAnimeSearchResponseDto, requestedPage: Int): MediaSearchPage {
         val results = response.data.orEmpty().mapNotNull(::mapResult)
@@ -23,19 +25,27 @@ internal object JikanSearchMapper {
 
     fun mapResult(dto: JikanAnimeSearchResultDto): MediaSearchResult? {
         val id = dto.malId?.takeIf { it > 0 } ?: return null
-        val title =
-            dto.title.normalized() ?: dto.titleEnglish.normalized() ?: dto.titleJapanese.normalized() ?: return null
-        val original = listOf(dto.titleJapanese, dto.titleEnglish)
+        val title = dto.titleEnglish.normalized()
+            ?: dto.title.normalized()
+            ?: dto.titleJapanese.normalized()
+            ?: return null
+        val animeFormat = AnimeFormatClassifier.parseFormat(dto.type)
+        val mediaType = AnimeFormatClassifier.toMediaType(animeFormat) ?: return null
+        val original = listOf(dto.title, dto.titleJapanese)
             .mapNotNull { it.normalized() }
             .firstOrNull { !it.equals(title, ignoreCase = true) }
         return MediaSearchResult(
             externalRef = ExternalMediaRef(MediaSource.JIKAN, id.toString()),
-            mediaType = MediaType.ANIME,
+            mediaType = mediaType,
             title = title,
             originalTitle = original,
             posterUrl = dto.images?.jpg?.largeImageUrl.normalized() ?: dto.images?.jpg?.imageUrl.normalized(),
             releaseDate = dto.aired?.from.normalized()?.take(10)?.let(::parseDate),
-            overview = dto.synopsis.normalized()?.replace(HTML_TAGS, " ")?.replace(WHITESPACE, " ")?.trim()
+            overview = dto.synopsis.normalized()?.replace(HTML_TAGS, " ")?.replace(WHITESPACE, " ")?.trim(),
+            animeFormat = animeFormat,
+            episodes = dto.episodes?.takeIf { it > 0 },
+            status = dto.status.normalized(),
+            score = dto.score?.takeIf { it > 0.0 }
         )
     }
 

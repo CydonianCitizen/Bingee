@@ -173,14 +173,14 @@ class SearchScreenTest {
         val item = (state.content as SearchContentState.Results).items.single()
         setSearchState(state = { state }, onToggleLibrary = toggled::set)
 
-        composeRule.onNodeWithText("Add to library").performClick()
+        composeRule.onNodeWithText("Add to Watch Later").performClick()
 
         assertEquals(item, toggled.get())
 
         composeRule.runOnIdle {
             state = state.copy(libraryMembership = setOf(item.externalRef))
         }
-        composeRule.onNodeWithText("Remove from library").assertIsDisplayed()
+        composeRule.onNodeWithText("In Watch Later").assertIsDisplayed()
     }
 
     @Test
@@ -196,7 +196,7 @@ class SearchScreenTest {
         composeRule.onNodeWithContentDescription("Open details for Fixed Movie").performClick()
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "1") to MediaType.MOVIE, opened.get())
         opened.set(null)
-        composeRule.onNodeWithText("Add to library").performClick()
+        composeRule.onNodeWithText("Add to Watch Later").performClick()
         assertTrue(toggled.get())
         assertEquals(null, opened.get())
     }

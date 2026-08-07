@@ -39,18 +39,7 @@ internal object JikanDetailsMapper {
         )
     }
 
-    internal fun mapFormat(value: String?): AnimeFormat = when (value.key()) {
-        "tv" -> AnimeFormat.TV
-        "movie" -> AnimeFormat.MOVIE
-        "ova" -> AnimeFormat.OVA
-        "ona" -> AnimeFormat.ONA
-        "special" -> AnimeFormat.SPECIAL
-        "music" -> AnimeFormat.MUSIC
-        "cm" -> AnimeFormat.CM
-        "pv" -> AnimeFormat.PV
-        "tv special" -> AnimeFormat.TV_SPECIAL
-        else -> AnimeFormat.UNKNOWN
-    }
+    internal fun mapFormat(value: String?): AnimeFormat = com.cydoniancitizen.bingee.domain.model.AnimeFormatClassifier.parseFormat(value)
 
     internal fun mapStatus(value: String?): AnimeStatus = when (value.key()) {
         "currently airing" -> AnimeStatus.AIRING

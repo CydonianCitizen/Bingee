@@ -477,6 +477,8 @@ class MediaDetailsViewModelTest {
             movie.value = AppResult.Success(MovieWatchState.Unwatched)
             return AppResult.Success(Unit)
         }
+        override suspend fun markSeriesWatched(reference: ExternalMediaRef) = success("series-watched")
+        override suspend fun markSeriesUnwatched(reference: ExternalMediaRef) = success("series-unwatched")
 
         private fun success(action: String): AppResult<Unit> {
             actions += action

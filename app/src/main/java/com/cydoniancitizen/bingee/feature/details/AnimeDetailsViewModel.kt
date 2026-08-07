@@ -15,6 +15,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.navigation.DetailRoute
+import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.equivalence.MediaEquivalenceCandidate
@@ -45,8 +46,14 @@ internal data class AnimeDetailsUiState(
     val refreshing: Boolean = false,
     val refreshError: AppError? = null,
     val isInLibrary: Boolean? = null,
+    val isFavorite: Boolean = false,
+    val watchedDate: java.time.LocalDate? = null,
+    val favoriteUpdating: Boolean = false,
+    val watchedDateUpdating: Boolean = false,
     val libraryUpdating: Boolean = false,
     val libraryError: AppError? = null,
+    val movieProgress: MovieProgressState = MovieProgressState.NotApplicable,
+    val isSeriesWatched: Boolean = false,
     val progress: AnimeWatchProgress? = null,
     val progressUpdating: Boolean = false,
     val progressError: AppError? = null,
@@ -64,15 +71,17 @@ internal class AnimeDetailsViewModel @Inject constructor(
     private val ratingRepository: RatingRepository,
     private val candidateRepository: MediaEquivalenceCandidateRepository,
     private val linkRepository: MediaLinkRepository,
+    private val watchProgressRepository: com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository,
     private val availability: AnimeFeatureAvailability
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(AnimeDetailsUiState())
     val uiState: StateFlow<AnimeDetailsUiState> = mutableUiState.asStateFlow()
-    private val reference: ExternalMediaRef? = DetailRoute.parse(
+    private val routeArgs: DetailRouteArgs? = DetailRoute.parse(
         savedStateHandle[DetailRoute.SOURCE_ARG],
         savedStateHandle[DetailRoute.MEDIA_TYPE_ARG],
         savedStateHandle[DetailRoute.EXTERNAL_ID_ARG]
-    )?.takeIf { it.reference.source == MediaSource.JIKAN && it.mediaType == MediaType.ANIME }?.reference
+    )?.takeIf { it.reference.source == MediaSource.JIKAN }
+    private val reference: ExternalMediaRef? = routeArgs?.reference
     private var automaticRefreshStarted = false
     private var refreshJob: Job? = null
 
@@ -88,6 +97,10 @@ internal class AnimeDetailsViewModel @Inject constructor(
             observeProgress(ref)
             observeRating(ref)
             observeEquivalence(ref)
+            if (routeArgs?.mediaType == MediaType.MOVIE) {
+                mutableUiState.update { it.copy(movieProgress = MovieProgressState.Loading) }
+                observeMovieProgress(ref)
+            }
         }
     }
 
@@ -128,6 +141,86 @@ internal class AnimeDetailsViewModel @Inject constructor(
             }
         }
     }
+
+    fun toggleFavorite() {
+        val ref = reference ?: return
+        val state = mutableUiState.value
+        if (state.favoriteUpdating) return
+        mutableUiState.update { it.copy(favoriteUpdating = true) }
+        viewModelScope.launch {
+            val result = libraryRepository.setFavorite(ref, !state.isFavorite)
+            mutableUiState.update {
+                it.copy(
+                    favoriteUpdating = false,
+                    libraryError = (result as? AppResult.Failure)?.error
+                )
+            }
+        }
+    }
+
+    fun setWatchedDate(date: java.time.LocalDate?) {
+        val ref = reference ?: return
+        if (mutableUiState.value.watchedDateUpdating) return
+        mutableUiState.update { it.copy(watchedDateUpdating = true) }
+        viewModelScope.launch {
+            val result = libraryRepository.setWatchedDate(ref, date)
+            mutableUiState.update {
+                it.copy(
+                    watchedDateUpdating = false,
+                    watchedDate = if (result is AppResult.Success) date else it.watchedDate,
+                    progressError = (result as? AppResult.Failure)?.error
+                )
+            }
+        }
+    }
+
+    fun toggleMovieWatched() {
+        val ref = reference ?: return
+        val current = mutableUiState.value.movieProgress as? MovieProgressState.Ready ?: return
+        if (current.updating) return
+        mutableUiState.update {
+            it.copy(movieProgress = current.copy(updating = true), progressError = null)
+        }
+        viewModelScope.launch {
+            val result = if (current.state is com.cydoniancitizen.bingee.core.model.MovieWatchState.Watched) {
+                watchProgressRepository.markMovieUnwatched(ref)
+            } else {
+                watchProgressRepository.markMovieWatched(ref)
+            }
+            mutableUiState.update { state ->
+                val observed = state.movieProgress as? MovieProgressState.Ready
+                state.copy(
+                    movieProgress = observed?.copy(updating = false) ?: state.movieProgress,
+                    progressError = (result as? AppResult.Failure)?.error
+                )
+            }
+        }
+    }
+
+    fun toggleSeriesWatched() {
+        val ref = reference ?: return
+        val state = mutableUiState.value
+        if (state.progressUpdating) return
+        mutableUiState.update { it.copy(progressUpdating = true, progressError = null) }
+        viewModelScope.launch {
+            val wasWatched = state.isSeriesWatched || state.watchedDate != null
+            val result = if (wasWatched) {
+                watchProgressRepository.markSeriesUnwatched(ref)
+            } else {
+                watchProgressRepository.markSeriesWatched(ref)
+            }
+            mutableUiState.update {
+                it.copy(
+                    progressUpdating = false,
+                    isSeriesWatched = if (result is AppResult.Success) !wasWatched else state.isSeriesWatched,
+                    progressError = (result as? AppResult.Failure)?.error
+                )
+            }
+        }
+    }
+
+    fun dismissLibraryError() = mutableUiState.update { it.copy(libraryError = null) }
+    fun dismissProgressError() = mutableUiState.update { it.copy(progressError = null) }
 
     fun selectRating(value: Int) {
         if (value !in PersonalRating.MIN_VALUE..PersonalRating.MAX_VALUE) return
@@ -176,8 +269,34 @@ internal class AnimeDetailsViewModel @Inject constructor(
         libraryRepository.observeEntry(ref).collectLatest { result ->
             mutableUiState.update {
                 when (result) {
-                    is AppResult.Success -> it.copy(isInLibrary = result.value != null)
+                    is AppResult.Success -> {
+                        val entry = result.value
+                        val seriesWatched = entry?.watchedDate != null ||
+                            (entry?.progress as? com.cydoniancitizen.bingee.core.model.LibraryProgress.Series)?.progress?.isComplete == true
+                        it.copy(
+                            isInLibrary = entry?.inLibrary == true,
+                            isFavorite = entry?.isFavorite ?: false,
+                            watchedDate = entry?.watchedDate,
+                            isSeriesWatched = seriesWatched
+                        )
+                    }
                     is AppResult.Failure -> it.copy(libraryError = result.error)
+                }
+            }
+        }
+    }
+
+    private fun observeMovieProgress(ref: ExternalMediaRef) = viewModelScope.launch {
+        watchProgressRepository.observeMovie(ref).collectLatest { result ->
+            mutableUiState.update { state ->
+                when (result) {
+                    is AppResult.Success -> state.copy(
+                        movieProgress = MovieProgressState.Ready(
+                            state = result.value,
+                            updating = (state.movieProgress as? MovieProgressState.Ready)?.updating == true
+                        )
+                    )
+                    is AppResult.Failure -> state.copy(movieProgress = MovieProgressState.Error(result.error))
                 }
             }
         }
@@ -283,8 +402,9 @@ internal class AnimeDetailsViewModel @Inject constructor(
     }
 
     private fun observeEquivalence(ref: ExternalMediaRef) {
+        val mediaType = routeArgs?.mediaType ?: MediaType.ANIME
         val identity =
-            LinkedMediaIdentity(source = ref.source, mediaType = MediaType.ANIME, externalId = ref.externalId)
+            LinkedMediaIdentity(source = ref.source, mediaType = mediaType, externalId = ref.externalId)
         viewModelScope.launch {
             candidateRepository.observeCandidatesForMedia(identity).collectLatest { candidates ->
                 mutableUiState.update { it.copy(candidate = candidates.firstOrNull()) }
@@ -293,7 +413,7 @@ internal class AnimeDetailsViewModel @Inject constructor(
         viewModelScope.launch {
             linkRepository.observeLinkForMedia(identity).collectLatest { result ->
                 mutableUiState.update {
-                    it.copy(linkGroup = (result as? AppResult.Success<MediaLinkGroup?>)?.value)
+                    it.copy(linkGroup = result)
                 }
             }
         }

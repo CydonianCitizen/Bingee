@@ -26,7 +26,7 @@ internal class DefaultWatchProgressRepository @Inject constructor(
     private val clock: Clock
 ) : WatchProgressRepository {
     override fun observeMovie(reference: ExternalMediaRef): Flow<AppResult<MovieWatchState>> {
-        val normalized = reference.normalizedTmdbOrNull()
+        val normalized = reference.normalizedRefOrNull()
             ?: return flowOf(AppResult.Failure(reference.invalidReferenceError()))
         return dao.observeMovieProgress(normalized.source, normalized.externalId)
             .map { row ->
@@ -73,10 +73,16 @@ internal class DefaultWatchProgressRepository @Inject constructor(
     override suspend fun markMovieUnwatched(reference: ExternalMediaRef): AppResult<Unit> =
         reference.write { dao.markMovieUnwatched(it.source, it.externalId) }
 
+    override suspend fun markSeriesWatched(reference: ExternalMediaRef): AppResult<Unit> =
+        reference.write { dao.markSeriesWatched(it.source, it.externalId, clock.instant()) }
+
+    override suspend fun markSeriesUnwatched(reference: ExternalMediaRef): AppResult<Unit> =
+        reference.write { dao.markSeriesUnwatched(it.source, it.externalId) }
+
     private suspend fun ExternalMediaRef.write(
         block: suspend (ExternalMediaRef) -> ProgressWriteOutcome
     ): AppResult<Unit> {
-        val normalized = normalizedTmdbOrNull() ?: return AppResult.Failure(invalidReferenceError())
+        val normalized = normalizedRefOrNull() ?: return AppResult.Failure(invalidReferenceError())
         return try {
             block(normalized).toResult()
         } catch (cancelled: CancellationException) {
@@ -94,14 +100,14 @@ private fun ProgressWriteOutcome.toResult(): AppResult<Unit> = when (this) {
     ProgressWriteOutcome.MEDIA_TYPE_MISMATCH -> AppResult.Failure(AppError.MediaTypeMismatch)
 }
 
-private fun ExternalMediaRef.normalizedTmdbOrNull(): ExternalMediaRef? {
-    if (source != MediaSource.TMDB) return null
+private fun ExternalMediaRef.normalizedRefOrNull(): ExternalMediaRef? {
+    if (source != MediaSource.TMDB && source != MediaSource.JIKAN) return null
     val id = externalId.trim().takeIf { it.toLongOrNull()?.let { value -> value > 0 } == true } ?: return null
     return ExternalMediaRef(source, id)
 }
 
 private fun ExternalMediaRef.invalidReferenceError(): AppError =
-    if (source == MediaSource.TMDB) AppError.InvalidInput else AppError.UnsupportedData
+    if (source == MediaSource.TMDB || source == MediaSource.JIKAN) AppError.InvalidInput else AppError.UnsupportedData
 
 private fun Throwable.toPersistenceError(): AppError = when (this) {
     is IllegalArgumentException,

@@ -66,9 +66,7 @@ internal class DefaultLibraryRepository @Inject constructor(
                         rating = ratingsByMedia[localMediaId],
                         animeAvailable = animeAvailability.isAvailable
                     )
-                    if (!animeAvailability.isAvailable &&
-                        (domain.mediaRef.source == MediaSource.JIKAN || domain.mediaType == MediaType.ANIME)
-                    ) {
+                    if (!animeAvailability.isAvailable && domain.mediaType == MediaType.ANIME) {
                         null
                     } else {
                         domain

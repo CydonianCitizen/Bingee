@@ -179,6 +179,30 @@ internal abstract class WatchProgressDao {
     }
 
     @Transaction
+    open suspend fun markSeriesWatched(
+        source: MediaSource,
+        externalId: String,
+        completedAt: Instant,
+        watchedDate: LocalDate? = null
+    ): ProgressWriteOutcome {
+        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
+        val existing = getSeriesProgressByMediaId(media.localMediaId)
+        val finalDate = watchedDate ?: existing?.watchedDate ?: LocalDate.now()
+        insertSeriesProgress(SeriesWatchProgressEntity(media.localMediaId, finalDate, completedAt))
+        return ProgressWriteOutcome.SUCCESS
+    }
+
+    @Transaction
+    open suspend fun markSeriesUnwatched(source: MediaSource, externalId: String): ProgressWriteOutcome {
+        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
+        deleteSeriesProgress(media.localMediaId)
+        return ProgressWriteOutcome.SUCCESS
+    }
+
+
+    @Transaction
     open suspend fun setMediaWatchedDate(
         source: MediaSource,
         externalId: String,

@@ -38,18 +38,24 @@ object FakeAnimeData {
 
     val searchResult = MediaSearchResult(
         externalRef = animeRef,
-        mediaType = MediaType.ANIME,
+        mediaType = MediaType.SERIES,
         title = longEnglishTitle,
         originalTitle = longJapaneseTitle,
-        releaseDate = LocalDate.of(2025, 1, 8)
+        releaseDate = LocalDate.of(2025, 1, 8),
+        animeFormat = AnimeFormat.TV,
+        episodes = 28,
+        status = "Currently Airing",
+        score = 9.1
     )
 
     val secondSearchResult = MediaSearchResult(
         externalRef = ExternalMediaRef(MediaSource.JIKAN, "52992"),
-        mediaType = MediaType.ANIME,
+        mediaType = MediaType.MOVIE,
         title = "Synthetic Anime Movie",
         originalTitle = "合成アニメ映画",
-        releaseDate = LocalDate.of(2024, 7, 20)
+        releaseDate = LocalDate.of(2024, 7, 20),
+        animeFormat = AnimeFormat.MOVIE,
+        score = 8.5
     )
 
     val searchResults = listOf(searchResult, secondSearchResult)

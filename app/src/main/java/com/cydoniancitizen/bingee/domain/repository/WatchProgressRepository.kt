@@ -19,4 +19,8 @@ interface WatchProgressRepository {
     suspend fun markMovieWatched(reference: ExternalMediaRef): AppResult<Unit>
 
     suspend fun markMovieUnwatched(reference: ExternalMediaRef): AppResult<Unit>
+
+    suspend fun markSeriesWatched(reference: ExternalMediaRef): AppResult<Unit>
+
+    suspend fun markSeriesUnwatched(reference: ExternalMediaRef): AppResult<Unit>
 }

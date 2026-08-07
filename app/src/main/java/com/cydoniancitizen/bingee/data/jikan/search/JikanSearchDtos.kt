@@ -13,13 +13,18 @@ internal data class JikanPaginationDto(
 )
 
 internal data class JikanAnimeSearchResultDto(
-    @SerializedName("mal_id") val malId: Int?,
-    val title: String?,
-    @SerializedName("title_english") val titleEnglish: String?,
-    @SerializedName("title_japanese") val titleJapanese: String?,
-    val synopsis: String?,
-    val images: JikanImagesDto?,
-    val aired: JikanAiredDto?
+    @SerializedName("mal_id") val malId: Int? = null,
+    val title: String? = null,
+    @SerializedName("title_english") val titleEnglish: String? = null,
+    @SerializedName("title_japanese") val titleJapanese: String? = null,
+    val synopsis: String? = null,
+    val images: JikanImagesDto? = null,
+    val type: String? = null,
+    val status: String? = null,
+    val episodes: Int? = null,
+    val score: Double? = null,
+    val members: Int? = null,
+    val aired: JikanAiredDto? = null
 )
 
 internal data class JikanImagesDto(val jpg: JikanJpgImageDto?)

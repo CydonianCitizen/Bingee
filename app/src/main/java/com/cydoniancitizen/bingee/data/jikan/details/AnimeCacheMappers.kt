@@ -21,7 +21,7 @@ internal fun CachedAnimeRelation.toCachedDomain(
     freshnessPolicy: CacheFreshnessPolicy
 ): CachedAnimeDetails? {
     val row = details ?: return null
-    check(media.mediaType == MediaType.ANIME)
+    check(media.mediaType == MediaType.ANIME || media.mediaType == MediaType.MOVIE || media.mediaType == MediaType.SERIES)
     check(externalRefs.any { it.source == MediaSource.JIKAN && it.externalId == reference.externalId })
     return CachedAnimeDetails(
         details = AnimeDetails(
@@ -56,7 +56,7 @@ internal fun CachedAnimeRelation.toCachedDomain(
 
 internal fun AnimeDetails.toCacheWrite(now: Instant): AnimeCacheWrite = AnimeCacheWrite(
     media = MediaEntity(
-        mediaType = MediaType.ANIME,
+        mediaType = com.cydoniancitizen.bingee.domain.model.AnimeFormatClassifier.toMediaType(format) ?: MediaType.ANIME,
         title = title,
         originalTitle = japaneseTitle ?: englishTitle,
         overview = synopsis,
