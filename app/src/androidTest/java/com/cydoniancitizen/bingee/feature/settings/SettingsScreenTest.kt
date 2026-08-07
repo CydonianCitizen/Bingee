@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -40,11 +42,10 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Language").assertIsDisplayed()
         composeRule.onNodeWithText("English").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("System default").assertDoesNotExist()
 
         composeRule.onNodeWithText("English").performClick()
         composeRule.onNodeWithText("Italiano").assertIsDisplayed()
-        composeRule.onNodeWithText("System default").assertDoesNotExist()
+        composeRule.onNode(hasText("System default") and hasAnyAncestor(hasText("Language"))).assertDoesNotExist()
 
         composeRule.onNodeWithText("Italiano").performClick()
         assertEquals(AppLanguage.ITALIAN, selectedLanguage)
@@ -98,8 +99,8 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Open Source").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(
             "Bingee is open source. You can help improve the app by reporting issues, suggesting features, or contributing code on GitHub."
-        ).assertIsDisplayed()
-        composeRule.onNodeWithText("View on GitHub").assertIsDisplayed()
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("View on GitHub").performScrollTo().assertIsDisplayed()
 
         // Verify click does not crash even without real browser intent handling in unit test context
         composeRule.onNodeWithText("View on GitHub").performClick()

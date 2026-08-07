@@ -10,7 +10,7 @@ class ReleaseEventIdentityTest {
         val media = identity(MediaSource.TMDB, ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE)
         val season = identity(MediaSource.TMDB, ReleaseSubjectType.SEASON, ReleaseEventType.SEASON_PREMIERE)
         val episode = identity(MediaSource.TMDB, ReleaseSubjectType.EPISODE, ReleaseEventType.EPISODE_AIRING)
-        val otherProvider = identity(MediaSource.JIKAN, ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE)
+        val otherProvider = identity(MediaSource.IMDB, ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE)
         val otherEvent = identity(MediaSource.TMDB, ReleaseSubjectType.MEDIA, ReleaseEventType.SEASON_PREMIERE)
 
         assertEquals(5, setOf(media, season, episode, otherProvider, otherEvent).size)

@@ -45,7 +45,7 @@ class NotificationDeliveryDaoTest {
         assertEquals(1, dao.count())
 
         listOf(
-            base.copy(source = MediaSource.JIKAN),
+            base.copy(source = MediaSource.IMDB),
             base.copy(subjectType = ReleaseSubjectType.SEASON),
             base.copy(eventType = ReleaseEventType.SEASON_PREMIERE),
             base.copy(eventDate = base.eventDate.plusDays(1)),

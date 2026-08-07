@@ -201,7 +201,6 @@ internal abstract class WatchProgressDao {
         return ProgressWriteOutcome.SUCCESS
     }
 
-
     @Transaction
     open suspend fun setMediaWatchedDate(
         source: MediaSource,

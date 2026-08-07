@@ -136,7 +136,7 @@ class WatchedStatisticsTest {
         )
 
         val entries = listOf(watchedMovieWithDate, watchedMovieWithoutDate, completedTvSeries, unwatchedMovie)
-        val stats = calculateWatchedStatistics(entries, animeAvailable = false)
+        val stats = calculateWatchedStatistics(entries)
 
         assertEquals(2, stats.moviesWatchedCount)
         assertEquals(1, stats.tvSeriesCompletedCount)
@@ -154,23 +154,5 @@ class WatchedStatisticsTest {
         assertEquals(1, stats.watchedByYear.size)
         assertEquals(2026, stats.watchedByYear.first().year)
         assertEquals(2, stats.watchedByYear.first().count)
-    }
-
-    @Test
-    fun calculateWatchedStatisticsExcludesHiddenAnimeWhenDisabled() {
-        val animeMovie = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.JIKAN, "1"),
-            mediaType = MediaType.ANIME,
-            title = "Anime Movie",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
-            watchedDate = LocalDate.of(2026, 1, 1)
-        )
-
-        val statsDisabled = calculateWatchedStatistics(listOf(animeMovie), animeAvailable = false)
-        assertEquals(0, statsDisabled.moviesWatchedCount)
-
-        val statsEnabled = calculateWatchedStatistics(listOf(animeMovie), animeAvailable = true)
-        assertEquals(1, statsEnabled.moviesWatchedCount)
     }
 }

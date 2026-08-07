@@ -1,9 +1,6 @@
 package com.cydoniancitizen.bingee.data.library.local
 
 import androidx.room.TypeConverter
-import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
-import com.cydoniancitizen.bingee.core.model.AnimeFormat
-import com.cydoniancitizen.bingee.core.model.AnimeStatus
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
@@ -21,24 +18,6 @@ internal class RoomConverters {
 
     @TypeConverter
     fun stringToMediaType(value: String): MediaType = MediaType.valueOf(value)
-
-    @TypeConverter
-    fun animeFormatToString(value: AnimeFormat): String = value.name
-
-    @TypeConverter
-    fun stringToAnimeFormat(value: String): AnimeFormat = AnimeFormat.valueOf(value)
-
-    @TypeConverter
-    fun animeStatusToString(value: AnimeStatus): String = value.name
-
-    @TypeConverter
-    fun stringToAnimeStatus(value: String): AnimeStatus = AnimeStatus.valueOf(value)
-
-    @TypeConverter
-    fun completionOriginToString(value: AnimeCompletionOrigin?): String? = value?.name
-
-    @TypeConverter
-    fun stringToCompletionOrigin(value: String?): AnimeCompletionOrigin? = value?.let(AnimeCompletionOrigin::valueOf)
 
     @TypeConverter
     fun localDateToString(value: LocalDate?): String? = value?.toString()

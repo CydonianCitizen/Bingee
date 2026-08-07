@@ -51,10 +51,6 @@ sealed interface AppError {
         override val isRetryable = false
     }
 
-    data object FeatureUnavailable : AppError {
-        override val isRetryable = false
-    }
-
     data object MediaTypeMismatch : AppError {
         override val isRetryable = false
     }

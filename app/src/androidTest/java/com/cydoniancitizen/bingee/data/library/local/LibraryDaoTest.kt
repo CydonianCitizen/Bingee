@@ -69,12 +69,12 @@ class LibraryDaoTest {
     fun sameNumericIdFromDifferentProvidersDoesNotCollide() = runBlocking {
         val now = Instant.parse("2026-08-01T10:00:00Z")
         val tmdb = dao.addToLibrary(media("Movie", MediaType.MOVIE, now), MediaSource.TMDB, "7", now)
-        val jikan = dao.addToLibrary(media("Series", MediaType.SERIES, now), MediaSource.JIKAN, "7", now)
+        val imdb = dao.addToLibrary(media("Series", MediaType.SERIES, now), MediaSource.IMDB, "7", now)
 
-        assertNotEquals(tmdb.media.localMediaId, jikan.media.localMediaId)
+        assertNotEquals(tmdb.media.localMediaId, imdb.media.localMediaId)
         assertEquals(2, dao.observeLibraryItems().firstValue().size)
         assertTrue(dao.isInLibrary(MediaSource.TMDB, "7"))
-        assertTrue(dao.isInLibrary(MediaSource.JIKAN, "7"))
+        assertTrue(dao.isInLibrary(MediaSource.IMDB, "7"))
     }
 
     @Test

@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.data.calendar
 
-import com.cydoniancitizen.bingee.core.model.AnimeDetails
 import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaType
@@ -58,20 +57,6 @@ internal class ReleaseEventProjector @Inject constructor() {
                 subjectType = ReleaseSubjectType.EPISODE,
                 externalId = episode.externalRef.externalId,
                 eventType = ReleaseEventType.EPISODE_AIRING
-            ),
-            eventDate = date,
-            projectedAt = updatedAt,
-            sourceMetadataUpdatedAt = updatedAt
-        )
-    }
-
-    fun anime(details: AnimeDetails, updatedAt: Instant): ProjectedReleaseEvent? = details.startDate?.let { date ->
-        ProjectedReleaseEvent(
-            identity = ReleaseSubjectIdentity(
-                source = details.externalRef.source,
-                subjectType = ReleaseSubjectType.MEDIA,
-                externalId = details.externalRef.externalId,
-                eventType = ReleaseEventType.ANIME_PREMIERE
             ),
             eventDate = date,
             projectedAt = updatedAt,

@@ -135,7 +135,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
 - Source/type enums use names, dates use ISO `LocalDate`, and timestamps use UTC `Instant`; malformed values fail safely rather than changing meaning.
-- Version 1 is the canonical database version. It incorporates all media entries, external references, membership, media details, genres, seasons, episodes, episode/movie/series watch progress, ratings, release events, notification deliveries, portable preferences, import provenance, anime details/relations/progress, and media link groups/audit records.
+- Version 1 is the canonical database version. It incorporates all media entries, external references, membership, media details, genres, seasons, episodes, episode/movie/series watch progress, ratings, release events, notification deliveries, portable preferences, and import provenance. No Anime-specific Room structures exist.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
@@ -144,8 +144,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Versioned backup and restore
 
-- `data/importexport` owns dedicated backup DTOs, a manual Gson tree/stream codec, bounded input, structural parsing, pure semantic validation, deterministic export mapping, SAF file access, and the narrow FileProvider share path.
-- Export emits `bingee-backup` v1 and import accepts v1. V1 includes TMDB and Jikan identity, favorites, watched dates, anime metadata, relations, progress, membership, ratings, and media link groups/audit records; restore regenerates local IDs and anime-premiere events transactionally. Freshness, provider responses, credentials, network state, WorkManager records, and delivery history remain excluded.
+- Export emits `bingee-backup` v1 and import accepts v1. V1 includes TMDB identity, favorites, watched dates, progress, membership, ratings, and preferences; restore regenerates local IDs transactionally. Freshness, provider responses, credentials, network state, WorkManager records, and delivery history remain excluded.
 - Import supports only `REPLACE_PORTABLE_DATA`: parse and validate first, preview second, one explicit Room transaction last. The transaction regenerates local IDs, restores portable state, rebuilds release events, clears technical derived state, and leaves credential/permission/enablement/device runtime state outside the transaction.
 - SAF uses `CreateDocument("application/json")` and `OpenDocument`; sharing uses a private cache subdirectory exposed only through a read-only `FileProvider` URI. Backup content and selected URIs are never logged.
 
@@ -168,7 +167,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - Manual refresh uses at most three concurrent title operations. Movies refresh details. TV refresh first updates details/summaries, then seasons with cached episode metadata, highest regular season, and known current/future regular seasons. Season zero is selected only when episode metadata is cached or its air date lies within Home window.
 - Successful and failed operations are isolated. At least one successful eligible operation permits advancing last-successful refresh after local consistency succeeds; complete failure and empty Library do not advance it.
 - Background refresh and notification evaluation each run as unique approximate 24-hour work. Calendar batches 20 oldest or never-refreshed active parents and retains title concurrency three. Notification evaluation is local-only, bounded to 200 candidates in the seven-day window, and prunes ledger rows beyond 30 days.
-- Current limits: no exact release time/delivery, per-event reminder, snooze, notification action/history, regional theatrical selector, provider-removal reconciliation, external calendar integration, push messaging, anime notification, or inferred anime episode event.
+- Current limits: no exact release time/delivery, per-event reminder, snooze, notification action/history, regional theatrical selector, provider-removal reconciliation, external calendar integration, or push messaging.
 
 ## Fake strategy
 
@@ -232,4 +231,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0023. ADR 0020 keeps Search provider-separated; ADR 0021 keeps every Jikan entry, cour, sequel, and relation distinct; ADR 0022 governs cross-provider equivalence and reversible media links; ADR 0023 establishes multiplatform readiness without premature Android migration before `1.0.0-stable`. Backup v3 serves as the cross-platform data contract. Cross-provider linking, per-episode anime history, anime notifications, manga, accounts, recommendations, cloud sync, and other import formats remain deferred.
+Accepted decisions are recorded in ADRs 0001–0023. TMDB is the single media provider for Bingee. Movies and TV Series may include anime or animated content from TMDB. No Jikan runtime integration exists, and no Anime-specific Room or Backup structures exist. Backup v1 serves as the data contract. Accounts, recommendations, cloud sync, and other import formats remain deferred.

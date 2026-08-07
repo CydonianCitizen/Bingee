@@ -80,7 +80,7 @@ class DefaultWatchProgressRepositoryTest {
 
         assertEquals(
             AppResult.Failure(AppError.UnsupportedData),
-            repository.markEpisodeWatched(ExternalMediaRef(MediaSource.JIKAN, "1"))
+            repository.markEpisodeWatched(ExternalMediaRef(MediaSource.IMDB, "1"))
         )
         assertEquals(
             AppResult.Failure(AppError.InvalidInput),

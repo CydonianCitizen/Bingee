@@ -10,7 +10,6 @@ data class MediaSearchResult(
     val posterUrl: String? = null,
     val releaseDate: LocalDate? = null,
     val overview: String? = null,
-    val animeFormat: AnimeFormat? = null,
     val episodes: Int? = null,
     val status: String? = null,
     val score: Double? = null

@@ -617,11 +617,6 @@ private fun ProfileGridItem(
                         p.progress.watchedEpisodes,
                         p.progress.trackableEpisodes
                     )
-                    is LibraryProgress.Anime -> if (p.totalEpisodes != null) {
-                        stringResource(R.string.anime_progress_known, p.watchedEpisodes, p.totalEpisodes)
-                    } else {
-                        stringResource(R.string.anime_progress_unknown, p.watchedEpisodes)
-                    }
                     LibraryProgress.Unavailable -> entry.releaseDate?.year?.toString()
                 }
 
@@ -658,20 +653,6 @@ private fun ProfileGridItem(
                     is LibraryProgress.Series -> {
                         if (p.progress.trackableEpisodes > 0) {
                             val fraction = p.progress.watchedEpisodes.toFloat() / p.progress.trackableEpisodes
-                            Spacer(modifier = Modifier.height(2.dp))
-                            LinearProgressIndicator(
-                                progress = { fraction.coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                            )
-                        }
-                    }
-                    is LibraryProgress.Anime -> {
-                        val total = p.totalEpisodes
-                        if (total != null && total > 0) {
-                            val fraction = p.watchedEpisodes.toFloat() / total
                             Spacer(modifier = Modifier.height(2.dp))
                             LinearProgressIndicator(
                                 progress = { fraction.coerceIn(0f, 1f) },
@@ -760,7 +741,6 @@ private fun ProfileListItem(
                         when (entry.mediaType) {
                             MediaType.MOVIE -> R.string.library_type_movie
                             MediaType.SERIES -> R.string.library_type_tv
-                            MediaType.ANIME -> R.string.library_type_anime
                         }
                     )
                 )
@@ -850,9 +830,4 @@ private fun LibraryProgress.displayText(): String = when (this) {
         progress.watchedEpisodes,
         progress.trackableEpisodes
     )
-    is LibraryProgress.Anime -> if (totalEpisodes == null) {
-        stringResource(R.string.anime_progress_unknown, watchedEpisodes)
-    } else {
-        stringResource(R.string.anime_progress_known, watchedEpisodes, totalEpisodes)
-    }
 }

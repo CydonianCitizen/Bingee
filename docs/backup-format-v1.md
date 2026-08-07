@@ -11,19 +11,15 @@ Bingee backup files are UTF-8, human-readable JSON with:
 
 The machine-readable contract is [bingee-backup-v1.schema.json](backup/bingee-backup-v1.schema.json). Unknown additive fields are ignored; missing, malformed, conflicting, or unsupported core fields reject the complete file.
 
-`LocalDate` values use `YYYY-MM-DD`. Enums use names, never ordinals. Provider IDs are nonblank strings qualified by `source` (`TMDB` or `JIKAN`).
+`LocalDate` values use `YYYY-MM-DD`. Enums use names, never ordinals. Provider IDs are nonblank strings qualified by `source` (`TMDB`).
 
 ## Portable data
 
-`media` contains every active Library title, rated title, movie-progress title, or series/anime with progress. It includes a deterministic primary reference, all external references, type (`MOVIE`, `SERIES`, or `ANIME`), title, optional canonical overview/poster, release/first-air date, and `isFavorite` flag. Inactive metadata with no personal state is excluded.
+`media` contains every active Library title, rated title, movie-progress title, or series with progress. It includes a deterministic primary reference, all external references, type (`MOVIE` or `SERIES`), title, optional canonical overview/poster, release/first-air date, and `isFavorite` flag. Inactive metadata with no personal state is excluded.
 
 `seasons` and `episodes` contain all cached records for included series, including season zero and unwatched episodes. Cache freshness, response bodies, and internal Room IDs are excluded.
 
 `library` preserves membership and `addedAt`. `movieProgress`, `seriesProgress`, and `episodeProgress` preserve watched timestamps and optional `watchedDate`. `ratings` preserves value, `ratedAt`, and `updatedAt`.
-
-`animeDetails`, `animeRelations`, and `animeProgress` contain portable Anime metadata, relation structures, and progress state.
-
-`mediaLinkGroups` and `mediaLinkAudit` preserve cross-provider media equivalence links and their audit history.
 
 `preferences` contains only notification lead days and movie/season/episode category selections. Notification enablement, Android permission and channel state remain device-local.
 

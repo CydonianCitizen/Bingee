@@ -63,7 +63,7 @@ class RatingDaoTest {
 
         assertEquals(7, dao.observeRating(MediaSource.TMDB, "101").first()!!.ratingValue)
         assertEquals(8, dao.observeRating(MediaSource.TMDB, "202").first()!!.ratingValue)
-        assertEquals(RatingWriteOutcome.NOT_FOUND, dao.setRating(MediaSource.JIKAN, "101", 5, first))
+        assertEquals(RatingWriteOutcome.NOT_FOUND, dao.setRating(MediaSource.IMDB, "101", 5, first))
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -75,9 +75,9 @@ class RatingDaoTest {
     private fun insertMedia(localId: Long, mediaType: String, externalId: String) {
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, " +
-                "poster_url, release_date, created_at, metadata_updated_at) VALUES" +
+                "poster_url, release_date, created_at, metadata_updated_at, is_favorite) VALUES" +
                 "($localId, '$mediaType', 'Title $localId', NULL, NULL, NULL, NULL, " +
-                "'2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z')"
+                "'2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z', 0)"
         )
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO external_refs(local_media_id, source, external_id) VALUES($localId, 'TMDB', '$externalId')"

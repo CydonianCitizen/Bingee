@@ -101,13 +101,13 @@ private fun ProgressWriteOutcome.toResult(): AppResult<Unit> = when (this) {
 }
 
 private fun ExternalMediaRef.normalizedRefOrNull(): ExternalMediaRef? {
-    if (source != MediaSource.TMDB && source != MediaSource.JIKAN) return null
+    if (source != MediaSource.TMDB) return null
     val id = externalId.trim().takeIf { it.toLongOrNull()?.let { value -> value > 0 } == true } ?: return null
     return ExternalMediaRef(source, id)
 }
 
 private fun ExternalMediaRef.invalidReferenceError(): AppError =
-    if (source == MediaSource.TMDB || source == MediaSource.JIKAN) AppError.InvalidInput else AppError.UnsupportedData
+    if (source == MediaSource.TMDB) AppError.InvalidInput else AppError.UnsupportedData
 
 private fun Throwable.toPersistenceError(): AppError = when (this) {
     is IllegalArgumentException,

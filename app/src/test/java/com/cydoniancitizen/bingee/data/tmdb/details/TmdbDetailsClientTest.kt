@@ -94,7 +94,7 @@ class TmdbDetailsClientTest {
     fun unsupportedSourceAndInvalidIdMakeNoRequest() = runTest {
         assertEquals(
             AppResult.Failure(AppError.UnsupportedData),
-            client.load(ExternalMediaRef(MediaSource.JIKAN, "550"), MediaType.MOVIE)
+            client.load(ExternalMediaRef(MediaSource.IMDB, "550"), MediaType.MOVIE)
         )
         assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("bad"), MediaType.MOVIE))
         assertEquals(0, server.requestCount)

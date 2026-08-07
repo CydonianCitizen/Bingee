@@ -30,7 +30,6 @@ internal class DefaultTvTimeTmdbGateway @Inject constructor(
                 when (mediaType) {
                     MediaType.MOVIE -> result.value.movies
                     MediaType.SERIES -> result.value.series
-                    MediaType.ANIME -> emptyList()
                 }.map(::toCandidate)
             )
         }
@@ -71,7 +70,6 @@ internal class DefaultTvTimeTmdbGateway @Inject constructor(
             category = when (mediaType) {
                 MediaType.MOVIE -> MediaSearchCategory.MOVIES
                 MediaType.SERIES -> MediaSearchCategory.TV_SERIES
-                MediaType.ANIME -> return AppResult.Success(emptyList())
             }
         )
         return when (val result = searchClient.search(query, year)) {

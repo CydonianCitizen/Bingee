@@ -30,7 +30,7 @@ class NotificationIdentityTest {
     @Test
     fun providerSubjectTypeEventTypeDateAndLeadAffectId() {
         val variants = listOf(
-            base.copy(source = MediaSource.JIKAN),
+            base.copy(source = MediaSource.IMDB),
             base.copy(subjectType = ReleaseSubjectType.SEASON),
             base.copy(eventType = ReleaseEventType.SEASON_PREMIERE),
             base.copy(eventDate = base.eventDate.plusDays(1)),

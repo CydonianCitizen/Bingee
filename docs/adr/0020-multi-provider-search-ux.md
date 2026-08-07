@@ -1,6 +1,6 @@
 # ADR 0020: Provider-isolated search categories
 
-- Status: Accepted
+- Status: Superseded (Obsolete - Jikan integration removed)
 - Date: 2026-08-05
 
 ## Context

@@ -29,19 +29,12 @@ internal fun MediaSearchResult.toMediaEntity(now: Instant): MediaEntity = MediaE
 internal fun LibraryItemWithRefs.toDomain(
     preferredRef: ExternalMediaRef? = null,
     progressRow: LibraryDao.LibraryProgressRow? = null,
-    rating: MediaRatingEntity? = null,
-    animeAvailable: Boolean = true
+    rating: MediaRatingEntity? = null
 ): LibraryEntry {
     val refs = externalRefs.map(ExternalRefEntity::toDomain)
     require(refs.isNotEmpty()) { "Persisted library item has no external reference" }
-    val selectedRef = if (!animeAvailable) {
-        refs.firstOrNull { it.source == com.cydoniancitizen.bingee.core.model.MediaSource.TMDB }
-            ?: preferredRef?.takeIf(refs::contains)
-            ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
-    } else {
-        preferredRef?.takeIf(refs::contains)
-            ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
-    }
+    val selectedRef = preferredRef?.takeIf(refs::contains)
+        ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
     val domainProgress = progressRow.toDomainProgress(media.mediaType)
     val domainWatchedDate = progressRow?.let {
         if (media.mediaType == MediaType.MOVIE) it.movieWatchedDate else it.seriesWatchedDate
@@ -67,14 +60,6 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
     this == null -> LibraryProgress.Unavailable
     mediaType == MediaType.MOVIE -> LibraryProgress.Movie(
         movieWatchedAt?.let { MovieWatchState.Watched(it, movieWatchedDate) } ?: MovieWatchState.Unwatched
-    )
-    mediaType == MediaType.ANIME -> LibraryProgress.Anime(
-        watchedEpisodes = animeWatchedEpisodes,
-        totalEpisodes = animeEpisodeTotal,
-        completed = animeCompletedAt != null || (
-            animeEpisodeTotal != null && animeEpisodeTotal > 0 &&
-                animeWatchedEpisodes >= animeEpisodeTotal
-            )
     )
     trackableEpisodes == 0 -> LibraryProgress.Unavailable
     else -> LibraryProgress.Series(

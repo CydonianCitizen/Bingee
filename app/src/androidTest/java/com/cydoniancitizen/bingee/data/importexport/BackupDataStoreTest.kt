@@ -4,19 +4,12 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
-import com.cydoniancitizen.bingee.core.model.AnimeFormat
-import com.cydoniancitizen.bingee.core.model.AnimeStatus
-import com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction
-import com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
 import java.time.Clock
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -83,35 +76,6 @@ class BackupDataStoreTest {
     }
 
     @Test
-    fun v1RestoreCreatesNoAnimeRowsAndPreservesSemanticRoundTrip() = runBlocking {
-        val v1 = plan(
-            movieId = "v1",
-            includeSeries = true,
-            schemaVersion = BACKUP_SCHEMA_VERSION_V1
-        )
-
-        val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(v1.document))
-            as BackupParseResult.Success
-        assertEquals(BACKUP_SCHEMA_VERSION_V1, parsed.document.schemaVersion)
-
-        store.restore(v1)
-        val snapshot = database.portableSnapshotDao().readSnapshot()
-        assertTrue(snapshot.animeDetails.isEmpty())
-        assertTrue(snapshot.animeRelations.isEmpty())
-        assertTrue(snapshot.animeProgress.isEmpty())
-
-        val clock = Clock.fixed(exportedAt, ZoneOffset.UTC)
-        val first = exportedDocument(BackupExporter(store, clock).export().bytes)
-        assertTrue(first.data.animeDetails.isEmpty())
-        assertTrue(first.data.animeRelations.isEmpty())
-        assertTrue(first.data.animeProgress.isEmpty())
-
-        store.restore((BackupValidator.validate(first) as BackupValidationResult.Success).plan)
-        val second = exportedDocument(BackupExporter(store, clock).export().bytes)
-        assertEquals(first.data, second.data)
-    }
-
-    @Test
     fun restoreRollsBackAtEveryInsertionStage() = runBlocking {
         store.restore(plan("existing", includeSeries = true))
         val before = database.portableSnapshotDao().readSnapshot()
@@ -122,11 +86,9 @@ class BackupDataStoreTest {
                 store.restore(
                     plan(
                         "incoming-${failedStage.name}",
-                        includeSeries = true,
-                        includeAnime = true
+                        includeSeries = true
                     ),
                     RestoreFailureInjector { stage ->
-
                         if (stage == failedStage) throw InjectedRestoreFailure(stage)
                     }
                 )
@@ -139,94 +101,10 @@ class BackupDataStoreTest {
     }
 
     @Test
-    fun versionTwoRestoresAnimeProgressRatingRelationsAndPremiere() = runBlocking {
-        val animeRef = BackupRef(MediaSource.JIKAN, "42")
-        val data = BackupData(
-            media = listOf(
-                BackupMedia(
-                    primaryRef = animeRef,
-                    externalRefs = listOf(animeRef),
-                    mediaType = MediaType.ANIME,
-                    title = "Anime",
-                    originalTitle = "アニメ",
-                    overview = null,
-                    posterUrl = null,
-                    releaseDate = null
-                )
-            ),
-            seasons = emptyList(),
-            episodes = emptyList(),
-            library = listOf(BackupLibraryEntry(animeRef, exportedAt)),
-            movieProgress = emptyList(),
-            episodeProgress = emptyList(),
-            ratings = listOf(BackupRating(animeRef, 9, exportedAt, exportedAt)),
-            preferences = BackupPreferences(1, true, true, true),
-            animeDetails = listOf(
-                BackupAnimeDetails(
-                    animeRef,
-                    AnimeFormat.TV,
-                    AnimeStatus.FINISHED,
-                    "Anime",
-                    "アニメ",
-                    "Cached",
-                    12,
-                    "24 min",
-                    LocalDate.of(2026, 8, 5),
-                    null,
-                    "summer",
-                    2026,
-                    8.5,
-                    null
-                )
-            ),
-            animeRelations = listOf(
-                BackupAnimeRelation(
-                    animeRef,
-                    "Sequel",
-                    BackupRef(MediaSource.JIKAN, "43"),
-                    "Anime 2",
-                    AnimeFormat.TV
-                )
-            ),
-            animeProgress = listOf(
-                BackupAnimeProgress(
-                    animeRef,
-                    12,
-                    exportedAt,
-                    AnimeCompletionOrigin.EXPLICIT,
-                    exportedAt
-                )
-            )
-        )
-        val document = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, data)
-        val plan = (BackupValidator.validate(document) as BackupValidationResult.Success).plan
-
-        store.restore(plan)
-
-        val snapshot = database.portableSnapshotDao().readSnapshot()
-        assertEquals(1, snapshot.animeDetails.size)
-        assertEquals(1, snapshot.animeRelations.size)
-        assertEquals(1, snapshot.animeProgress.size)
-        assertEquals(1, snapshot.ratings.size)
-        val events = database.releaseEventDao().getActiveEventsBetween(
-            LocalDate.of(2026, 8, 1),
-            LocalDate.of(2026, 8, 31),
-            10
-        )
-        assertEquals(ReleaseEventType.ANIME_PREMIERE, events.single().eventType)
-    }
-
-    @Test
     fun exportedBackupRestoresToTheSameSemanticData() = runBlocking {
         store.restore(roundTripPlan())
         val clock = Clock.fixed(exportedAt, ZoneOffset.UTC)
         val first = exportedDocument(BackupExporter(store, clock).export().bytes)
-
-        val removedAnime = BackupRef(MediaSource.JIKAN, "900001")
-        assertTrue(first.data.library.none { it.mediaRef == removedAnime })
-        assertTrue(first.data.animeDetails.any { it.mediaRef == removedAnime })
-        assertEquals(5, first.data.animeProgress.single { it.mediaRef == removedAnime }.watchedEpisodeCount)
-        assertEquals(6, first.data.ratings.single { it.mediaRef == removedAnime }.rating)
 
         val validated = BackupValidator.validate(first)
         assertTrue(validated is BackupValidationResult.Success)
@@ -251,7 +129,6 @@ class BackupDataStoreTest {
         val watchedEpisode = BackupRef(MediaSource.TMDB, "episode-round-trip-watched")
         val futureEpisode = BackupRef(MediaSource.TMDB, "episode-round-trip-future")
         val removedMovie = BackupRef(MediaSource.TMDB, "movie-round-trip-removed")
-        val removedAnime = BackupRef(MediaSource.JIKAN, "900001")
         val watchedAt = Instant.parse("2026-07-01T08:00:00Z")
         val ratedAt = Instant.parse("2026-07-02T08:00:00Z")
         val data = BackupData(
@@ -285,16 +162,6 @@ class BackupDataStoreTest {
                     null,
                     null,
                     null
-                ),
-                BackupMedia(
-                    removedAnime,
-                    listOf(removedAnime),
-                    MediaType.ANIME,
-                    "Removed Anime",
-                    "削除したアニメ",
-                    "Portable anime metadata",
-                    null,
-                    LocalDate.of(2026, 6, 1)
                 )
             ),
             seasons = listOf(
@@ -325,37 +192,9 @@ class BackupDataStoreTest {
             episodeProgress = listOf(BackupEpisodeProgress(watchedEpisode, watchedAt)),
             ratings = listOf(
                 BackupRating(movie, 10, ratedAt, ratedAt),
-                BackupRating(removedMovie, 4, ratedAt, ratedAt),
-                BackupRating(removedAnime, 6, ratedAt, ratedAt)
+                BackupRating(removedMovie, 4, ratedAt, ratedAt)
             ),
-            preferences = BackupPreferences(7, false, true, false),
-            animeDetails = listOf(
-                BackupAnimeDetails(
-                    mediaRef = removedAnime,
-                    format = AnimeFormat.TV,
-                    status = AnimeStatus.FINISHED,
-                    englishTitle = "Removed Anime",
-                    japaneseTitle = "削除したアニメ",
-                    synopsis = "Portable anime metadata",
-                    episodeCount = 12,
-                    duration = "24 min",
-                    startDate = LocalDate.of(2026, 6, 1),
-                    endDate = null,
-                    season = "spring",
-                    year = 2026,
-                    providerScore = 7.0,
-                    posterUrl = null
-                )
-            ),
-            animeProgress = listOf(
-                BackupAnimeProgress(
-                    mediaRef = removedAnime,
-                    watchedEpisodeCount = 5,
-                    completedAt = null,
-                    completionOrigin = null,
-                    updatedAt = watchedAt
-                )
-            )
+            preferences = BackupPreferences(7, false, true, false)
         )
         val document = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, data)
         return (BackupValidator.validate(document) as BackupValidationResult.Success).plan
@@ -364,14 +203,12 @@ class BackupDataStoreTest {
     private fun plan(
         movieId: String,
         includeSeries: Boolean,
-        schemaVersion: Int = BACKUP_SCHEMA_VERSION,
-        includeAnime: Boolean = false
+        schemaVersion: Int = BACKUP_SCHEMA_VERSION
     ): ValidatedBackupPlan {
         val movieRef = BackupRef(MediaSource.TMDB, movieId)
         val seriesRef = BackupRef(MediaSource.TMDB, "series-$movieId")
         val seasonRef = BackupRef(MediaSource.TMDB, "season-$movieId")
         val episodeRef = BackupRef(MediaSource.TMDB, "episode-$movieId")
-        val animeRef = BackupRef(MediaSource.JIKAN, "7001")
         val data = BackupData(
             media = buildList {
                 add(BackupMedia(movieRef, listOf(movieRef), MediaType.MOVIE, "Movie $movieId", null, null, null, null))
@@ -384,20 +221,6 @@ class BackupDataStoreTest {
                             "Series $movieId",
                             null,
                             null,
-                            null,
-                            null
-                        )
-                    )
-                }
-                if (includeAnime) {
-                    add(
-                        BackupMedia(
-                            animeRef,
-                            listOf(animeRef),
-                            MediaType.ANIME,
-                            "Anime $movieId",
-                            "アニメ $movieId",
-                            "Portable anime synopsis",
                             null,
                             null
                         )
@@ -420,96 +243,13 @@ class BackupDataStoreTest {
             },
             library = buildList {
                 add(BackupLibraryEntry(movieRef, exportedAt))
-                if (includeAnime) add(BackupLibraryEntry(animeRef, exportedAt))
             },
             movieProgress = listOf(BackupMovieProgress(movieRef, exportedAt)),
             episodeProgress = if (includeSeries) listOf(BackupEpisodeProgress(episodeRef, exportedAt)) else emptyList(),
             ratings = buildList {
                 add(BackupRating(movieRef, 9, exportedAt, exportedAt))
-                if (includeAnime) add(BackupRating(animeRef, 8, exportedAt, exportedAt))
             },
-            preferences = BackupPreferences(3, true, false, true),
-            animeDetails = if (includeAnime) {
-                listOf(
-                    BackupAnimeDetails(
-                        mediaRef = animeRef,
-                        format = AnimeFormat.TV,
-                        status = AnimeStatus.FINISHED,
-                        englishTitle = "Anime $movieId",
-                        japaneseTitle = "アニメ $movieId",
-                        synopsis = "Portable anime synopsis",
-                        episodeCount = 2,
-                        duration = "24 min",
-                        startDate = LocalDate.of(2026, 1, 1),
-                        endDate = LocalDate.of(2026, 1, 15),
-                        season = "winter",
-                        year = 2026,
-                        providerScore = 8.0,
-                        posterUrl = null
-                    )
-                )
-            } else {
-                emptyList()
-            },
-            animeRelations = if (includeAnime) {
-                listOf(
-                    BackupAnimeRelation(
-                        mediaRef = animeRef,
-                        relationType = "Sequel",
-                        relatedRef = BackupRef(MediaSource.JIKAN, "7002"),
-                        relatedTitle = "Anime sequel",
-                        relatedFormat = AnimeFormat.TV
-                    )
-                )
-            } else {
-                emptyList()
-            },
-            animeProgress = if (includeAnime) {
-                listOf(
-                    BackupAnimeProgress(
-                        mediaRef = animeRef,
-                        watchedEpisodeCount = 1,
-                        completedAt = null,
-                        completionOrigin = null,
-                        updatedAt = exportedAt
-                    )
-                )
-            } else {
-                emptyList()
-            },
-            mediaLinkGroups = if (includeAnime && includeSeries) {
-                listOf(
-                    BackupMediaLinkGroup(
-                        groupId = "group-$movieId",
-                        preferredPresentation = BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId),
-                        createdAt = exportedAt,
-                        updatedAt = exportedAt,
-                        members = listOf(
-                            BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId),
-                            BackupMediaIdentity(MediaSource.JIKAN, MediaType.ANIME, "7001")
-                        )
-                    )
-                )
-            } else {
-                emptyList()
-            },
-            mediaLinkAudit = if (includeAnime && includeSeries) {
-                listOf(
-                    BackupMediaLinkAudit(
-                        groupId = "group-$movieId",
-                        action = MediaLinkAuditAction.LINKED,
-                        timestamp = exportedAt,
-                        origin = MediaLinkAuditOrigin.MANUAL_USER_ACTION,
-                        members = listOf(
-                            BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId),
-                            BackupMediaIdentity(MediaSource.JIKAN, MediaType.ANIME, "7001")
-                        ),
-                        preferredPresentation = BackupMediaIdentity(MediaSource.TMDB, MediaType.MOVIE, movieId)
-                    )
-                )
-            } else {
-                emptyList()
-            }
+            preferences = BackupPreferences(3, true, false, true)
         )
         val document = BackupDocument(BACKUP_FORMAT_ID, schemaVersion, exportedAt, data)
         return (BackupValidator.validate(document) as BackupValidationResult.Success).plan

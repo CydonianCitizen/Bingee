@@ -41,9 +41,8 @@ data class WatchedStatistics(
                 episodesWatchedCount == 0
 }
 
-fun calculateWatchedStatistics(entries: List<LibraryEntry>, animeAvailable: Boolean = false): WatchedStatistics {
+fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
     val watchedEntries = entries.filter { entry ->
-        if (!animeAvailable && entry.mediaType == MediaType.ANIME) return@filter false
         entry.isWatched()
     }
 
@@ -58,7 +57,6 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>, animeAvailable: Bool
     val tvSeriesCompletedCount = tvSeries.count { entry ->
         when (val p = entry.progress) {
             is LibraryProgress.Series -> p.progress.isComplete
-            is LibraryProgress.Anime -> p.completed
             else -> false
         }
     }
@@ -76,11 +74,6 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>, animeAvailable: Bool
             is LibraryProgress.Series -> {
                 totalEpisodesWatched += p.progress.watchedEpisodes
                 totalWatchTimeMinutes += p.progress.watchedEpisodes * 45L
-                isIncompleteWatchTime = true
-            }
-            is LibraryProgress.Anime -> {
-                totalEpisodesWatched += p.watchedEpisodes
-                totalWatchTimeMinutes += p.watchedEpisodes * 24L
                 isIncompleteWatchTime = true
             }
             LibraryProgress.Unavailable -> {

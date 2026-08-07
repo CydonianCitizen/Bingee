@@ -15,7 +15,7 @@ class RoomConvertersTest {
     @Test
     fun enumsPersistByStableNameInsteadOfOrdinal() {
         assertEquals("TMDB", converters.mediaSourceToString(MediaSource.TMDB))
-        assertEquals(MediaSource.JIKAN, converters.stringToMediaSource("JIKAN"))
+        assertEquals(MediaSource.IMDB, converters.stringToMediaSource("IMDB"))
         assertEquals("MOVIE", converters.mediaTypeToString(MediaType.MOVIE))
         assertEquals(MediaType.SERIES, converters.stringToMediaType("SERIES"))
     }

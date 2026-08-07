@@ -65,12 +65,6 @@ sealed interface LibraryProgress {
     data class Movie(val state: MovieWatchState) : LibraryProgress
 
     data class Series(val progress: SeriesProgress) : LibraryProgress
-
-    data class Anime(val watchedEpisodes: Int, val totalEpisodes: Int?, val completed: Boolean) : LibraryProgress {
-        init {
-            require(watchedEpisodes >= 0)
-        }
-    }
 }
 
 fun deriveEpisodeWatchState(episode: Episode, watchedAt: Instant?, today: LocalDate): EpisodeWatchState = when {

@@ -64,8 +64,9 @@ class BackgroundRefreshPlannerTest {
     private fun insertMedia(id: Long, externalId: String, type: MediaType, active: Boolean, fetchedAt: String?) {
         sql(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                "release_date, created_at, metadata_updated_at) VALUES($id, '${type.name}', 'Fixture $id', " +
-                "NULL, NULL, NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z')"
+                "release_date, created_at, metadata_updated_at, is_favorite) VALUES(" +
+                "$id, '${type.name}', 'Fixture $id', NULL, NULL, NULL, NULL, " +
+                "'2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z', 0)"
         )
         sql("INSERT INTO external_refs(local_media_id, source, external_id) VALUES($id, 'TMDB', '$externalId')")
         if (active) sql("INSERT INTO library_entries(local_media_id, added_at) VALUES($id, '2026-01-01T00:00:00Z')")

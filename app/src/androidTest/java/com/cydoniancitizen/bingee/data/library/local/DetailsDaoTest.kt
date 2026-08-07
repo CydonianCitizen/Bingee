@@ -105,10 +105,10 @@ class DetailsDaoTest {
     @Test
     fun sameNumericIdAcrossProvidersRemainsSeparated() = runBlocking {
         store(title = "TMDB", source = MediaSource.TMDB)
-        store(title = "Jikan", source = MediaSource.JIKAN)
+        store(title = "IMDB", source = MediaSource.IMDB)
 
         assertEquals("TMDB", detailsDao.getCachedDetails(MediaSource.TMDB, "550")?.media?.title)
-        assertEquals("Jikan", detailsDao.getCachedDetails(MediaSource.JIKAN, "550")?.media?.title)
+        assertEquals("IMDB", detailsDao.getCachedDetails(MediaSource.IMDB, "550")?.media?.title)
         assertEquals(2, count("media_entries"))
     }
 

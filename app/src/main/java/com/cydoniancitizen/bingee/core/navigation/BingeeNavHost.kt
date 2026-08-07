@@ -18,9 +18,7 @@ import androidx.navigation.navArgument
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.feature.details.AnimeDetailsScreen
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
 import com.cydoniancitizen.bingee.feature.notifications.NotificationsScreen
@@ -112,22 +110,13 @@ fun BingeeNavHost(
                 entry.arguments?.getString(DetailRoute.MEDIA_TYPE_ARG),
                 entry.arguments?.getString(DetailRoute.EXTERNAL_ID_ARG)
             )
-            when {
-                args == null -> InvalidDetailRoute(onBack = navController::popBackStack)
-                args.reference.source == MediaSource.JIKAN -> {
-                    AnimeDetailsScreen(
-                        onBack = navController::popBackStack,
-                        onOpenRelated = { relation ->
-                            navController.navigate(DetailRoute.create(relation.animeRef, MediaType.ANIME))
-                        }
-                    )
-                }
-                else -> {
-                    MediaDetailsScreen(
-                        onBack = navController::popBackStack,
-                        onOpenSettings = onOpenSettings
-                    )
-                }
+            if (args == null) {
+                InvalidDetailRoute(onBack = navController::popBackStack)
+            } else {
+                MediaDetailsScreen(
+                    onBack = navController::popBackStack,
+                    onOpenSettings = onOpenSettings
+                )
             }
         }
     }

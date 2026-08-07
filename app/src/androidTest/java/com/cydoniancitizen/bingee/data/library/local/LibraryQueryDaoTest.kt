@@ -60,9 +60,9 @@ class LibraryQueryDaoTest {
         val db = database.openHelper.writableDatabase
         db.execSQL(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                "release_date, created_at, metadata_updated_at) VALUES" +
+                "release_date, created_at, metadata_updated_at, is_favorite) VALUES" +
                 "($id, '$type', '$escapedTitle', $originalValue, NULL, NULL, NULL, " +
-                "'2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z')"
+                "'2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z', 0)"
         )
         db.execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES($id, 'TMDB', '$id')")
         if (active) {

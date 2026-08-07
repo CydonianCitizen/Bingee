@@ -97,10 +97,10 @@ class DefaultMediaDetailsRepositoryTest {
     fun unsupportedProviderFailsWithoutRemoteRequest() = runTest {
         val remote = FakeRemote { ref, type -> AppResult.Success(details(ref, type, "Unexpected")) }
         val repository = repository(FakeDetailsDao(), remote)
-        val jikan = ExternalMediaRef(MediaSource.JIKAN, "550")
+        val imdb = ExternalMediaRef(MediaSource.IMDB, "550")
 
-        assertEquals(AppResult.Failure(AppError.UnsupportedData), repository.refreshDetails(jikan, MediaType.MOVIE))
-        assertEquals(AppResult.Failure(AppError.UnsupportedData), repository.observeDetails(jikan).first())
+        assertEquals(AppResult.Failure(AppError.UnsupportedData), repository.refreshDetails(imdb, MediaType.MOVIE))
+        assertEquals(AppResult.Failure(AppError.UnsupportedData), repository.observeDetails(imdb).first())
         assertTrue(remote.calls.isEmpty())
     }
 

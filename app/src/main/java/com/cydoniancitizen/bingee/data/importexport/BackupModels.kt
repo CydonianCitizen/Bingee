@@ -1,10 +1,5 @@
 package com.cydoniancitizen.bingee.data.importexport
 
-import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
-import com.cydoniancitizen.bingee.core.model.AnimeFormat
-import com.cydoniancitizen.bingee.core.model.AnimeStatus
-import com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction
-import com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
@@ -27,23 +22,6 @@ internal object BackupLimits {
 internal data class BackupRef(val source: MediaSource, val externalId: String)
 
 internal data class BackupMediaIdentity(val source: MediaSource, val mediaType: MediaType, val externalId: String)
-
-internal data class BackupMediaLinkGroup(
-    val groupId: String,
-    val members: List<BackupMediaIdentity>,
-    val preferredPresentation: BackupMediaIdentity,
-    val createdAt: Instant,
-    val updatedAt: Instant
-)
-
-internal data class BackupMediaLinkAudit(
-    val groupId: String,
-    val action: MediaLinkAuditAction,
-    val timestamp: Instant,
-    val origin: MediaLinkAuditOrigin,
-    val members: List<BackupMediaIdentity>,
-    val preferredPresentation: BackupMediaIdentity? = null
-)
 
 internal data class BackupMedia(
     val primaryRef: BackupRef,
@@ -97,39 +75,6 @@ internal data class BackupEpisodeProgress(val episodeRef: BackupRef, val watched
 
 internal data class BackupRating(val mediaRef: BackupRef, val rating: Int, val ratedAt: Instant, val updatedAt: Instant)
 
-internal data class BackupAnimeDetails(
-    val mediaRef: BackupRef,
-    val format: AnimeFormat,
-    val status: AnimeStatus,
-    val englishTitle: String?,
-    val japaneseTitle: String?,
-    val synopsis: String?,
-    val episodeCount: Int?,
-    val duration: String?,
-    val startDate: LocalDate?,
-    val endDate: LocalDate?,
-    val season: String?,
-    val year: Int?,
-    val providerScore: Double?,
-    val posterUrl: String?
-)
-
-internal data class BackupAnimeRelation(
-    val mediaRef: BackupRef,
-    val relationType: String,
-    val relatedRef: BackupRef,
-    val relatedTitle: String,
-    val relatedFormat: AnimeFormat?
-)
-
-internal data class BackupAnimeProgress(
-    val mediaRef: BackupRef,
-    val watchedEpisodeCount: Int,
-    val completedAt: Instant?,
-    val completionOrigin: AnimeCompletionOrigin?,
-    val updatedAt: Instant
-)
-
 internal data class BackupPreferences(
     val notificationLeadDays: Int,
     val notifyMovieReleases: Boolean,
@@ -146,11 +91,6 @@ internal data class BackupData(
     val episodeProgress: List<BackupEpisodeProgress>,
     val ratings: List<BackupRating>,
     val preferences: BackupPreferences,
-    val animeDetails: List<BackupAnimeDetails> = emptyList(),
-    val animeRelations: List<BackupAnimeRelation> = emptyList(),
-    val animeProgress: List<BackupAnimeProgress> = emptyList(),
-    val mediaLinkGroups: List<BackupMediaLinkGroup> = emptyList(),
-    val mediaLinkAudit: List<BackupMediaLinkAudit> = emptyList(),
     val seriesProgress: List<BackupSeriesProgress> = emptyList()
 )
 

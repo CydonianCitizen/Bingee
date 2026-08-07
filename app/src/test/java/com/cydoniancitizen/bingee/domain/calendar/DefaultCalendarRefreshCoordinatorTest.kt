@@ -18,7 +18,6 @@ import com.cydoniancitizen.bingee.core.model.SeasonProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
-import com.cydoniancitizen.bingee.domain.repository.AnimeDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
@@ -84,27 +83,6 @@ class DefaultCalendarRefreshCoordinatorTest {
         assertEquals(1, summary.operationsSucceeded)
         assertEquals(1, calendar.backfillCalls)
         assertEquals(now, calendar.lastMarked)
-    }
-
-    @Test
-    fun jikanRefreshIsSkippedWhenAnimeIsDisabled() = runTest {
-        val calendar = FakeCalendarRepository()
-        val details = FakeDetailsRepository()
-        val animeRepo = FakeAnimeDetailsRepository()
-        val summary = coordinator(
-            entries = listOf(animeEntry("100")),
-            details = details,
-            series = FakeSeriesRepository(),
-            calendar = calendar,
-            anime = animeRepo,
-            animeAvailability = com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(
-                isAvailable = false
-            )
-        ).refresh()
-
-        assertEquals(0, animeRepo.calls.size)
-        assertEquals(1, summary.operationsSkipped)
-        assertEquals(0, summary.operationsFailed)
     }
 
     @Test
@@ -181,175 +159,26 @@ class DefaultCalendarRefreshCoordinatorTest {
         assertEquals(0, details.activeCalls)
     }
 
-    @Test
-    fun missingTmdbCredentialSkipsTmdbButRefreshesJikan() = runTest {
-        val anime = FakeAnimeDetailsRepository()
-        val animeEntry = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.JIKAN, "42"),
-            mediaType = MediaType.ANIME,
-            title = "Anime",
-            addedAt = now
-        )
-        val summary = coordinator(
-            entries = listOf(entry("42", MediaType.MOVIE), animeEntry),
-            details = FakeDetailsRepository(),
-            series = FakeSeriesRepository(),
-            calendar = FakeCalendarRepository(),
-            credential = TmdbCredentialStatus.NotConfigured,
-            anime = anime
-        ).refresh()
-
-        assertEquals(CalendarRefreshOutcome.PARTIAL_SUCCESS, summary.outcome)
-        assertEquals(listOf(animeEntry.mediaRef), anime.calls)
-        assertEquals(1, summary.operationsSkipped)
-        assertEquals(1, summary.operationsSucceeded)
-    }
-
-    @Test
-    fun providerFailureMatrixKeepsJikanAndTmdbOutcomesIndependent() = runTest {
-        val tmdbEntry = entry("10", MediaType.MOVIE)
-        val animeEntry = animeEntry("10")
-
-        suspend fun summaryFor(
-            entries: List<LibraryEntry>,
-            credential: TmdbCredentialStatus = TmdbCredentialStatus.Valid,
-            tmdbResult: AppResult<Unit> = AppResult.Success(Unit),
-            animeResult: AppResult<Unit> = AppResult.Success(Unit)
-        ): CalendarRefreshSummary = coordinator(
-            entries = entries,
-            details = FakeDetailsRepository { _, _ -> tmdbResult },
-            series = FakeSeriesRepository(),
-            calendar = FakeCalendarRepository(),
-            credential = credential,
-            anime = FakeAnimeDetailsRepository(animeResult)
-        ).refresh()
-
-        assertEquals(
-            CalendarRefreshOutcome.COMPLETE_SUCCESS,
-            summaryFor(listOf(tmdbEntry)).outcome
-        )
-        assertEquals(
-            CalendarRefreshOutcome.COMPLETE_SUCCESS,
-            summaryFor(listOf(animeEntry)).outcome
-        )
-        assertEquals(
-            CalendarRefreshOutcome.COMPLETE_SUCCESS,
-            summaryFor(listOf(tmdbEntry, animeEntry)).outcome
-        )
-
-        listOf(
-            TmdbCredentialStatus.NotConfigured,
-            TmdbCredentialStatus.Rejected(false)
-        ).forEach { credential ->
-            val summary = summaryFor(
-                entries = listOf(tmdbEntry, animeEntry),
-                credential = credential
-            )
-            assertEquals(CalendarRefreshOutcome.PARTIAL_SUCCESS, summary.outcome)
-            assertEquals(1, summary.operationsSucceeded)
-            assertEquals(1, summary.operationsSkipped)
-        }
-
-        listOf(AppError.RateLimited, AppError.InvalidRemoteResponse).forEach { error ->
-            val summary = summaryFor(
-                entries = listOf(tmdbEntry, animeEntry),
-                animeResult = AppResult.Failure(error)
-            )
-            assertEquals(CalendarRefreshOutcome.PARTIAL_SUCCESS, summary.outcome)
-            assertEquals(1, summary.operationsSucceeded)
-            assertEquals(1, summary.operationsFailed)
-            assertEquals(error, summary.representativeError)
-        }
-
-        val tmdbFailure = summaryFor(
-            entries = listOf(tmdbEntry, animeEntry),
-            tmdbResult = AppResult.Failure(AppError.NetworkUnavailable)
-        )
-        assertEquals(CalendarRefreshOutcome.PARTIAL_SUCCESS, tmdbFailure.outcome)
-        assertEquals(1, tmdbFailure.operationsSucceeded)
-        assertEquals(1, tmdbFailure.operationsFailed)
-        assertEquals(AppError.NetworkUnavailable, tmdbFailure.representativeError)
-
-        val jikanFirst = summaryFor(
-            entries = listOf(animeEntry, tmdbEntry),
-            tmdbResult = AppResult.Failure(AppError.NetworkUnavailable)
-        )
-        assertEquals(CalendarRefreshOutcome.PARTIAL_SUCCESS, jikanFirst.outcome)
-        assertEquals(1, jikanFirst.operationsSucceeded)
-        assertEquals(1, jikanFirst.operationsFailed)
-
-        val bothFailed = summaryFor(
-            entries = listOf(animeEntry, tmdbEntry),
-            tmdbResult = AppResult.Failure(AppError.NetworkUnavailable),
-            animeResult = AppResult.Failure(AppError.RateLimited)
-        )
-        assertEquals(CalendarRefreshOutcome.COMPLETE_FAILURE, bothFailed.outcome)
-        assertEquals(0, bothFailed.operationsSucceeded)
-        assertEquals(2, bothFailed.operationsFailed)
-    }
-
-    @Test
-    fun seasonSelectionUsesEpisodeCacheHighestFutureAndExplicitSeasonZeroPolicy() {
-        val seriesRef = ref("10")
-        val before = listOf(
-            season(seriesRef, 1, LocalDate.of(2020, 1, 1), episodesCached = true),
-            season(seriesRef, 0, LocalDate.of(2020, 1, 1), episodesCached = false)
-        )
-        val after = before + listOf(
-            season(seriesRef, 2, LocalDate.of(2025, 1, 1), episodesCached = false),
-            season(seriesRef, 3, LocalDate.of(2026, 9, 1), episodesCached = false)
-        )
-
-        assertEquals(
-            listOf(1, 3),
-            selectRelevantSeasonNumbers(before, after, LocalDate.of(2026, 8, 3), ReleaseCalendarWindow())
-        )
-
-        val specialInWindow = after.map {
-            if (it.season.seasonNumber == 0) {
-                it.copy(season = it.season.copy(airDate = LocalDate.of(2026, 8, 1)))
-            } else {
-                it
-            }
-        }
-        assertEquals(
-            listOf(0, 1, 3),
-            selectRelevantSeasonNumbers(before, specialInWindow, LocalDate.of(2026, 8, 3), ReleaseCalendarWindow())
-        )
-    }
-
     private fun coordinator(
         entries: List<LibraryEntry>,
         details: FakeDetailsRepository,
         series: FakeSeriesRepository,
         calendar: FakeCalendarRepository,
-        credential: TmdbCredentialStatus = TmdbCredentialStatus.Valid,
-        anime: AnimeDetailsRepository = FakeAnimeDetailsRepository(),
-        animeAvailability: com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability =
-            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+        credential: TmdbCredentialStatus = TmdbCredentialStatus.Valid
     ) = DefaultCalendarRefreshCoordinator(
         libraryRepository = FakeLibraryRepository(entries),
         detailsRepository = details,
-        animeDetailsRepository = anime,
         seriesRepository = series,
         calendarRepository = calendar,
         credentialRepository = FakeCredentialRepository(credential),
         clock = clock,
-        window = ReleaseCalendarWindow(),
-        animeAvailability = animeAvailability
+        window = ReleaseCalendarWindow()
     )
 
     private fun entry(id: String, type: MediaType) = LibraryEntry(
         mediaRef = ref(id),
         mediaType = type,
         title = "Title $id",
-        addedAt = now
-    )
-
-    private fun animeEntry(id: String) = LibraryEntry(
-        mediaRef = ExternalMediaRef(MediaSource.JIKAN, id),
-        mediaType = MediaType.ANIME,
-        title = "Anime $id",
         addedAt = now
     )
 
@@ -394,18 +223,6 @@ class DefaultCalendarRefreshCoordinatorTest {
             } finally {
                 activeCalls--
             }
-        }
-    }
-    private class FakeAnimeDetailsRepository(private val result: AppResult<Unit> = AppResult.Success(Unit)) :
-        AnimeDetailsRepository {
-        val calls = mutableListOf<ExternalMediaRef>()
-
-        override fun observeDetails(reference: ExternalMediaRef) =
-            flowOf(AppResult.Success<com.cydoniancitizen.bingee.core.model.CachedAnimeDetails?>(null))
-
-        override suspend fun refreshDetails(reference: ExternalMediaRef, force: Boolean): AppResult<Unit> {
-            calls += reference
-            return result
         }
     }
 

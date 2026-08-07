@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -85,7 +86,7 @@ class ProfileScreenTest {
         composeRule.onNodeWithText("Watch Later").performClick()
         assertEquals(ProfileCollection.WATCH_LATER, selectedCollection.get())
 
-        composeRule.onNodeWithText("TV Series").performClick()
+        composeRule.onNodeWithText("TV Series").performScrollTo().performClick()
         assertEquals(ProfileCategory.TV_SERIES, selectedCategory.get())
     }
 

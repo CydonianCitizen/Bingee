@@ -1,6 +1,6 @@
 # ADR 0021: Anime entries, relations, and entry-level progress
 
-- Status: Accepted
+- Status: Superseded (Obsolete - Anime integration removed)
 - Date: 2026-08-05
 
 ## Context

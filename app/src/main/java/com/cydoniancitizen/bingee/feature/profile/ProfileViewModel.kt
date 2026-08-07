@@ -2,7 +2,6 @@ package com.cydoniancitizen.bingee.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
@@ -56,17 +55,12 @@ internal data class ProfileUiState(
 fun LibraryEntry.isWatched(): Boolean = when (val p = progress) {
     is LibraryProgress.Movie -> p.state is MovieWatchState.Watched
     is LibraryProgress.Series -> p.progress.watchedEpisodes > 0 || p.progress.isComplete
-    is LibraryProgress.Anime -> p.watchedEpisodes > 0 || p.completed
     LibraryProgress.Unavailable -> libraryState == LibraryState.COMPLETED || libraryState == LibraryState.IN_PROGRESS
 }
 
 fun LibraryEntry.belongsToCategory(category: ProfileCategory): Boolean = when (category) {
-    ProfileCategory.MOVIES ->
-        mediaType == MediaType.MOVIE ||
-            (mediaType == MediaType.ANIME && progress is LibraryProgress.Movie)
-    ProfileCategory.TV_SERIES ->
-        mediaType == MediaType.SERIES ||
-            (mediaType == MediaType.ANIME && progress !is LibraryProgress.Movie)
+    ProfileCategory.MOVIES -> mediaType == MediaType.MOVIE
+    ProfileCategory.TV_SERIES -> mediaType == MediaType.SERIES
 }
 
 fun LibraryEntry.progressSortMetric(): Double = when (val p = progress) {
@@ -75,8 +69,6 @@ fun LibraryEntry.progressSortMetric(): Double = when (val p = progress) {
     } else {
         0.0
     }
-    is LibraryProgress.Anime -> p.totalEpisodes?.takeIf { it > 0 }?.let { p.watchedEpisodes.toDouble() / it }
-        ?: p.watchedEpisodes.toDouble()
     is LibraryProgress.Movie -> if (p.state is MovieWatchState.Watched) 1.0 else 0.0
     LibraryProgress.Unavailable -> 0.0
 }
@@ -84,8 +76,7 @@ fun LibraryEntry.progressSortMetric(): Double = when (val p = progress) {
 @HiltViewModel
 internal class ProfileViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
-    private val displayModePreferences: ProfileDisplayModePreferences,
-    private val animeAvailability: AnimeFeatureAvailability
+    private val displayModePreferences: ProfileDisplayModePreferences
 ) : ViewModel() {
 
     private val mutableUiState = MutableStateFlow(ProfileUiState())
@@ -210,11 +201,9 @@ internal class ProfileViewModel @Inject constructor(
     private fun refilter() {
         val state = mutableUiState.value
         val allRaw = rawEntries.value
-        val stats = calculateWatchedStatistics(allRaw, animeAvailability.isAvailable)
+        val stats = calculateWatchedStatistics(allRaw)
 
         val filtered = allRaw.filter { entry ->
-            if (!animeAvailability.isAvailable && entry.mediaType == MediaType.ANIME) return@filter false
-
             val matchesCollection = when (state.collection) {
                 ProfileCollection.WATCHED -> entry.isWatched()
                 ProfileCollection.WATCH_LATER -> !entry.isWatched() && entry.inLibrary

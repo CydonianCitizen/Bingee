@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaDetails
@@ -128,8 +127,7 @@ class MetadataCalendarStoreTest {
         sql("INSERT INTO library_entries(local_media_id, added_at) VALUES($mediaId, '2026-08-03T12:00:00Z')")
         val repository = DefaultReleaseCalendarRepository(
             database.releaseEventDao(),
-            Clock.fixed(now, ZoneOffset.UTC),
-            TestingAnimeFeatureAvailability(isAvailable = true)
+            Clock.fixed(now, ZoneOffset.UTC)
         )
 
         val events = repository.observeEvents(LocalDate.of(2026, 7, 27)).first()

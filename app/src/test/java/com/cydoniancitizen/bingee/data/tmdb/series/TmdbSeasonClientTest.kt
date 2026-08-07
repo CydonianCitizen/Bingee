@@ -81,7 +81,7 @@ class TmdbSeasonClientTest {
     fun unsupportedInputAndMissingCredentialDoNotCallService() = runTest {
         assertEquals(
             AppResult.Failure(AppError.UnsupportedData),
-            client.load(ExternalMediaRef(MediaSource.JIKAN, "1"), 1)
+            client.load(ExternalMediaRef(MediaSource.IMDB, "1"), 1)
         )
         assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("bad"), 1))
         assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("1"), -1))

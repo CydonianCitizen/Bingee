@@ -21,14 +21,7 @@ import androidx.room.TypeConverters
         CalendarRefreshStateEntity::class,
         NotificationDeliveryEntity::class,
         PortablePreferencesEntity::class,
-        ImportProvenanceRefEntity::class,
-        AnimeDetailsEntity::class,
-        AnimeProgressEntity::class,
-        AnimeRelationEntity::class,
-        MediaLinkGroupEntity::class,
-        MediaLinkMemberEntity::class,
-        MediaLinkAuditEntity::class,
-        MediaLinkAuditMemberEntity::class
+        ImportProvenanceRefEntity::class
     ],
     version = 1,
     exportSchema = true
@@ -54,12 +47,6 @@ internal abstract class BingeeDatabase : RoomDatabase() {
     abstract fun portableSnapshotDao(): PortableSnapshotDao
 
     abstract fun importProvenanceDao(): ImportProvenanceDao
-
-    abstract fun animeDao(): AnimeDao
-
-    abstract fun mediaLinkDao(): MediaLinkDao
-
-    abstract fun equivalenceCandidateDao(): MediaEquivalenceCandidateDao
 
     companion object {
         const val DATABASE_NAME = "bingee.db"

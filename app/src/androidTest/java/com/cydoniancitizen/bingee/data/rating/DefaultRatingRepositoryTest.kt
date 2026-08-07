@@ -34,8 +34,8 @@ class DefaultRatingRepositoryTest {
         database = Room.inMemoryDatabaseBuilder(context, BingeeDatabase::class.java).build()
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                "release_date, created_at, metadata_updated_at) VALUES" +
-                "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, NULL, '2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z')"
+                "release_date, created_at, metadata_updated_at, is_favorite) VALUES" +
+                "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, NULL, '2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z', 0)"
         )
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '101')"

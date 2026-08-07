@@ -1,6 +1,6 @@
 # ADR 0022: Assisted cross-provider equivalence and reversible media links
 
-- Status: Accepted
+- Status: Superseded (Obsolete - Cross-provider links removed)
 - Date: 2026-08-05
 
 ## Context

@@ -3,13 +3,11 @@ package com.cydoniancitizen.bingee.di
 import android.content.Context
 import androidx.room.Room
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
-import com.cydoniancitizen.bingee.data.library.local.AnimeDao
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
 import com.cydoniancitizen.bingee.data.library.local.ImportProgressDao
 import com.cydoniancitizen.bingee.data.library.local.ImportProvenanceDao
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
-import com.cydoniancitizen.bingee.data.library.local.MediaLinkDao
 import com.cydoniancitizen.bingee.data.library.local.NotificationDeliveryDao
 import com.cydoniancitizen.bingee.data.library.local.PortableSnapshotDao
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
@@ -67,17 +65,6 @@ internal object DatabaseModule {
 
     @Provides
     fun provideImportProvenanceDao(database: BingeeDatabase): ImportProvenanceDao = database.importProvenanceDao()
-
-    @Provides
-    fun provideAnimeDao(database: BingeeDatabase): AnimeDao = database.animeDao()
-
-    @Provides
-    fun provideMediaLinkDao(database: BingeeDatabase): MediaLinkDao = database.mediaLinkDao()
-
-    @Provides
-    fun provideEquivalenceCandidateDao(
-        database: BingeeDatabase
-    ): com.cydoniancitizen.bingee.data.library.local.MediaEquivalenceCandidateDao = database.equivalenceCandidateDao()
 
     @Provides
     @Singleton

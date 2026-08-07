@@ -21,7 +21,6 @@ fun AppError.toUiError(): UiError = UiError(
         AppError.LocalStorageFailure -> R.string.error_local_storage
         AppError.NotificationDeliveryFailure -> R.string.error_notification_delivery
         AppError.NotTrackable -> R.string.error_not_trackable
-        AppError.FeatureUnavailable -> R.string.anime_feature_unavailable
         AppError.MediaTypeMismatch -> R.string.error_media_type_mismatch
         is AppError.LinkError -> R.string.error_invalid_input
         AppError.Unknown -> R.string.error_unknown

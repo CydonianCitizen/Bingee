@@ -56,27 +56,6 @@ class BackupJsonCodecTest {
     }
 
     @Test
-    fun committedLinkedFixturesRemainAccepted() {
-        val fixtureNames =
-            listOf("valid-linked-v3.json", "valid-unlinked-audit-v3.json", "valid-numeric-collision-v3.json")
-        for (name in fixtureNames) {
-            val fixture = listOf(
-                Path.of("docs", "backup", "fixtures", name),
-                Path.of("..", "docs", "backup", "fixtures", name)
-            ).first { Files.isRegularFile(it) }
-            val parsed = BackupJsonCodec.parse(Files.readAllBytes(fixture))
-
-            assertTrue("Fixture $name should parse successfully", parsed is BackupParseResult.Success)
-            val document = (parsed as BackupParseResult.Success).document
-            assertEquals(BACKUP_SCHEMA_VERSION_V1, document.schemaVersion)
-            assertTrue(
-                "Fixture $name should validate successfully",
-                BackupValidator.validate(document) is BackupValidationResult.Success
-            )
-        }
-    }
-
-    @Test
     fun rejectsMalformedWrongFormatMissingAndNewerVersion() {
         assertEquals(
             BackupFailureKind.MALFORMED_JSON,

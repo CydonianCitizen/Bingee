@@ -54,6 +54,5 @@ private val ReleaseEventType.sortOrder: Int
     get() = when (this) {
         ReleaseEventType.EPISODE_AIRING -> 0
         ReleaseEventType.SEASON_PREMIERE -> 1
-        ReleaseEventType.ANIME_PREMIERE -> 2
-        ReleaseEventType.MOVIE_RELEASE -> 3
+        ReleaseEventType.MOVIE_RELEASE -> 2
     }

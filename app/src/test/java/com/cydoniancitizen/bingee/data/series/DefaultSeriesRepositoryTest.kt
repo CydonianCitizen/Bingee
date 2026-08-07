@@ -103,7 +103,7 @@ class DefaultSeriesRepositoryTest {
 
         assertEquals(
             AppResult.Failure(AppError.UnsupportedData),
-            repository.refreshSeason(ExternalMediaRef(MediaSource.JIKAN, "100"), 1)
+            repository.refreshSeason(ExternalMediaRef(MediaSource.IMDB, "100"), 1)
         )
         assertEquals(
             AppResult.Failure(AppError.InvalidRemoteResponse),

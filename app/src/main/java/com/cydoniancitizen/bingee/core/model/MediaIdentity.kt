@@ -2,14 +2,12 @@ package com.cydoniancitizen.bingee.core.model
 
 enum class MediaSource {
     TMDB,
-    JIKAN,
     IMDB
 }
 
 enum class MediaType {
     MOVIE,
-    SERIES,
-    ANIME
+    SERIES
 }
 
 data class ExternalMediaRef(val source: MediaSource, val externalId: String) {

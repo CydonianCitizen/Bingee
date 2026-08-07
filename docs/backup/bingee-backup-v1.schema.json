@@ -16,7 +16,7 @@
       "type": "object",
       "required": ["source", "externalId"],
       "properties": {
-        "source": {"enum": ["TMDB", "JIKAN"]},
+        "source": {"enum": ["TMDB"]},
         "externalId": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
@@ -25,8 +25,8 @@
       "type": "object",
       "required": ["source", "mediaType", "externalId"],
       "properties": {
-        "source": {"enum": ["TMDB", "JIKAN"]},
-        "mediaType": {"enum": ["MOVIE", "SERIES", "ANIME"]},
+        "source": {"enum": ["TMDB"]},
+        "mediaType": {"enum": ["MOVIE", "SERIES"]},
         "externalId": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
@@ -37,7 +37,7 @@
       "properties": {
         "primaryRef": {"$ref": "#/$defs/ref"},
         "externalRefs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ref"}},
-        "mediaType": {"enum": ["MOVIE", "SERIES", "ANIME"]},
+        "mediaType": {"enum": ["MOVIE", "SERIES"]},
         "title": {"type": "string", "minLength": 1},
         "originalTitle": {"type": ["string", "null"]},
         "overview": {"type": ["string", "null"]},
@@ -67,81 +67,6 @@
       },
       "additionalProperties": false
     },
-    "animeDetails": {
-      "type": "object",
-      "required": ["mediaRef", "format", "status", "englishTitle", "japaneseTitle", "synopsis", "episodeCount", "duration", "startDate", "endDate", "season", "year", "providerScore", "posterUrl"],
-      "properties": {
-        "mediaRef": {"$ref": "#/$defs/ref"},
-        "format": {"enum": ["TV", "MOVIE", "OVA", "ONA", "SPECIAL", "MUSIC", "CM", "PV", "TV_SPECIAL", "UNKNOWN"]},
-        "status": {"enum": ["AIRING", "FINISHED", "UPCOMING", "UNKNOWN"]},
-        "englishTitle": {"type": ["string", "null"]},
-        "japaneseTitle": {"type": ["string", "null"]},
-        "synopsis": {"type": ["string", "null"]},
-        "episodeCount": {"type": ["integer", "null"], "minimum": 1},
-        "duration": {"type": ["string", "null"]},
-        "startDate": {"type": ["string", "null"], "format": "date"},
-        "endDate": {"type": ["string", "null"], "format": "date"},
-        "season": {"type": ["string", "null"]},
-        "year": {"type": ["integer", "null"]},
-        "providerScore": {"type": ["number", "null"], "minimum": 0, "maximum": 10},
-        "posterUrl": {"type": ["string", "null"]}
-      },
-      "additionalProperties": false
-    },
-    "animeRelation": {
-      "type": "object",
-      "required": ["mediaRef", "relationType", "relatedRef", "relatedTitle", "relatedFormat"],
-      "properties": {
-        "mediaRef": {"$ref": "#/$defs/ref"},
-        "relationType": {"type": "string", "minLength": 1},
-        "relatedRef": {"$ref": "#/$defs/ref"},
-        "relatedTitle": {"type": "string", "minLength": 1},
-        "relatedFormat": {"type": ["string", "null"], "enum": ["TV", "MOVIE", "OVA", "ONA", "SPECIAL", "MUSIC", "CM", "PV", "TV_SPECIAL", "UNKNOWN", null]}
-      },
-      "additionalProperties": false
-    },
-    "animeProgress": {
-      "type": "object",
-      "required": ["mediaRef", "watchedEpisodeCount", "completedAt", "completionOrigin", "updatedAt"],
-      "properties": {
-        "mediaRef": {"$ref": "#/$defs/ref"},
-        "watchedEpisodeCount": {"type": "integer", "minimum": 0, "maximum": 100000},
-        "completedAt": {"type": ["string", "null"], "format": "date-time"},
-        "completionOrigin": {"type": ["string", "null"], "enum": ["INFERRED", "EXPLICIT", null]},
-        "updatedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}
-      },
-      "additionalProperties": false
-    },
-    "mediaLinkGroup": {
-      "type": "object",
-      "required": ["groupId", "members", "preferredPresentation", "createdAt", "updatedAt"],
-      "properties": {
-        "groupId": {"type": "string", "minLength": 1},
-        "members": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/mediaIdentity"}},
-        "preferredPresentation": {"$ref": "#/$defs/mediaIdentity"},
-        "createdAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
-        "updatedAt": {"type": "string", "format": "date-time", "pattern": "Z$"}
-      },
-      "additionalProperties": false
-    },
-    "mediaLinkAudit": {
-      "type": "object",
-      "required": ["groupId", "action", "timestamp", "origin", "members"],
-      "properties": {
-        "groupId": {"type": "string", "minLength": 1},
-        "action": {"enum": ["LINKED", "UNLINKED", "PREFERRED_PRESENTATION_CHANGED"]},
-        "timestamp": {"type": "string", "format": "date-time", "pattern": "Z$"},
-        "origin": {"enum": ["MANUAL_USER_ACTION", "RESTORED_BACKUP"]},
-        "members": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/mediaIdentity"}},
-        "preferredPresentation": {
-          "oneOf": [
-            {"type": "null"},
-            {"$ref": "#/$defs/mediaIdentity"}
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
     "data": {
       "type": "object",
       "required": ["media", "seasons", "episodes", "library", "movieProgress", "episodeProgress", "ratings", "preferences"],
@@ -154,11 +79,6 @@
         "seriesProgress": {"type": "array", "items": {"$ref": "#/$defs/seriesProgress"}},
         "episodeProgress": {"type": "array", "items": {"type": "object"}},
         "ratings": {"type": "array", "items": {"type": "object"}},
-        "animeDetails": {"type": "array", "items": {"$ref": "#/$defs/animeDetails"}},
-        "animeRelations": {"type": "array", "items": {"$ref": "#/$defs/animeRelation"}},
-        "animeProgress": {"type": "array", "items": {"$ref": "#/$defs/animeProgress"}},
-        "mediaLinkGroups": {"type": "array", "items": {"$ref": "#/$defs/mediaLinkGroup"}},
-        "mediaLinkAudit": {"type": "array", "items": {"$ref": "#/$defs/mediaLinkAudit"}},
         "preferences": {"type": "object"}
       },
       "additionalProperties": false

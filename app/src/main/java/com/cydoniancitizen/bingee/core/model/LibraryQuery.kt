@@ -3,8 +3,7 @@ package com.cydoniancitizen.bingee.core.model
 enum class LibraryMediaFilter(val mediaType: MediaType?) {
     ALL(null),
     MOVIES(MediaType.MOVIE),
-    TV_SERIES(MediaType.SERIES),
-    ANIME(MediaType.ANIME)
+    TV_SERIES(MediaType.SERIES)
 }
 
 enum class LibraryStateFilter {
@@ -44,11 +43,6 @@ fun LibraryProgress.deriveLibraryState(): LibraryState = when (this) {
         progress.trackableEpisodes == 0 -> LibraryState.PROGRESS_UNAVAILABLE
         progress.watchedEpisodes == 0 -> LibraryState.NOT_STARTED
         progress.isComplete -> LibraryState.COMPLETED
-        else -> LibraryState.IN_PROGRESS
-    }
-    is LibraryProgress.Anime -> when {
-        completed -> LibraryState.COMPLETED
-        watchedEpisodes == 0 -> LibraryState.NOT_STARTED
         else -> LibraryState.IN_PROGRESS
     }
 }

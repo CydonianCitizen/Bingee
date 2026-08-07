@@ -51,7 +51,6 @@ internal class CalendarRefreshWorkerExecutor @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                // The coordinator skips only TMDB; Jikan work remains eligible.
             }
         }
 

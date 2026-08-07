@@ -1,10 +1,8 @@
 package com.cydoniancitizen.bingee.data.calendar
 
 import android.database.sqlite.SQLiteException
-import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
-import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -25,16 +23,12 @@ import kotlinx.coroutines.flow.map
 @Singleton
 internal class DefaultReleaseCalendarRepository @Inject constructor(
     private val dao: ReleaseEventDao,
-    private val clock: Clock,
-    private val availability: AnimeFeatureAvailability
+    private val clock: Clock
 ) : ReleaseCalendarRepository {
     override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
         dao.observeActiveEvents(fromDate)
             .map<List<ReleaseEventRow>, AppResult<List<ReleaseEvent>>> { rows ->
                 val events = rows.map(ReleaseEventRow::toDomain)
-                    .filter {
-                        if (!availability.isAvailable) it.subject.eventType != ReleaseEventType.ANIME_PREMIERE else true
-                    }
                 AppResult.Success(events)
             }
             .catchPersistence()
@@ -50,7 +44,6 @@ internal class DefaultReleaseCalendarRepository @Inject constructor(
     ): AppResult<List<ReleaseEvent>> = persistenceRead {
         dao.getActiveEventsBetween(fromDate, throughDate, limit)
             .map(ReleaseEventRow::toDomain)
-            .filter { if (!availability.isAvailable) it.subject.eventType != ReleaseEventType.ANIME_PREMIERE else true }
     }
 
     override suspend fun backfill(): AppResult<Unit> = persistenceWrite {

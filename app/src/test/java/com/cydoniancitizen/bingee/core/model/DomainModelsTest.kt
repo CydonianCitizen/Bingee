@@ -12,7 +12,7 @@ class DomainModelsTest {
     fun externalReferencesUseProviderAndIdForEquality() {
         val first = ExternalMediaRef(MediaSource.TMDB, "42")
         val equal = ExternalMediaRef(MediaSource.TMDB, "42")
-        val otherProvider = ExternalMediaRef(MediaSource.JIKAN, "42")
+        val otherProvider = ExternalMediaRef(MediaSource.IMDB, "42")
 
         assertEquals(first, equal)
         assertNotEquals(first, otherProvider)
@@ -25,9 +25,8 @@ class DomainModelsTest {
     }
 
     @Test
-    fun mediaTypeKeepsAnimeDistinctFromMoviesAndSeries() {
-        assertEquals(listOf(MediaType.MOVIE, MediaType.SERIES, MediaType.ANIME), MediaType.entries)
-        assertTrue(MediaType.ANIME !in listOf(MediaType.MOVIE, MediaType.SERIES))
+    fun mediaTypeEntriesAreMovieAndSeries() {
+        assertEquals(listOf(MediaType.MOVIE, MediaType.SERIES), MediaType.entries)
     }
 
     @Test(expected = IllegalArgumentException::class)

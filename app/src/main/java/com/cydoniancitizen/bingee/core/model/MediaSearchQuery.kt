@@ -2,8 +2,7 @@ package com.cydoniancitizen.bingee.core.model
 
 enum class MediaSearchCategory {
     MOVIES,
-    TV_SERIES,
-    ANIME
+    TV_SERIES
 }
 
 data class MediaSearchQuery(

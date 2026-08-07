@@ -53,8 +53,6 @@ internal class TmdbDetailsClient @Inject constructor(
                     )
                 }
             )
-
-            MediaType.ANIME -> AppResult.Failure(AppError.UnsupportedData)
         }
     }
 }

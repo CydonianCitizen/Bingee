@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.data.calendar
 
-import com.cydoniancitizen.bingee.core.model.AnimeDetails
 import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaDetails
@@ -59,39 +58,6 @@ class ReleaseEventProjectorTest {
         assertEquals(ReleaseSubjectType.EPISODE, projector.episode(future, updatedAt)?.identity?.subjectType)
         assertEquals(ReleaseEventType.EPISODE_AIRING, projector.episode(future, updatedAt)?.identity?.eventType)
         assertNull(projector.episode(future.copy(airDate = null), updatedAt))
-    }
-
-    @Test
-    fun animePremiereUsesOnlyReliableStartDateAndProviderQualifiedIdentity() {
-        val animeRef = ExternalMediaRef(MediaSource.JIKAN, "52991")
-        val first = projector.anime(
-            AnimeDetails(
-                externalRef = animeRef,
-                title = "Anime",
-                startDate = LocalDate.of(2026, 8, 5)
-            ),
-            updatedAt
-        )
-        val changed = projector.anime(
-            AnimeDetails(
-                externalRef = animeRef,
-                title = "Anime",
-                startDate = LocalDate.of(2026, 8, 6)
-            ),
-            updatedAt.plusSeconds(1)
-        )
-
-        assertEquals(MediaSource.JIKAN, first?.identity?.source)
-        assertEquals(ReleaseSubjectType.MEDIA, first?.identity?.subjectType)
-        assertEquals(ReleaseEventType.ANIME_PREMIERE, first?.identity?.eventType)
-        assertEquals(first?.identity, changed?.identity)
-        assertEquals(LocalDate.of(2026, 8, 6), changed?.eventDate)
-        assertNull(
-            projector.anime(
-                AnimeDetails(externalRef = animeRef, title = "Anime", startDate = null),
-                updatedAt
-            )
-        )
     }
 
     private fun movie(date: LocalDate?) = MediaDetails(

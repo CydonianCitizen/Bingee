@@ -11,7 +11,6 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
-import com.cydoniancitizen.bingee.domain.repository.AnimeRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaRepository
 import com.cydoniancitizen.bingee.testutil.FakeCredentialRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
@@ -40,10 +39,8 @@ class SearchViewModelTest {
         val missing =
             SearchViewModel(
                 missingRepository,
-                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                FakeCredentialRepository(TmdbCredentialStatus.NotConfigured),
-                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+                FakeCredentialRepository(TmdbCredentialStatus.NotConfigured)
             )
         runCurrent()
         assertEquals(SearchCredentialAvailability.REQUIRED, missing.uiState.value.credentialAvailability)
@@ -53,10 +50,8 @@ class SearchViewModelTest {
         val valid =
             SearchViewModel(
                 validRepository,
-                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                FakeCredentialRepository(TmdbCredentialStatus.Valid),
-                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
         runCurrent()
         valid.onQueryChanged("   ")
@@ -316,10 +311,8 @@ class SearchViewModelTest {
         val viewModel =
             SearchViewModel(
                 repository,
-                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                credentialRepository,
-                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+                credentialRepository
             )
         runCurrent()
         viewModel.onQueryChanged("fixed")
@@ -342,10 +335,8 @@ class SearchViewModelTest {
         val viewModel =
             SearchViewModel(
                 RecordingMediaRepository(),
-                RecordingAnimeRepository(),
                 libraryRepository,
-                FakeCredentialRepository(TmdbCredentialStatus.Valid),
-                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
         val item = result("42")
         runCurrent()
@@ -367,10 +358,8 @@ class SearchViewModelTest {
         val viewModel =
             SearchViewModel(
                 RecordingMediaRepository(),
-                RecordingAnimeRepository(),
                 libraryRepository,
-                FakeCredentialRepository(TmdbCredentialStatus.Valid),
-                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
         val item = result("42")
         runCurrent()
@@ -383,100 +372,12 @@ class SearchViewModelTest {
         assertTrue(viewModel.uiState.value.pendingLibraryActions.isEmpty())
     }
 
-    @Test
-    fun animeSearchUsesJikanBoundaryWithoutTmdbCredential() = runTest(mainDispatcherRule.dispatcher) {
-        val tmdb = RecordingMediaRepository()
-        val anime = RecordingAnimeRepository()
-        val viewModel = SearchViewModel(
-            tmdb,
-            anime,
-            FakeLibraryRepository(),
-            FakeCredentialRepository(TmdbCredentialStatus.NotConfigured),
-            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
-        )
-        runCurrent()
-
-        viewModel.onCategoryChanged(MediaSearchCategory.ANIME)
-        viewModel.onQueryChanged("Frieren")
-        advanceTimeBy(SearchViewModel.SEARCH_DEBOUNCE_MILLIS)
-        runCurrent()
-
-        assertEquals(listOf(MediaSearchCategory.ANIME), anime.requests.map { it.category })
-        assertTrue(tmdb.requests.isEmpty())
-        assertTrue(viewModel.uiState.value.content is SearchContentState.Results)
-    }
-
-    @Test
-    fun disabledAnimePolicyOmitsAnimeCategoryAndPreventsJikanSearch() = runTest(mainDispatcherRule.dispatcher) {
-        val tmdb = RecordingMediaRepository()
-        val anime = RecordingAnimeRepository()
-        val viewModel = SearchViewModel(
-            tmdb,
-            anime,
-            FakeLibraryRepository(),
-            FakeCredentialRepository(TmdbCredentialStatus.Valid),
-            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = false)
-        )
-        runCurrent()
-
-        assertFalse(viewModel.uiState.value.availableCategories.contains(MediaSearchCategory.ANIME))
-        assertEquals(
-            listOf(MediaSearchCategory.MOVIES, MediaSearchCategory.TV_SERIES),
-            viewModel.uiState.value.availableCategories
-        )
-
-        viewModel.onCategoryChanged(MediaSearchCategory.ANIME)
-        runCurrent()
-        assertEquals(MediaSearchCategory.MOVIES, viewModel.uiState.value.category)
-
-        performDebouncedSearch(viewModel, "Naruto")
-        assertTrue(anime.requests.isEmpty())
-        assertEquals("Naruto", tmdb.requests.single().query)
-    }
-
-    @Test
-    fun animeSearchSupportsPaginationAndRetry() = runTest(mainDispatcherRule.dispatcher) {
-        var failPage2 = true
-        val anime = RecordingAnimeRepository { query ->
-            if (query.page == 2 && failPage2) {
-                AppResult.Failure(AppError.RemoteServiceFailure)
-            } else {
-                AppResult.Success(page(query.query, query.page, 2, MediaType.SERIES))
-            }
-        }
-        val viewModel = SearchViewModel(
-            RecordingMediaRepository(),
-            anime,
-            FakeLibraryRepository(),
-            FakeCredentialRepository(TmdbCredentialStatus.Valid),
-            com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
-        )
-        runCurrent()
-
-        viewModel.onCategoryChanged(MediaSearchCategory.ANIME)
-        performDebouncedSearch(viewModel, "Frieren")
-
-        viewModel.loadNextPage()
-        runCurrent()
-        assertTrue((viewModel.uiState.value.content as SearchContentState.Results).nextPage is NextPageState.Error)
-
-        failPage2 = false
-        viewModel.retryNextPage()
-        runCurrent()
-        val content = viewModel.uiState.value.content as SearchContentState.Results
-        assertEquals(2, content.currentPage)
-        assertEquals(NextPageState.End, content.nextPage)
-        assertEquals(listOf(1, 2, 2), anime.requests.map { it.page })
-    }
-
     private fun validViewModel(repository: MediaRepository): SearchViewModel {
         val viewModel =
             SearchViewModel(
                 repository,
-                RecordingAnimeRepository(),
                 FakeLibraryRepository(),
-                FakeCredentialRepository(TmdbCredentialStatus.Valid),
-                com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability(isAvailable = true)
+                FakeCredentialRepository(TmdbCredentialStatus.Valid)
             )
         return viewModel
     }
@@ -496,19 +397,6 @@ class SearchViewModelTest {
             AppResult.Success(page(query.query, query.page, query.page))
         }
     ) : MediaRepository {
-        val requests = mutableListOf<MediaSearchQuery>()
-
-        override suspend fun search(query: MediaSearchQuery): AppResult<MediaSearchPage> {
-            requests += query
-            return responder(query)
-        }
-    }
-
-    private class RecordingAnimeRepository(
-        var responder: suspend (MediaSearchQuery) -> AppResult<MediaSearchPage> = { query ->
-            AppResult.Success(page(query.query, query.page, query.page, MediaType.ANIME))
-        }
-    ) : AnimeRepository {
         val requests = mutableListOf<MediaSearchQuery>()
 
         override suspend fun search(query: MediaSearchQuery): AppResult<MediaSearchPage> {

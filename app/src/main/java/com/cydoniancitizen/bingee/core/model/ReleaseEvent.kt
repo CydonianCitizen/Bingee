@@ -4,7 +4,7 @@ import java.time.LocalDate
 
 enum class ReleaseSubjectType { MEDIA, SEASON, EPISODE }
 
-enum class ReleaseEventType { MOVIE_RELEASE, SEASON_PREMIERE, EPISODE_AIRING, ANIME_PREMIERE }
+enum class ReleaseEventType { MOVIE_RELEASE, SEASON_PREMIERE, EPISODE_AIRING }
 
 data class ReleaseSubjectIdentity(
     val source: MediaSource,
@@ -47,10 +47,6 @@ data class ReleaseEvent(
                 ReleaseEventType.EPISODE_AIRING ->
                     subject.subjectType == ReleaseSubjectType.EPISODE && mediaType == MediaType.SERIES &&
                         seasonNumber != null && episodeNumber != null
-                ReleaseEventType.ANIME_PREMIERE ->
-                    subject.subjectType == ReleaseSubjectType.MEDIA && mediaType == MediaType.ANIME &&
-                        subject.source == MediaSource.JIKAN &&
-                        seasonNumber == null && episodeNumber == null
             }
         ) { "Release event type does not match its subject" }
     }

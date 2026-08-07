@@ -19,9 +19,6 @@ internal data class PortableSnapshotRows(
     val movieProgress: List<MovieWatchProgressEntity>,
     val seriesProgress: List<SeriesWatchProgressEntity>,
     val ratings: List<MediaRatingEntity>,
-    val animeDetails: List<AnimeDetailsEntity>,
-    val animeRelations: List<AnimeRelationEntity>,
-    val animeProgress: List<AnimeProgressEntity>,
     val preferences: PortablePreferencesEntity?
 )
 
@@ -60,15 +57,6 @@ internal abstract class PortableSnapshotDao {
     @Query("SELECT * FROM media_ratings ORDER BY local_media_id")
     protected abstract suspend fun getRatings(): List<MediaRatingEntity>
 
-    @Query("SELECT * FROM anime_details ORDER BY local_media_id")
-    protected abstract suspend fun getAnimeDetails(): List<AnimeDetailsEntity>
-
-    @Query("SELECT * FROM anime_relations ORDER BY local_media_id, relation_type, related_jikan_id")
-    protected abstract suspend fun getAnimeRelations(): List<AnimeRelationEntity>
-
-    @Query("SELECT * FROM anime_progress ORDER BY local_media_id")
-    protected abstract suspend fun getAnimeProgress(): List<AnimeProgressEntity>
-
     @Query("SELECT * FROM portable_preferences WHERE singleton_key = 1 LIMIT 1")
     abstract suspend fun getPreferences(): PortablePreferencesEntity?
 
@@ -102,32 +90,11 @@ internal abstract class PortableSnapshotDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertRating(rating: MediaRatingEntity)
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    abstract suspend fun insertAnimeDetails(details: AnimeDetailsEntity)
-
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    abstract suspend fun insertAnimeRelation(relation: AnimeRelationEntity)
-
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    abstract suspend fun insertAnimeProgress(progress: AnimeProgressEntity)
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun replacePreferences(preferences: PortablePreferencesEntity)
 
     @Query("DELETE FROM notification_deliveries")
     abstract suspend fun deleteNotificationDeliveries()
-
-    @Query("DELETE FROM media_link_audit_members")
-    abstract suspend fun deleteLinkAuditMembers()
-
-    @Query("DELETE FROM media_link_audit")
-    abstract suspend fun deleteLinkAudit()
-
-    @Query("DELETE FROM media_link_members")
-    abstract suspend fun deleteLinkMembers()
-
-    @Query("DELETE FROM media_link_groups")
-    abstract suspend fun deleteLinkGroups()
 
     @Query("DELETE FROM release_events")
     abstract suspend fun deleteReleaseEvents()
@@ -140,12 +107,6 @@ internal abstract class PortableSnapshotDao {
 
     @Query("DELETE FROM series_watch_progress")
     abstract suspend fun deleteSeriesProgress()
-
-    @Query("DELETE FROM anime_progress")
-    abstract suspend fun deleteAnimeProgress()
-
-    @Query("DELETE FROM anime_relations")
-    abstract suspend fun deleteAnimeRelations()
 
     @Query("DELETE FROM media_ratings")
     abstract suspend fun deleteRatings()
@@ -168,9 +129,6 @@ internal abstract class PortableSnapshotDao {
     @Query("DELETE FROM external_refs")
     abstract suspend fun deleteRefs()
 
-    @Query("DELETE FROM anime_details")
-    abstract suspend fun deleteAnimeDetails()
-
     @Query("DELETE FROM media_entries")
     abstract suspend fun deleteMedia()
 
@@ -186,8 +144,7 @@ internal abstract class PortableSnapshotDao {
         details = getDetails(), genres = getGenres(), seasons = getSeasons(),
         episodes = getEpisodes(), episodeProgress = getEpisodeProgress(),
         movieProgress = getMovieProgress(), seriesProgress = getSeriesProgress(),
-        ratings = getRatings(), animeDetails = getAnimeDetails(),
-        animeRelations = getAnimeRelations(), animeProgress = getAnimeProgress(),
+        ratings = getRatings(),
         preferences = getPreferences()
     )
 }

@@ -21,9 +21,6 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
         @ColumnInfo(name = "movie_watched_date") val movieWatchedDate: LocalDate?,
         @ColumnInfo(name = "series_watched_date") val seriesWatchedDate: LocalDate?,
-        @ColumnInfo(name = "anime_watched_episodes") val animeWatchedEpisodes: Int,
-        @ColumnInfo(name = "anime_episode_total") val animeEpisodeTotal: Int?,
-        @ColumnInfo(name = "anime_completed_at") val animeCompletedAt: Instant?,
         @ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
         @ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
         @ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
@@ -38,14 +35,11 @@ internal abstract class LibraryDao {
                CASE WHEN library_entries.local_media_id IS NOT NULL THEN 1 ELSE 0 END AS in_library
         FROM media_entries
         LEFT JOIN library_entries USING(local_media_id)
-        LEFT JOIN anime_details USING(local_media_id)
         WHERE (library_entries.local_media_id IS NOT NULL OR media_entries.is_favorite = 1)
           AND (:mediaType IS NULL OR media_entries.media_type = :mediaType)
           AND (
               LOWER(media_entries.title) LIKE :searchPattern ESCAPE '\'
               OR LOWER(COALESCE(media_entries.original_title, '')) LIKE :searchPattern ESCAPE '\'
-              OR LOWER(COALESCE(anime_details.english_title, '')) LIKE :searchPattern ESCAPE '\'
-              OR LOWER(COALESCE(anime_details.japanese_title, '')) LIKE :searchPattern ESCAPE '\'
           )
         ORDER BY COALESCE(library_entries.added_at, media_entries.created_at) DESC,
                  LOWER(media_entries.title) ASC,
@@ -60,14 +54,7 @@ internal abstract class LibraryDao {
     @Query("SELECT COUNT(*) FROM library_entries")
     abstract fun observeLibraryEntryCount(): Flow<Int>
 
-    @Query(
-        """
-        SELECT COUNT(*)
-        FROM library_entries
-        INNER JOIN media_entries USING(local_media_id)
-        WHERE media_entries.media_type != 'ANIME'
-        """
-    )
+    @Query("SELECT COUNT(*) FROM library_entries")
     abstract fun observeSupportedLibraryEntryCount(): Flow<Int>
 
     @Transaction
@@ -102,9 +89,8 @@ internal abstract class LibraryDao {
         INNER JOIN media_entries USING(local_media_id)
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN media_details USING(local_media_id)
-        LEFT JOIN anime_details USING(local_media_id)
-        ORDER BY CASE WHEN COALESCE(media_details.details_fetched_at, anime_details.details_updated_at) IS NULL THEN 0 ELSE 1 END ASC,
-                 COALESCE(media_details.details_fetched_at, anime_details.details_updated_at) ASC,
+        ORDER BY CASE WHEN media_details.details_fetched_at IS NULL THEN 0 ELSE 1 END ASC,
+                 media_details.details_fetched_at ASC,
                  media_entries.metadata_updated_at ASC,
                  external_refs.source ASC,
                  external_refs.external_id ASC,
@@ -121,9 +107,6 @@ internal abstract class LibraryDao {
                movie_watch_progress.watched_at AS movie_watched_at,
                movie_watch_progress.watched_date AS movie_watched_date,
                series_watch_progress.watched_date AS series_watched_date,
-               COALESCE(anime_progress.watched_episode_count, 0) AS anime_watched_episodes,
-               anime_details.episode_count AS anime_episode_total,
-               anime_progress.completed_at AS anime_completed_at,
                (
                    SELECT COUNT(*)
                    FROM episodes
@@ -174,8 +157,6 @@ internal abstract class LibraryDao {
         LEFT JOIN library_entries USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
         LEFT JOIN series_watch_progress USING(local_media_id)
-        LEFT JOIN anime_progress USING(local_media_id)
-        LEFT JOIN anime_details USING(local_media_id)
         """
     )
     abstract fun observeLibraryProgress(today: LocalDate): Flow<List<LibraryProgressRow>>

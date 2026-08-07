@@ -2,7 +2,6 @@ package com.cydoniancitizen.bingee.feature.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cydoniancitizen.bingee.core.common.AnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
@@ -11,9 +10,7 @@ import com.cydoniancitizen.bingee.core.model.LibrarySort
 import com.cydoniancitizen.bingee.core.model.LibraryStateFilter
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
-import com.cydoniancitizen.bingee.domain.equivalence.MediaEquivalenceCandidate
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
-import com.cydoniancitizen.bingee.domain.repository.MediaEquivalenceCandidateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,8 +37,6 @@ internal sealed interface LibraryContentState {
 internal data class LibraryUiState(
     val query: LibraryQuery = LibraryQuery(),
     val content: LibraryContentState = LibraryContentState.Loading,
-    val presentationItems: List<LibraryPresentationItem> = emptyList(),
-    val candidates: List<MediaEquivalenceCandidate> = emptyList(),
     val availableMediaFilters: List<LibraryMediaFilter> =
         listOf(LibraryMediaFilter.ALL, LibraryMediaFilter.MOVIES, LibraryMediaFilter.TV_SERIES),
     val resultCount: Int = 0,
@@ -52,28 +47,26 @@ internal data class LibraryUiState(
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
-internal class LibraryViewModel @Inject constructor(
-    private val libraryRepository: LibraryRepository,
-    private val candidateRepository: MediaEquivalenceCandidateRepository,
-    private val animeAvailability: AnimeFeatureAvailability
-) : ViewModel() {
+internal class LibraryViewModel @Inject constructor(private val libraryRepository: LibraryRepository) : ViewModel() {
     private val mutableUiState: MutableStateFlow<LibraryUiState>
     val uiState: StateFlow<LibraryUiState>
     private val query = MutableStateFlow(LibraryQuery())
     private val retryTrigger = MutableStateFlow(0)
 
     init {
-        val filters = if (animeAvailability.isAvailable) {
-            LibraryMediaFilter.entries
-        } else {
-            listOf(LibraryMediaFilter.ALL, LibraryMediaFilter.MOVIES, LibraryMediaFilter.TV_SERIES)
-        }
-        mutableUiState = MutableStateFlow(LibraryUiState(availableMediaFilters = filters))
+        mutableUiState = MutableStateFlow(
+            LibraryUiState(
+                availableMediaFilters = listOf(
+                    LibraryMediaFilter.ALL,
+                    LibraryMediaFilter.MOVIES,
+                    LibraryMediaFilter.TV_SERIES
+                )
+            )
+        )
         uiState = mutableUiState.asStateFlow()
 
         observeEntries()
         observeEntryCount()
-        observeCandidates()
     }
 
     fun onSearchQueryChanged(value: String) = updateQuery { copy(searchQuery = value) }
@@ -81,11 +74,7 @@ internal class LibraryViewModel @Inject constructor(
     fun clearSearch() = updateQuery { copy(searchQuery = "") }
 
     fun onMediaFilterChanged(filter: LibraryMediaFilter) = updateQuery {
-        val targetFilter = if (!animeAvailability.isAvailable && filter == LibraryMediaFilter.ANIME) {
-            LibraryMediaFilter.ALL
-        } else {
-            filter
-        }
+        val targetFilter = filter
         val nextState = if (
             targetFilter == LibraryMediaFilter.MOVIES &&
             stateFilter in setOf(LibraryStateFilter.IN_PROGRESS, LibraryStateFilter.PROGRESS_UNAVAILABLE)
@@ -170,18 +159,6 @@ internal class LibraryViewModel @Inject constructor(
                         )
                     }
                 }
-            }
-        }
-    }
-
-    private fun observeCandidates() {
-        if (!animeAvailability.isAvailable) {
-            mutableUiState.update { it.copy(candidates = emptyList()) }
-            return
-        }
-        viewModelScope.launch {
-            candidateRepository.observeLibraryCandidates().collectLatest { candidates ->
-                mutableUiState.update { it.copy(candidates = candidates) }
             }
         }
     }

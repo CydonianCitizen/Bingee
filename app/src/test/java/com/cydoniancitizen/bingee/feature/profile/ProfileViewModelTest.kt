@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.feature.profile
 
-import com.cydoniancitizen.bingee.core.common.TestingAnimeFeatureAvailability
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
@@ -68,25 +67,13 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun animeClassificationSupportsFutureReactivation() {
-        val animeMovie = entry("5", MediaType.ANIME, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
-        val animeSeries = entry("6", MediaType.ANIME, LibraryProgress.Anime(5, 12, false))
-
-        assertTrue(animeMovie.belongsToCategory(ProfileCategory.MOVIES))
-        assertFalse(animeMovie.belongsToCategory(ProfileCategory.TV_SERIES))
-
-        assertTrue(animeSeries.belongsToCategory(ProfileCategory.TV_SERIES))
-        assertFalse(animeSeries.belongsToCategory(ProfileCategory.MOVIES))
-    }
-
-    @Test
     fun profileViewModelFiltersWatchedAndWatchLater() = runTest {
         val watchedMovie = entry("1", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
         val unwatchedMovie = entry("2", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Unwatched))
 
         val repo = FakeLibraryRepo(listOf(watchedMovie, unwatchedMovie))
         val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs, TestingAnimeFeatureAvailability(false))
+        val viewModel = ProfileViewModel(repo, prefs)
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -98,21 +85,6 @@ class ProfileViewModelTest {
         viewModel.setCollection(ProfileCollection.WATCH_LATER)
         assertEquals(1, viewModel.uiState.value.entries.size)
         assertEquals("2", viewModel.uiState.value.entries.first().mediaRef.externalId)
-    }
-
-    @Test
-    fun animeRemainsHiddenWhenFeatureDisabled() = runTest {
-        val watchedMovie = entry("1", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
-        val animeMovie = entry("2", MediaType.ANIME, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
-
-        val repo = FakeLibraryRepo(listOf(watchedMovie, animeMovie))
-        val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs, TestingAnimeFeatureAvailability(false))
-
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(1, viewModel.uiState.value.entries.size)
-        assertEquals("1", viewModel.uiState.value.entries.first().mediaRef.externalId)
     }
 
     @Test
@@ -138,7 +110,7 @@ class ProfileViewModelTest {
 
         val repo = FakeLibraryRepo(listOf(movieA, movieB))
         val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs, TestingAnimeFeatureAvailability(false))
+        val viewModel = ProfileViewModel(repo, prefs)
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -160,7 +132,7 @@ class ProfileViewModelTest {
     fun displayModePersistenceDelegatesToPrefs() = runTest {
         val repo = FakeLibraryRepo(emptyList())
         val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs, TestingAnimeFeatureAvailability(false))
+        val viewModel = ProfileViewModel(repo, prefs)
 
         testDispatcher.scheduler.advanceUntilIdle()
 

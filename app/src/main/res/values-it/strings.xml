@@ -57,8 +57,6 @@
     <string name="search_clear_query">Cancella testo ricerca</string>
     <string name="search_category_movies">Film</string>
     <string name="search_category_tv">Serie TV</string>
-    <string name="search_category_anime">Anime</string>
-    <string name="search_provider_jikan">Dati anime: Jikan / MyAnimeList</string>
     <string name="search_idle_title">Trova qualcosa da guardare</string>
     <string name="search_idle_body">Inserisci almeno un carattere. La ricerca parte dopo una breve pausa.</string>
     <string name="search_loading">Ricerca su TMDB in corso</string>
@@ -121,10 +119,8 @@
     <string name="library_filter_all">Tutti</string>
     <string name="library_filter_movies">Film</string>
     <string name="library_filter_tv">Serie TV</string>
-    <string name="library_filter_anime">Anime</string>
     <string name="library_type_movie">Film</string>
     <string name="library_type_tv">Serie TV</string>
-    <string name="library_type_anime">Anime</string>
     <string name="library_progress_watched">Visto</string>
     <string name="library_progress_unwatched">Non visto</string>
     <string name="library_progress_unavailable">Progresso non disponibile</string>
@@ -190,7 +186,6 @@
     <string name="settings_theme_light">Chiaro</string>
     <string name="settings_theme_dark">Scuro</string>
     <string name="settings_language_title">Lingua</string>
-    <string name="settings_language_system">Predefinita di sistema</string>
     <string name="settings_language_en">Inglese</string>
     <string name="settings_language_it">Italiano</string>
     <string name="settings_open_source_title">Open Source</string>

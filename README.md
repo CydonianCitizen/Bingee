@@ -98,7 +98,7 @@ app/src/debug/java/com/cydoniancitizen/bingee/
   feature/    deterministic Search, Library, Details, Home, and Settings state previews
 ```
 
-Feature UI depends on immutable domain models and repository contracts, never provider DTOs or Room entities. TMDB and Jikan clients, DTOs, mappers, errors, and identities remain isolated. Room v9 stores anime details, metadata-only relations, and entry-level progress separately; title ratings remain local and provider scores read-only. Anime details are cache-first for 24 hours, Library removal retains personal state, and Home projects only date-backed anime premieres. Anime premiere notifications, per-episode anime history, account sync, manga, recommendations, and automatic TMDB/Jikan merging are absent.
+Feature UI depends on immutable domain models and repository contracts, never provider DTOs or Room entities. TMDB client, DTOs, mappers, errors, and identities remain isolated. Japanese animation returned by TMDB behaves identically to standard Movies and TV Series. Account sync, recommendations, and automatic merging are absent.
 
 See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 

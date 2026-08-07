@@ -1,8 +1,5 @@
 package com.cydoniancitizen.bingee.data.importexport
 
-import com.cydoniancitizen.bingee.core.model.AnimeCompletionOrigin
-import com.cydoniancitizen.bingee.core.model.AnimeFormat
-import com.cydoniancitizen.bingee.core.model.AnimeStatus
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.google.gson.JsonArray
@@ -121,62 +118,10 @@ internal object BackupJsonCodec {
         data.ratings.forEach { writeRating(writer, it) }
         writer.endArray()
 
-        writer.name("animeDetails").beginArray()
-        data.animeDetails.forEach { writeAnimeDetails(writer, it) }
-        writer.endArray()
-        writer.name("animeRelations").beginArray()
-        data.animeRelations.forEach { writeAnimeRelation(writer, it) }
-        writer.endArray()
-        writer.name("animeProgress").beginArray()
-        data.animeProgress.forEach { writeAnimeProgress(writer, it) }
-        writer.endArray()
-        writer.name("mediaLinkGroups").beginArray()
-        data.mediaLinkGroups.forEach { writeMediaLinkGroup(writer, it) }
-        writer.endArray()
-        writer.name("mediaLinkAudit").beginArray()
-        data.mediaLinkAudit.forEach { writeMediaLinkAudit(writer, it) }
-        writer.endArray()
+        writer.name("mediaLinkGroups").beginArray().endArray()
+        writer.name("mediaLinkAudit").beginArray().endArray()
         writer.name("preferences")
         writePreferences(writer, data.preferences)
-        writer.endObject()
-    }
-
-    private fun writeMediaIdentity(writer: JsonWriter, identity: BackupMediaIdentity) {
-        writer.beginObject()
-        writer.name("source").value(identity.source.name)
-        writer.name("mediaType").value(identity.mediaType.name)
-        writer.name("externalId").value(identity.externalId)
-        writer.endObject()
-    }
-
-    private fun writeMediaLinkGroup(writer: JsonWriter, group: BackupMediaLinkGroup) {
-        writer.beginObject()
-        writer.name("groupId").value(group.groupId)
-        writer.name("members").beginArray()
-        group.members.forEach { writeMediaIdentity(writer, it) }
-        writer.endArray()
-        writer.name("preferredPresentation")
-        writeMediaIdentity(writer, group.preferredPresentation)
-        writer.name("createdAt").value(group.createdAt.toString())
-        writer.name("updatedAt").value(group.updatedAt.toString())
-        writer.endObject()
-    }
-
-    private fun writeMediaLinkAudit(writer: JsonWriter, audit: BackupMediaLinkAudit) {
-        writer.beginObject()
-        writer.name("groupId").value(audit.groupId)
-        writer.name("action").value(audit.action.name)
-        writer.name("timestamp").value(audit.timestamp.toString())
-        writer.name("origin").value(audit.origin.name)
-        writer.name("members").beginArray()
-        audit.members.forEach { writeMediaIdentity(writer, it) }
-        writer.endArray()
-        if (audit.preferredPresentation != null) {
-            writer.name("preferredPresentation")
-            writeMediaIdentity(writer, audit.preferredPresentation)
-        } else {
-            writer.name("preferredPresentation").nullValue()
-        }
         writer.endObject()
     }
 
@@ -278,61 +223,6 @@ internal object BackupJsonCodec {
         writer.name("updatedAt").value(rating.updatedAt.toString()).endObject()
     }
 
-    private fun writeAnimeDetails(writer: JsonWriter, details: BackupAnimeDetails) {
-        writer.beginObject()
-        writer.name("mediaRef")
-        writeRef(writer, details.mediaRef)
-        writer.name("format").value(details.format.name)
-        writer.name("status").value(details.status.name)
-        writeNullable(writer, "englishTitle", details.englishTitle)
-        writeNullable(writer, "japaneseTitle", details.japaneseTitle)
-        writeNullable(writer, "synopsis", details.synopsis)
-        if (details.episodeCount ==
-            null
-        ) {
-            writer.name("episodeCount").nullValue()
-        } else {
-            writer.name("episodeCount").value(details.episodeCount)
-        }
-        writeNullable(writer, "duration", details.duration)
-        writeNullable(writer, "startDate", details.startDate?.toString())
-        writeNullable(writer, "endDate", details.endDate?.toString())
-        writeNullable(writer, "season", details.season)
-        if (details.year == null) writer.name("year").nullValue() else writer.name("year").value(details.year)
-        if (details.providerScore ==
-            null
-        ) {
-            writer.name("providerScore").nullValue()
-        } else {
-            writer.name("providerScore").value(details.providerScore)
-        }
-        writeNullable(writer, "posterUrl", details.posterUrl)
-        writer.endObject()
-    }
-
-    private fun writeAnimeRelation(writer: JsonWriter, relation: BackupAnimeRelation) {
-        writer.beginObject()
-        writer.name("mediaRef")
-        writeRef(writer, relation.mediaRef)
-        writer.name("relationType").value(relation.relationType)
-        writer.name("relatedRef")
-        writeRef(writer, relation.relatedRef)
-        writer.name("relatedTitle").value(relation.relatedTitle)
-        writeNullable(writer, "relatedFormat", relation.relatedFormat?.name)
-        writer.endObject()
-    }
-
-    private fun writeAnimeProgress(writer: JsonWriter, progress: BackupAnimeProgress) {
-        writer.beginObject()
-        writer.name("mediaRef")
-        writeRef(writer, progress.mediaRef)
-        writer.name("watchedEpisodeCount").value(progress.watchedEpisodeCount)
-        writeNullable(writer, "completedAt", progress.completedAt?.toString())
-        writeNullable(writer, "completionOrigin", progress.completionOrigin?.name)
-        writer.name("updatedAt").value(progress.updatedAt.toString())
-        writer.endObject()
-    }
-
     private fun writePreferences(writer: JsonWriter, preferences: BackupPreferences) {
         writer.beginObject()
         writer.name("notificationLeadDays").value(preferences.notificationLeadDays)
@@ -369,12 +259,6 @@ internal object BackupJsonCodec {
         val ratings = readArray(dataObj, "ratings", BackupLimits.MAX_MEDIA, ::readRating)
         val preferences = readPreferences(required(dataObj, "preferences").asObjectOrProblem())
 
-        val animeDetails = readOptionalArray(dataObj, "animeDetails", BackupLimits.MAX_MEDIA, ::readAnimeDetails)
-        val animeRelations = readOptionalArray(dataObj, "animeRelations", BackupLimits.MAX_MEDIA, ::readAnimeRelation)
-        val animeProgress = readOptionalArray(dataObj, "animeProgress", BackupLimits.MAX_MEDIA, ::readAnimeProgress)
-        val mediaLinkGroups =
-            readOptionalArray(dataObj, "mediaLinkGroups", BackupLimits.MAX_MEDIA, ::readMediaLinkGroup)
-        val mediaLinkAudit = readOptionalArray(dataObj, "mediaLinkAudit", BackupLimits.MAX_MEDIA, ::readMediaLinkAudit)
         val seriesProgress = readOptionalArray(dataObj, "seriesProgress", BackupLimits.MAX_MEDIA, ::readSeriesProgress)
 
         return BackupData(
@@ -386,63 +270,7 @@ internal object BackupJsonCodec {
             episodeProgress = episodeProgress,
             ratings = ratings,
             preferences = preferences,
-            animeDetails = animeDetails,
-            animeRelations = animeRelations,
-            animeProgress = animeProgress,
-            mediaLinkGroups = mediaLinkGroups,
-            mediaLinkAudit = mediaLinkAudit,
             seriesProgress = seriesProgress
-        )
-    }
-
-    private fun readMediaIdentity(value: JsonElement): BackupMediaIdentity {
-        val objectValue = value.asObjectOrProblem()
-        val source = try {
-            MediaSource.valueOf(requiredString(objectValue, "source"))
-        } catch (_: Exception) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-        val mediaType = readMediaType(requiredString(objectValue, "mediaType"))
-        val externalId = requiredString(objectValue, "externalId")
-        return BackupMediaIdentity(source, mediaType, externalId)
-    }
-
-    private fun readMediaLinkGroup(value: JsonElement): BackupMediaLinkGroup {
-        val objectValue = value.asObjectOrProblem()
-        return BackupMediaLinkGroup(
-            groupId = requiredString(objectValue, "groupId"),
-            members = requiredArray(objectValue, "members", 2).map(::readMediaIdentity),
-            preferredPresentation = readMediaIdentity(required(objectValue, "preferredPresentation")),
-            createdAt = requiredInstant(objectValue, "createdAt"),
-            updatedAt = requiredInstant(objectValue, "updatedAt")
-        )
-    }
-
-    private fun readMediaLinkAudit(value: JsonElement): BackupMediaLinkAudit {
-        val objectValue = value.asObjectOrProblem()
-        val action = try {
-            com.cydoniancitizen.bingee.core.model.MediaLinkAuditAction.valueOf(requiredString(objectValue, "action"))
-        } catch (_: Exception) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-        val origin = try {
-            com.cydoniancitizen.bingee.core.model.MediaLinkAuditOrigin.valueOf(requiredString(objectValue, "origin"))
-        } catch (_: Exception) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-        val prefObj = objectValue.get("preferredPresentation")
-        val preferredPresentation = if (prefObj == null || prefObj.isJsonNull) {
-            null
-        } else {
-            readMediaIdentity(prefObj)
-        }
-        return BackupMediaLinkAudit(
-            groupId = requiredString(objectValue, "groupId"),
-            action = action,
-            timestamp = requiredInstant(objectValue, "timestamp"),
-            origin = origin,
-            members = requiredArray(objectValue, "members", 2).map(::readMediaIdentity),
-            preferredPresentation = preferredPresentation
         )
     }
 
@@ -543,48 +371,6 @@ internal object BackupJsonCodec {
         )
     }
 
-    private fun readAnimeDetails(value: JsonElement): BackupAnimeDetails {
-        val objectValue = value.asObjectOrProblem()
-        return BackupAnimeDetails(
-            mediaRef = readRef(required(objectValue, "mediaRef")),
-            format = readAnimeFormat(requiredString(objectValue, "format")),
-            status = readAnimeStatus(requiredString(objectValue, "status")),
-            englishTitle = nullableString(objectValue, "englishTitle"),
-            japaneseTitle = nullableString(objectValue, "japaneseTitle"),
-            synopsis = nullableString(objectValue, "synopsis"),
-            episodeCount = nullableInt(objectValue, "episodeCount"),
-            duration = nullableString(objectValue, "duration"),
-            startDate = nullableDate(objectValue, "startDate"),
-            endDate = nullableDate(objectValue, "endDate"),
-            season = nullableString(objectValue, "season"),
-            year = nullableInt(objectValue, "year"),
-            providerScore = nullableDouble(objectValue, "providerScore"),
-            posterUrl = nullableString(objectValue, "posterUrl")
-        )
-    }
-
-    private fun readAnimeRelation(value: JsonElement): BackupAnimeRelation {
-        val objectValue = value.asObjectOrProblem()
-        return BackupAnimeRelation(
-            mediaRef = readRef(required(objectValue, "mediaRef")),
-            relationType = requiredString(objectValue, "relationType"),
-            relatedRef = readRef(required(objectValue, "relatedRef")),
-            relatedTitle = requiredString(objectValue, "relatedTitle"),
-            relatedFormat = nullableString(objectValue, "relatedFormat")?.let(::readAnimeFormat)
-        )
-    }
-
-    private fun readAnimeProgress(value: JsonElement): BackupAnimeProgress {
-        val objectValue = value.asObjectOrProblem()
-        return BackupAnimeProgress(
-            mediaRef = readRef(required(objectValue, "mediaRef")),
-            watchedEpisodeCount = requiredInt(objectValue, "watchedEpisodeCount"),
-            completedAt = nullableInstant(objectValue, "completedAt"),
-            completionOrigin = nullableString(objectValue, "completionOrigin")?.let(::readCompletionOrigin),
-            updatedAt = requiredInstant(objectValue, "updatedAt")
-        )
-    }
-
     private fun readPreferences(value: JsonObject) = BackupPreferences(
         requiredInt(value, "notificationLeadDays"),
         requiredBoolean(value, "notifyMovieReleases"),
@@ -594,24 +380,6 @@ internal object BackupJsonCodec {
 
     private fun readMediaType(value: String): MediaType = try {
         MediaType.valueOf(value)
-    } catch (_: Exception) {
-        problem(BackupFailureKind.INVALID_STRUCTURE)
-    }
-
-    private fun readAnimeFormat(value: String): AnimeFormat = try {
-        AnimeFormat.valueOf(value)
-    } catch (_: Exception) {
-        problem(BackupFailureKind.INVALID_STRUCTURE)
-    }
-
-    private fun readAnimeStatus(value: String): AnimeStatus = try {
-        AnimeStatus.valueOf(value)
-    } catch (_: Exception) {
-        problem(BackupFailureKind.INVALID_STRUCTURE)
-    }
-
-    private fun readCompletionOrigin(value: String): AnimeCompletionOrigin = try {
-        AnimeCompletionOrigin.valueOf(value)
     } catch (_: Exception) {
         problem(BackupFailureKind.INVALID_STRUCTURE)
     }

@@ -41,12 +41,12 @@ class LibraryMappersTest {
     fun roomRelationMapsToDomainAndHonorsRequestedProviderRef() {
         val media = mediaEntity()
         val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
-        val jikan = ExternalRefEntity(7, MediaSource.JIKAN, "84")
+        val imdb = ExternalRefEntity(7, MediaSource.IMDB, "84")
         val row = LibraryItemWithRefs(
             media = media,
             addedAt = now,
             inLibrary = true,
-            externalRefs = listOf(jikan, tmdb)
+            externalRefs = listOf(imdb, tmdb)
         )
 
         val entry = row.toDomain(preferredRef = tmdb.toDomain())

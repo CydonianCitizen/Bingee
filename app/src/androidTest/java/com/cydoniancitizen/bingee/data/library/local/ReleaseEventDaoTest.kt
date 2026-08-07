@@ -154,17 +154,17 @@ class ReleaseEventDaoTest {
     private fun insertFixture() {
         sql(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
-                "release_date, created_at, metadata_updated_at) VALUES" +
+                "release_date, created_at, metadata_updated_at, is_favorite) VALUES" +
                 "(1, 'MOVIE', 'Zulu', NULL, NULL, NULL, '2026-08-03', " +
-                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')," +
+                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z', 0)," +
                 "(2, 'SERIES', 'Alpha', NULL, NULL, NULL, NULL, " +
-                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')," +
+                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z', 0)," +
                 "(3, 'MOVIE', 'Old', NULL, NULL, NULL, '2026-07-26', " +
-                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')," +
+                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z', 0)," +
                 "(4, 'MOVIE', 'Future', NULL, NULL, NULL, '2030-01-01', " +
-                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')," +
+                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z', 0)," +
                 "(5, 'MOVIE', 'Boundary', NULL, NULL, NULL, '2026-07-27', " +
-                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z')"
+                "'2026-08-01T10:00:00Z', '2026-08-03T10:00:00Z', 0)"
         )
         listOf(1L to "42", 2L to "100", 3L to "old", 4L to "future", 5L to "boundary").forEach {
             sql(

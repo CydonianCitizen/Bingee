@@ -105,16 +105,14 @@ internal fun SearchContent(
             onClearQuery = onClearQuery,
             onCategoryChanged = onCategoryChanged
         )
-        when {
-            state.category != MediaSearchCategory.ANIME &&
-                state.credentialAvailability == SearchCredentialAvailability.CHECKING ->
+        when (state.credentialAvailability) {
+            SearchCredentialAvailability.CHECKING ->
                 LoadingState(stringResource(R.string.search_checking_configuration))
 
-            state.category != MediaSearchCategory.ANIME &&
-                state.credentialAvailability == SearchCredentialAvailability.REQUIRED ->
+            SearchCredentialAvailability.REQUIRED ->
                 ConfigurationRequired(onOpenSettings = onOpenSettings)
 
-            else -> {
+            SearchCredentialAvailability.AVAILABLE -> {
                 state.libraryError?.let { error ->
                     LibraryActionError(error, onDismissLibraryError)
                 }
@@ -213,7 +211,6 @@ private fun SearchControls(
                             when (item) {
                                 MediaSearchCategory.MOVIES -> R.string.search_category_movies
                                 MediaSearchCategory.TV_SERIES -> R.string.search_category_tv
-                                MediaSearchCategory.ANIME -> R.string.search_category_anime
                             }
                         )
                     )
@@ -388,7 +385,6 @@ internal fun SearchResultItem(
     modifier: Modifier = Modifier
 ) {
     val openDetailsDescription = stringResource(R.string.open_details, result.title)
-    val isJikan = result.externalRef.source == com.cydoniancitizen.bingee.core.model.MediaSource.JIKAN
     Card(
         onClick = onOpenDetails,
         modifier = modifier.fillMaxWidth().semantics {
@@ -416,44 +412,9 @@ internal fun SearchResultItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (isJikan) {
-                    val typeLabelRes = if (result.mediaType == MediaType.MOVIE) {
-                        R.string.search_anime_movie
-                    } else {
-                        R.string.search_anime_series
-                    }
-                    Text(
-                        text = stringResource(typeLabelRes),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
                 result.releaseDate?.let {
                     Text(
                         text = stringResource(R.string.search_release_year, it.year),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-                if (isJikan) {
-                    if (result.mediaType == MediaType.SERIES && result.episodes != null && result.episodes > 0) {
-                        Text(
-                            text = stringResource(R.string.search_episodes_count, result.episodes),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                    result.status?.let { status ->
-                        Text(
-                            text = stringResource(R.string.search_status, status),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                    result.score?.takeIf { it > 0.0 }?.let { score ->
-                        Text(
-                            text = stringResource(R.string.search_jikan_score, score),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.search_provider_jikan),
                         style = MaterialTheme.typography.labelLarge
                     )
                 }

@@ -60,9 +60,4 @@ private val LibraryProgress.completionRatio: Float get() = when (this) {
     LibraryProgress.Unavailable -> -1f
     is LibraryProgress.Movie -> if (state is MovieWatchState.Watched) 1f else 0f
     is LibraryProgress.Series -> progress.fraction
-    is LibraryProgress.Anime -> when {
-        completed -> 1f
-        totalEpisodes == null || totalEpisodes <= 0 -> watchedEpisodes.toFloat()
-        else -> watchedEpisodes.toFloat() / totalEpisodes
-    }
 }
