@@ -89,7 +89,33 @@ fun BingeeNavHost(
             )
         }
         composable(AppRoute.SETTINGS) {
-            SettingsScreen(onOpenTvTimeImport = { navController.navigate(AppRoute.TV_TIME_IMPORT) })
+            SettingsScreen(
+                onNavigateToAppearance = { navController.navigate(AppRoute.SETTINGS_APPEARANCE) },
+                onNavigateToNotifications = { navController.navigate(AppRoute.SETTINGS_NOTIFICATIONS) },
+                onNavigateToDataBackup = { navController.navigate(AppRoute.SETTINGS_DATA_BACKUP) },
+                onNavigateToPrivacy = { navController.navigate(AppRoute.SETTINGS_PRIVACY) },
+                onNavigateToAbout = { navController.navigate(AppRoute.SETTINGS_ABOUT) }
+            )
+        }
+        composable(AppRoute.SETTINGS_APPEARANCE) {
+            com.cydoniancitizen.bingee.feature.settings.AppearanceLanguageSettingsScreen(
+                onBack = navController::popBackStack
+            )
+        }
+        composable(AppRoute.SETTINGS_NOTIFICATIONS) {
+            com.cydoniancitizen.bingee.feature.settings.NotificationSettingsScreen(onBack = navController::popBackStack)
+        }
+        composable(AppRoute.SETTINGS_DATA_BACKUP) {
+            com.cydoniancitizen.bingee.feature.settings.DataBackupSettingsScreen(
+                onBack = navController::popBackStack,
+                onOpenTvTimeImport = { navController.navigate(AppRoute.TV_TIME_IMPORT) }
+            )
+        }
+        composable(AppRoute.SETTINGS_PRIVACY) {
+            com.cydoniancitizen.bingee.feature.settings.PrivacySettingsScreen(onBack = navController::popBackStack)
+        }
+        composable(AppRoute.SETTINGS_ABOUT) {
+            com.cydoniancitizen.bingee.feature.settings.AboutSettingsScreen(onBack = navController::popBackStack)
         }
         composable(AppRoute.NOTIFICATIONS) {
             NotificationsScreen(onBack = navController::popBackStack)

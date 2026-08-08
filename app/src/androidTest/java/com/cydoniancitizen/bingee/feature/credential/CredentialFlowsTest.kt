@@ -24,7 +24,7 @@ import com.cydoniancitizen.bingee.feature.onboarding.OnboardingUiState
 import com.cydoniancitizen.bingee.feature.search.SearchContent
 import com.cydoniancitizen.bingee.feature.search.SearchCredentialAvailability
 import com.cydoniancitizen.bingee.feature.search.SearchUiState
-import com.cydoniancitizen.bingee.feature.settings.SettingsContent
+import com.cydoniancitizen.bingee.feature.settings.PrivacySettingsContent
 import com.cydoniancitizen.bingee.feature.settings.SettingsUiState
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
@@ -175,14 +175,15 @@ class CredentialFlowsTest {
         val requested = AtomicBoolean(false)
         composeRule.setContent {
             BingeeTheme {
-                SettingsContent(
+                PrivacySettingsContent(
                     state = SettingsUiState(credentialStatus = TmdbCredentialStatus.Valid),
                     onInputChanged = {},
                     onSubmit = {},
                     onRetry = {},
                     onRequestRemoval = { requested.set(true) },
                     onDismissRemoval = {},
-                    onConfirmRemoval = {}
+                    onConfirmRemoval = {},
+                    onBack = {}
                 )
             }
         }

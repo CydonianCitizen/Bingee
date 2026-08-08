@@ -13,7 +13,6 @@ import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationPreferences
-import com.cydoniancitizen.bingee.feature.notifications.NotificationsContent
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -27,7 +26,7 @@ class ReleaseNotificationSettingsScreenTest {
     fun disabledSettingsShowLeadCategoriesAndApproximateSchedulingCopy() {
         composeRule.setContent {
             BingeeTheme(darkTheme = true) {
-                NotificationsContent(
+                NotificationSettingsContent(
                     state = ReleaseNotificationSettingsUiState(
                         preferences = ReleaseNotificationPreferences(
                             leadTime = ReleaseNotificationLeadTime.THREE_DAYS
@@ -45,18 +44,16 @@ class ReleaseNotificationSettingsScreenTest {
         }
 
         listOf(
-            "Release notifications",
+            "Enable release notifications",
+            "Android schedules background checks approximately.",
             "Permission will be requested only when you enable notifications.",
             "Three days before",
             "Movie releases",
             "Season premieres",
             "Episode airings"
         ).forEach { text ->
-            composeRule.onNodeWithText(text).performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithText(text, substring = true).performScrollTo().assertIsDisplayed()
         }
-        composeRule.onNodeWithText("Android schedules background checks approximately.", substring = true)
-            .performScrollTo()
-            .assertIsDisplayed()
     }
 
     @Test
@@ -64,7 +61,7 @@ class ReleaseNotificationSettingsScreenTest {
         val opened = AtomicBoolean(false)
         composeRule.setContent {
             BingeeTheme {
-                NotificationsContent(
+                NotificationSettingsContent(
                     state = ReleaseNotificationSettingsUiState(
                         capability = NotificationCapabilityStatus.SYSTEM_BLOCKED
                     ),
@@ -86,7 +83,7 @@ class ReleaseNotificationSettingsScreenTest {
     fun notificationControlsExposeRolesAndSelectionState() {
         composeRule.setContent {
             BingeeTheme {
-                NotificationsContent(
+                NotificationSettingsContent(
                     state = ReleaseNotificationSettingsUiState(
                         preferences = ReleaseNotificationPreferences(
                             leadTime = ReleaseNotificationLeadTime.THREE_DAYS

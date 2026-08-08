@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -27,19 +26,17 @@ class SettingsScreenTest {
         var selectedLanguage by mutableStateOf(AppLanguage.ENGLISH)
         composeRule.setContent {
             BingeeTheme {
-                SettingsContent(
-                    state = SettingsUiState(language = selectedLanguage),
-                    onInputChanged = {},
-                    onSubmit = {},
-                    onRetry = {},
-                    onRequestRemoval = {},
-                    onDismissRemoval = {},
-                    onConfirmRemoval = {},
-                    onSetLanguage = { selectedLanguage = it }
+                AppearanceLanguageSettingsContent(
+                    theme = AppTheme.SYSTEM_DEFAULT,
+                    language = selectedLanguage,
+                    onSetTheme = {},
+                    onSetLanguage = { selectedLanguage = it },
+                    onBack = {}
                 )
             }
         }
 
+        composeRule.onNodeWithText("Appearance & Language").assertIsDisplayed()
         composeRule.onNodeWithText("Language").assertIsDisplayed()
         composeRule.onNodeWithText("English").performScrollTo().assertIsDisplayed()
 
@@ -56,20 +53,17 @@ class SettingsScreenTest {
         var selectedTheme by mutableStateOf(AppTheme.SYSTEM_DEFAULT)
         composeRule.setContent {
             BingeeTheme {
-                SettingsContent(
-                    state = SettingsUiState(theme = selectedTheme),
-                    onInputChanged = {},
-                    onSubmit = {},
-                    onRetry = {},
-                    onRequestRemoval = {},
-                    onDismissRemoval = {},
-                    onConfirmRemoval = {},
-                    onSetTheme = { selectedTheme = it }
+                AppearanceLanguageSettingsContent(
+                    theme = selectedTheme,
+                    language = AppLanguage.ENGLISH,
+                    onSetTheme = { selectedTheme = it },
+                    onSetLanguage = {},
+                    onBack = {}
                 )
             }
         }
 
-        composeRule.onNodeWithText("Appearance").assertIsDisplayed()
+        composeRule.onNodeWithText("Appearance & Language").assertIsDisplayed()
         composeRule.onNodeWithText("Theme").performScrollTo().assertIsDisplayed()
 
         composeRule.onNodeWithText("System default").performClick()
@@ -78,31 +72,5 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Dark").performClick()
         assertEquals(AppTheme.DARK, selectedTheme)
-    }
-
-    @Test
-    fun openSourceSectionDisplaysGitHubAction() {
-        composeRule.setContent {
-            BingeeTheme {
-                SettingsContent(
-                    state = SettingsUiState(),
-                    onInputChanged = {},
-                    onSubmit = {},
-                    onRetry = {},
-                    onRequestRemoval = {},
-                    onDismissRemoval = {},
-                    onConfirmRemoval = {}
-                )
-            }
-        }
-
-        composeRule.onNodeWithText("Open Source").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(
-            "Bingee is open source. You can help improve the app by reporting issues, suggesting features, or contributing code on GitHub."
-        ).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("View on GitHub").performScrollTo().assertIsDisplayed()
-
-        // Verify click does not crash even without real browser intent handling in unit test context
-        composeRule.onNodeWithText("View on GitHub").performClick()
     }
 }

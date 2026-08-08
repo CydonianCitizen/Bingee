@@ -140,10 +140,15 @@ class HomeScreenTest {
 
     @Test
     fun refreshButtonHasAccessibleLabel() {
-        val refreshed = AtomicBoolean()
-        setHome(HomeUiState(content = HomeContentState.Empty, today = today), onRefresh = { refreshed.set(true) })
-        composeRule.onNodeWithContentDescription("Refresh release calendar").performClick()
-        assertTrue(refreshed.get())
+        val notificationsClicked = AtomicBoolean()
+        setHome(
+            HomeUiState(content = HomeContentState.Empty, today = today),
+            onOpenNotifications = { notificationsClicked.set(true) }
+        )
+
+        composeRule.onNodeWithContentDescription("Refresh release calendar").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Notifications").assertIsDisplayed().performClick()
+        assertTrue(notificationsClicked.get())
     }
 
     @Test
@@ -215,13 +220,15 @@ class HomeScreenTest {
     private fun setHome(
         state: HomeUiState,
         onRefresh: () -> Unit = {},
+        onOpenNotifications: () -> Unit = {},
         onOpenSettings: () -> Unit = {},
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
-    ) = setHomeState({ state }, onRefresh, onOpenSettings, onOpenDetails)
+    ) = setHomeState({ state }, onRefresh, onOpenNotifications, onOpenSettings, onOpenDetails)
 
     private fun setHomeState(
         state: () -> HomeUiState,
         onRefresh: () -> Unit = {},
+        onOpenNotifications: () -> Unit = {},
         onOpenSettings: () -> Unit = {},
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
     ) {
@@ -232,7 +239,7 @@ class HomeScreenTest {
                     onRefresh = onRefresh,
                     onRetryLocal = {},
                     onDismissFeedback = {},
-                    onOpenNotifications = {},
+                    onOpenNotifications = onOpenNotifications,
                     onOpenSettings = onOpenSettings,
                     onOpenDetails = onOpenDetails
                 )

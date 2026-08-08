@@ -1,4 +1,4 @@
-@set "JAVA_HOME=C:\Program Files\Java\jdk-21.0.11"
+@set "JAVA_HOME=C:\Program Files\Java\jdk-21.0.12"
 @set "ANDROID_HOME=C:\Users\thoma\AppData\Local\Android\Sdk"
 @set "ANDROID_SDK_ROOT=C:\Users\thoma\AppData\Local\Android\Sdk"
 @if "%DEBUG%"=="" @echo off

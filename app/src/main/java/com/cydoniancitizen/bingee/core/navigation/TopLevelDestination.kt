@@ -33,6 +33,11 @@ object AppRoute {
     const val ONBOARDING = "onboarding"
     const val TV_TIME_IMPORT = "tv-time-import"
     const val SETTINGS = "settings"
+    const val SETTINGS_APPEARANCE = "settings/appearance"
+    const val SETTINGS_NOTIFICATIONS = "settings/notifications"
+    const val SETTINGS_DATA_BACKUP = "settings/data-backup"
+    const val SETTINGS_PRIVACY = "settings/privacy"
+    const val SETTINGS_ABOUT = "settings/about"
     const val NOTIFICATIONS = "notifications"
     const val STATISTICS = "statistics"
 }

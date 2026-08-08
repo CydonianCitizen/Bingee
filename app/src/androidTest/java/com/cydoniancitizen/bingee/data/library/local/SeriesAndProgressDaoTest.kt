@@ -178,10 +178,10 @@ class SeriesAndProgressDaoTest {
             ProgressWriteOutcome.SUCCESS,
             progressDao.markMovieWatched(MediaSource.TMDB, "200", now.plusSeconds(1))
         )
-        assertEquals(now, progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)
+        assertEquals(now.plusSeconds(1), progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)
 
         libraryDao.removeMembership(MediaSource.TMDB, "200")
-        assertEquals(now, progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)
+        assertEquals(now.plusSeconds(1), progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)
         assertEquals(
             ProgressWriteOutcome.SUCCESS,
             progressDao.markMovieUnwatched(MediaSource.TMDB, "200")

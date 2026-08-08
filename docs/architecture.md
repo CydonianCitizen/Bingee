@@ -41,19 +41,19 @@ SearchScreen -> SearchViewModel -> MediaRepository
 Local library state follows a separate network-free path:
 
 ~~~text
-SearchScreen/LibraryScreen -> feature ViewModel -> LibraryRepository
+SearchScreen/ProfileScreen -> feature ViewModel -> LibraryRepository
                                                    |
                                                    v
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v8)
+                           LibraryDao -> Room bingee.db (v1)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
 
 ~~~text
-Search/Library -> provider-qualified DetailRoute -> MediaDetailsViewModel
+Search/Profile -> provider-qualified DetailRoute -> MediaDetailsViewModel
                                                     |-> LibraryRepository (membership only)
                                                     '-> MediaDetailsRepository
                                                           |-> DetailsDao -> Room Flow
@@ -154,7 +154,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 `TvTimeMatcher` reuses the existing authenticated TMDB search, Find-by-external-ID, details, and season data sources. It accepts only unique compatible exact identities, a documented movie title/year proposal, and ordinary episode numbering under an accepted parent series. Series title-only results and specials remain reviewable. Requests are sequential/bounded and deduplicated for one import session; TMDB errors never mutate Room.
 
-`TvTimeImportPlanBuilder` resolves all accepted candidates and canonical metadata before confirmation. `TvTimeImportStore` executes one additive `RoomDatabase.withTransaction` and uses `import_provenance_refs` (Room v8) for distinct TVDB, IMDb, and TV Time UUID namespaces. Existing membership, progress, ratings, credentials, portable preferences, notification delivery state, and calendar refresh state are preserved. Bingee backup restore remains the separate replace-only path.
+`TvTimeImportPlanBuilder` resolves all accepted candidates and canonical metadata before confirmation. `TvTimeImportStore` executes one additive `RoomDatabase.withTransaction` and uses `import_provenance_refs` (Room v1) for distinct TVDB, IMDb, and TV Time UUID namespaces. Existing membership, progress, ratings, credentials, portable preferences, notification delivery state, and calendar refresh state are preserved. Bingee backup restore remains the separate replace-only path.
 
 ## Local release calendar
 
@@ -188,7 +188,7 @@ Debug fakes live in app/src/debug; debug-variant JVM tests in app/src/test reuse
 
 ## Navigation
 
-TopLevelDestination is the only source of Home, Search, Library, and Settings routes, order, labels, and icons. BingeeNavHost owns the route-to-screen graph; reusable composables never receive a NavController. `DetailRoute` is non-top-level and carries only `MediaSource`, `MediaType`, and external provider ID. Provider/type pairs are validated before navigation; malformed routes render an input error rather than substituting another provider. `MediaType` is required to select an endpoint when a Search result has no local row. No token, local Room ID, query, URL, or metadata payload enters navigation.
+TopLevelDestination is the only source of Home, Search, and Profile routes, order, labels, and icons. Settings is opened from Profile. BingeeNavHost owns the route-to-screen graph; reusable composables never receive a NavController. `DetailRoute` is non-top-level and carries only `MediaSource`, `MediaType`, and external provider ID. Provider/type pairs are validated before navigation; malformed routes render an input error rather than substituting another provider. `MediaType` is required to select an endpoint when a Search result has no local row. No token, local Room ID, query, URL, or metadata payload enters navigation.
 
 AppRoute.ONBOARDING and DetailRoute are non-top-level routes. Startup reads local credential status and the non-sensitive first-run preference before constructing the graph. It starts at onboarding only for a first run without a usable stored credential; offline continuation and successful configuration both replace onboarding with Home. Removing a credential later does not force navigation away from the shell or delete cached details.
 
