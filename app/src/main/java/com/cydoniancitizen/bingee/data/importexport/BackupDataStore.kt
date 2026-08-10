@@ -16,6 +16,7 @@ import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -172,9 +173,7 @@ internal class BackupDataStore @Inject constructor(
         }
     }
 
-    suspend fun currentLibraryCount(): Int = database.withTransaction {
-        snapshotDao.readSnapshot().memberships.size
-    }
+    suspend fun currentLibraryCount(): Int = snapshotDao.countLibraryEntries()
 
     suspend fun restore(
         plan: ValidatedBackupPlan,
@@ -337,13 +336,11 @@ internal class BackupDataStore @Inject constructor(
         }
     }
 
-    suspend fun createPortableBackup(): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun createPortableBackup(exportedAt: Instant): ByteArray = withContext(Dispatchers.IO) {
         val document = BackupDocument(
             formatId = BACKUP_FORMAT_ID,
             schemaVersion = BACKUP_SCHEMA_VERSION,
-            exportedAt =
-            database.withTransaction { snapshotDao.readSnapshot() }.media.maxOfOrNull { it.metadataUpdatedAt }
-                ?: java.time.Instant.now(),
+            exportedAt = exportedAt,
             data = readPortableData()
         )
         BackupJsonCodec.encode(document)

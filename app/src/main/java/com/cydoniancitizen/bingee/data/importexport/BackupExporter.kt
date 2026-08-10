@@ -9,7 +9,7 @@ internal data class ExportedBackup(val bytes: ByteArray)
 @Singleton
 internal class BackupExporter @Inject constructor(private val dataStore: BackupDataStore, private val clock: Clock) {
     suspend fun export(): ExportedBackup {
-        val bytes = dataStore.createPortableBackup()
+        val bytes = dataStore.createPortableBackup(clock.instant())
         return ExportedBackup(bytes)
     }
 }

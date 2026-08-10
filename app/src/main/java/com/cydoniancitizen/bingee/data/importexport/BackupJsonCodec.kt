@@ -118,8 +118,6 @@ internal object BackupJsonCodec {
         data.ratings.forEach { writeRating(writer, it) }
         writer.endArray()
 
-        writer.name("mediaLinkGroups").beginArray().endArray()
-        writer.name("mediaLinkAudit").beginArray().endArray()
         writer.name("preferences")
         writePreferences(writer, data.preferences)
         writer.endObject()
@@ -396,7 +394,7 @@ internal object BackupJsonCodec {
         parseItem: (JsonElement) -> T
     ): List<T> {
         val elem = obj.get(key)
-        if (elem == null || elem.isJsonNull) return emptyList()
+        if (elem == null) return emptyList()
         if (!elem.isJsonArray) problem(BackupFailureKind.INVALID_STRUCTURE)
         val array = elem.asJsonArray
         if (array.size() > maxCount) problem(BackupFailureKind.TOO_LARGE)
@@ -443,7 +441,7 @@ internal object BackupJsonCodec {
 
     private fun booleanOrDefault(obj: JsonObject, key: String, default: Boolean): Boolean {
         val elem = obj.get(key)
-        if (elem == null || elem.isJsonNull) return default
+        if (elem == null) return default
         if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isBoolean) problem(BackupFailureKind.INVALID_STRUCTURE)
         return elem.asBoolean
     }

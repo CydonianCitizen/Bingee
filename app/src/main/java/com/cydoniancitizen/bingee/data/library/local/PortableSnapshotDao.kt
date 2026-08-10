@@ -11,8 +11,6 @@ internal data class PortableSnapshotRows(
     val media: List<MediaEntity>,
     val refs: List<ExternalRefEntity>,
     val memberships: List<LibraryMembershipEntity>,
-    val details: List<MediaDetailsEntity>,
-    val genres: List<MediaGenreEntity>,
     val seasons: List<SeasonEntity>,
     val episodes: List<EpisodeEntity>,
     val episodeProgress: List<EpisodeWatchProgressEntity>,
@@ -32,12 +30,6 @@ internal abstract class PortableSnapshotDao {
 
     @Query("SELECT * FROM library_entries ORDER BY local_media_id")
     protected abstract suspend fun getMemberships(): List<LibraryMembershipEntity>
-
-    @Query("SELECT * FROM media_details ORDER BY local_media_id")
-    protected abstract suspend fun getDetails(): List<MediaDetailsEntity>
-
-    @Query("SELECT * FROM media_genres ORDER BY local_media_id, genre_order")
-    protected abstract suspend fun getGenres(): List<MediaGenreEntity>
 
     @Query("SELECT * FROM seasons ORDER BY local_season_id")
     protected abstract suspend fun getSeasons(): List<SeasonEntity>
@@ -62,6 +54,9 @@ internal abstract class PortableSnapshotDao {
 
     @Query("SELECT * FROM portable_preferences WHERE singleton_key = 1 LIMIT 1")
     abstract fun observePreferences(): Flow<PortablePreferencesEntity?>
+
+    @Query("SELECT COUNT(*) FROM library_entries")
+    abstract suspend fun countLibraryEntries(): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertMedia(media: MediaEntity): Long
@@ -141,7 +136,7 @@ internal abstract class PortableSnapshotDao {
     @Transaction
     open suspend fun readSnapshot(): PortableSnapshotRows = PortableSnapshotRows(
         media = getMedia(), refs = getRefs(), memberships = getMemberships(),
-        details = getDetails(), genres = getGenres(), seasons = getSeasons(),
+        seasons = getSeasons(),
         episodes = getEpisodes(), episodeProgress = getEpisodeProgress(),
         movieProgress = getMovieProgress(), seriesProgress = getSeriesProgress(),
         ratings = getRatings(),

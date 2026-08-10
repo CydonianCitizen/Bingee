@@ -2,6 +2,9 @@ package com.cydoniancitizen.bingee.data.importexport
 
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -29,7 +32,29 @@ class BackupJsonCodecTest {
         assertFalse(json.contains("freshness"))
         assertFalse(json.contains("network"))
         assertFalse(json.contains("lastCheckedAt"))
+        assertFalse(json.contains("mediaLinkGroups"))
+        assertFalse(json.contains("mediaLinkAudit"))
         assertTrue(json.indexOf("\"media\"") < json.indexOf("\"seasons\""))
+    }
+
+    @Test
+    fun productionPayloadMatchesCanonicalV1SchemaAndParser() {
+        val encoded = BackupJsonCodec.encode(fullDocument())
+        val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
+        val schema = JsonParser.parseString(Files.readString(schemaPath()))
+        val errors = validateSchema(schema, payload, schema.asJsonObject, "$")
+
+        assertTrue(errors.joinToString("\n"), errors.isEmpty())
+        val parsed = BackupJsonCodec.parse(payload.toString().toByteArray(Charsets.UTF_8))
+        assertTrue(parsed is BackupParseResult.Success)
+        assertTrue(
+            BackupValidator.validate((parsed as BackupParseResult.Success).document) is BackupValidationResult.Success
+        )
+
+        payload.asJsonObject.addProperty("futureField", true)
+        payload.asJsonObject.getAsJsonObject("data").addProperty("futureDataField", "ignored")
+        val additiveResult = BackupJsonCodec.parse(payload.toString().toByteArray(Charsets.UTF_8))
+        assertTrue(additiveResult is BackupParseResult.Success)
     }
 
     @Test
@@ -132,4 +157,86 @@ class BackupJsonCodecTest {
             preferences = BackupPreferences(1, true, false, true)
         )
     )
+
+    private fun schemaPath(): Path = listOf(
+        Path.of("docs", "backup", "bingee-backup-v1.schema.json"),
+        Path.of("..", "docs", "backup", "bingee-backup-v1.schema.json")
+    ).first { Files.isRegularFile(it) }
+
+    // ponytail: validator covers schema keywords used here; add a library if contract grows beyond this subset.
+    private fun validateSchema(schema: JsonElement, value: JsonElement, root: JsonObject, path: String): List<String> {
+        val resolved = schema.asJsonObject.get("\$ref")?.let { ref ->
+            ref.asString.removePrefix("#/").split('/').fold(root as JsonElement) { current, part ->
+                current.asJsonObject.get(part)!!
+            }
+        } ?: schema
+        val definition = resolved.asJsonObject
+        val errors = mutableListOf<String>()
+        val types = definition.get("type")?.let { type ->
+            if (type.isJsonArray) type.asJsonArray.map { it.asString } else listOf(type.asString)
+        }
+        if (types != null && types.none { matchesType(value, it) }) {
+            return listOf("$path: type")
+        }
+        definition.get("const")?.let { if (it != value) errors += "$path: const" }
+        definition.get("enum")?.let { enums ->
+            if (enums.asJsonArray.none { it == value }) errors += "$path: enum"
+        }
+        if (value.isJsonObject) {
+            val jsonObject = value.asJsonObject
+            definition.getAsJsonArray("required")?.forEach { required ->
+                if (!jsonObject.has(required.asString)) errors += "$path.${required.asString}: required"
+            }
+            val properties = definition.getAsJsonObject("properties")
+            properties?.entrySet()?.forEach { (name, propertySchema) ->
+                if (jsonObject.has(name)) {
+                    errors += validateSchema(propertySchema, jsonObject.get(name), root, "$path.$name")
+                }
+            }
+            if (definition.get("additionalProperties")?.asBoolean == false && properties != null) {
+                jsonObject.keySet().filterNot { it in properties.keySet() }.forEach { name ->
+                    errors += "$path.$name: additional property"
+                }
+            }
+        }
+        if (value.isJsonArray) {
+            val array = value.asJsonArray
+            definition.get("minItems")?.let { if (array.size() < it.asInt) errors += "$path: minItems" }
+            definition.get("maxItems")?.let { if (array.size() > it.asInt) errors += "$path: maxItems" }
+            definition.get("items")?.let { itemSchema ->
+                array.forEachIndexed { index, item ->
+                    errors += validateSchema(itemSchema, item, root, "$path[$index]")
+                }
+            }
+        }
+        if (value.isJsonPrimitive && value.asJsonPrimitive.isString) {
+            val string = value.asString
+            definition.get("minLength")?.let { if (string.length < it.asInt) errors += "$path: minLength" }
+            definition.get("maxLength")?.let { if (string.length > it.asInt) errors += "$path: maxLength" }
+            definition.get("pattern")?.let {
+                if (!Regex(it.asString).containsMatchIn(string)) errors += "$path: pattern"
+            }
+            when (definition.get("format")?.asString) {
+                "date" -> runCatching { LocalDate.parse(string) }.onFailure { errors += "$path: date" }
+                "date-time" -> runCatching { Instant.parse(string) }.onFailure { errors += "$path: date-time" }
+            }
+        }
+        if (value.isJsonPrimitive && value.asJsonPrimitive.isNumber) {
+            val number = value.asDouble
+            definition.get("minimum")?.let { if (number < it.asDouble) errors += "$path: minimum" }
+            definition.get("maximum")?.let { if (number > it.asDouble) errors += "$path: maximum" }
+        }
+        return errors
+    }
+
+    private fun matchesType(value: JsonElement, type: String): Boolean = when (type) {
+        "object" -> value.isJsonObject
+        "array" -> value.isJsonArray
+        "string" -> value.isJsonPrimitive && value.asJsonPrimitive.isString
+        "integer" -> value.isJsonPrimitive && value.asJsonPrimitive.isNumber && value.asDouble % 1 == 0.0
+        "number" -> value.isJsonPrimitive && value.asJsonPrimitive.isNumber
+        "boolean" -> value.isJsonPrimitive && value.asJsonPrimitive.isBoolean
+        "null" -> value.isJsonNull
+        else -> false
+    }
 }

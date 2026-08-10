@@ -66,6 +66,7 @@ class BackupDataStoreTest {
         assertEquals(1, secondSnapshot.ratings.size)
         assertEquals(1, secondSnapshot.seasons.size)
         assertEquals(1, secondSnapshot.episodes.size)
+        assertEquals(1, store.currentLibraryCount())
 
         store.restore(second)
         val repeated = database.portableSnapshotDao().readSnapshot()
@@ -106,12 +107,15 @@ class BackupDataStoreTest {
         val clock = Clock.fixed(exportedAt, ZoneOffset.UTC)
         val first = exportedDocument(BackupExporter(store, clock).export().bytes)
 
+        assertEquals(exportedAt, first.exportedAt)
         val validated = BackupValidator.validate(first)
         assertTrue(validated is BackupValidationResult.Success)
         store.restore((validated as BackupValidationResult.Success).plan)
 
-        val second = exportedDocument(BackupExporter(store, clock).export().bytes)
+        val secondBytes = BackupExporter(store, clock).export().bytes
+        val second = exportedDocument(secondBytes)
         assertEquals(first.data, second.data)
+        assertEquals(BackupJsonCodec.encode(first), secondBytes)
     }
 
     private fun exportedDocument(bytes: ByteArray): BackupDocument =
