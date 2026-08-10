@@ -41,10 +41,12 @@ internal object NotificationDetailIntent {
         val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)
             ?.let { value -> MediaType.entries.firstOrNull { it.name == value } }
             ?: return null
-        val externalId = intent.getStringExtra(EXTRA_EXTERNAL_ID)?.trim()
+        if (source != MediaSource.TMDB) return null
+        if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return null
+        val externalId = intent.getStringExtra(EXTRA_EXTERNAL_ID)
             ?.takeIf(String::isNotEmpty)
             ?: return null
-        if (source == MediaSource.TMDB && externalId.toLongOrNull()?.let { it > 0 } != true) return null
+        if (!externalId.all { it in '0'..'9' } || externalId.toLongOrNull()?.let { it > 0 } != true) return null
         return NotificationNavigationTarget(ExternalMediaRef(source, externalId), mediaType)
     }
 }

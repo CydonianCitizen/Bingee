@@ -77,7 +77,7 @@ class BackupDataStoreTest {
 
     @Test
     fun restoreRollsBackAtEveryInsertionStage() = runBlocking {
-        store.restore(plan("existing", includeSeries = true))
+        store.restore(plan("900", includeSeries = true))
         val before = database.portableSnapshotDao().readSnapshot()
 
         RestoreStage.entries.forEach { failedStage ->
@@ -85,7 +85,7 @@ class BackupDataStoreTest {
             try {
                 store.restore(
                     plan(
-                        "incoming-${failedStage.name}",
+                        (1000 + failedStage.ordinal).toString(),
                         includeSeries = true
                     ),
                     RestoreFailureInjector { stage ->
@@ -120,15 +120,15 @@ class BackupDataStoreTest {
     private class InjectedRestoreFailure(stage: RestoreStage) : RuntimeException(stage.name)
 
     private fun roundTripPlan(): ValidatedBackupPlan {
-        val movie = BackupRef(MediaSource.TMDB, "movie-round-trip")
-        val movieAlias = BackupRef(MediaSource.TMDB, "movie-round-trip-alias")
-        val series = BackupRef(MediaSource.TMDB, "series-round-trip")
-        val seriesAlias = BackupRef(MediaSource.TMDB, "series-round-trip-alias")
-        val specials = BackupRef(MediaSource.TMDB, "season-round-trip-specials")
-        val regular = BackupRef(MediaSource.TMDB, "season-round-trip-1")
-        val watchedEpisode = BackupRef(MediaSource.TMDB, "episode-round-trip-watched")
-        val futureEpisode = BackupRef(MediaSource.TMDB, "episode-round-trip-future")
-        val removedMovie = BackupRef(MediaSource.TMDB, "movie-round-trip-removed")
+        val movie = BackupRef(MediaSource.TMDB, "550")
+        val movieAlias = BackupRef(MediaSource.TMDB, "551")
+        val series = BackupRef(MediaSource.TMDB, "1399")
+        val seriesAlias = BackupRef(MediaSource.TMDB, "1400")
+        val specials = BackupRef(MediaSource.TMDB, "10001")
+        val regular = BackupRef(MediaSource.TMDB, "10002")
+        val watchedEpisode = BackupRef(MediaSource.TMDB, "20001")
+        val futureEpisode = BackupRef(MediaSource.TMDB, "20002")
+        val removedMovie = BackupRef(MediaSource.TMDB, "600")
         val watchedAt = Instant.parse("2026-07-01T08:00:00Z")
         val ratedAt = Instant.parse("2026-07-02T08:00:00Z")
         val data = BackupData(
@@ -206,9 +206,9 @@ class BackupDataStoreTest {
         schemaVersion: Int = BACKUP_SCHEMA_VERSION
     ): ValidatedBackupPlan {
         val movieRef = BackupRef(MediaSource.TMDB, movieId)
-        val seriesRef = BackupRef(MediaSource.TMDB, "series-$movieId")
-        val seasonRef = BackupRef(MediaSource.TMDB, "season-$movieId")
-        val episodeRef = BackupRef(MediaSource.TMDB, "episode-$movieId")
+        val seriesRef = BackupRef(MediaSource.TMDB, "${movieId}1")
+        val seasonRef = BackupRef(MediaSource.TMDB, "${movieId}2")
+        val episodeRef = BackupRef(MediaSource.TMDB, "${movieId}3")
         val data = BackupData(
             media = buildList {
                 add(BackupMedia(movieRef, listOf(movieRef), MediaType.MOVIE, "Movie $movieId", null, null, null, null))

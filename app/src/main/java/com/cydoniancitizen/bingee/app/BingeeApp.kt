@@ -63,7 +63,15 @@ private fun BingeeNavigation(
     LaunchedEffect(startDestination, notificationTarget) {
         val target = notificationTarget ?: return@LaunchedEffect
         if (startDestination == AppRoute.ONBOARDING) return@LaunchedEffect
-        navController.navigate(DetailRoute.create(target.reference, target.mediaType)) {
+        val args = DetailRoute.parse(
+            target.reference.source.name,
+            target.mediaType.name,
+            target.reference.externalId
+        ) ?: run {
+            onNotificationTargetConsumed()
+            return@LaunchedEffect
+        }
+        navController.navigate(DetailRoute.create(args.reference, args.mediaType)) {
             launchSingleTop = true
         }
         onNotificationTargetConsumed()

@@ -85,4 +85,15 @@ class NotificationActivityNavigationTest {
             composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
         }
     }
+
+    @Test
+    fun unsupportedNotificationIntentDoesNotCrashOrOpenDetails() {
+        val unsupported = NotificationDetailIntent.intent(
+            context,
+            NotificationNavigationTarget(ExternalMediaRef(MediaSource.IMDB, "tt123"), MediaType.MOVIE)
+        )
+        ActivityScenario.launch<MainActivity>(unsupported).use {
+            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+        }
+    }
 }

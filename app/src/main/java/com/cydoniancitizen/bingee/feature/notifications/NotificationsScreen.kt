@@ -1,254 +1,359 @@
 package com.cydoniancitizen.bingee.feature.notifications
 
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.core.app.ActivityCompat
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cydoniancitizen.bingee.R
+import com.cydoniancitizen.bingee.core.designsystem.component.EmptyState
+import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
-import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
-import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
-import com.cydoniancitizen.bingee.feature.settings.ReleaseNotificationSettingsUiState
-import com.cydoniancitizen.bingee.feature.settings.ReleaseNotificationSettingsViewModel
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.ReleaseEvent
+import com.cydoniancitizen.bingee.core.model.ReleaseEventType
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NotificationsScreen(
     onBack: () -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ReleaseNotificationSettingsViewModel = hiltViewModel()
+    viewModel: NotificationsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        val permanentlyDenied = !granted && context.findActivity()?.let { activity ->
-            !ActivityCompat.shouldShowRequestPermissionRationale(
-                activity,
-                Manifest.permission.POST_NOTIFICATIONS
+    val snackbarHostState = remember { SnackbarHostState() }
+    val refreshFailedText = stringResource(R.string.notifications_refresh_failed)
+    val retryText = stringResource(R.string.action_retry)
+
+    LaunchedEffect(state.refreshState) {
+        if (state.refreshState == NotificationRefreshState.Failed) {
+            val result = snackbarHostState.showSnackbar(
+                message = refreshFailedText,
+                actionLabel = retryText
             )
-        } == true
-        viewModel.onPermissionResult(granted, permanentlyDenied)
+            viewModel.dismissRefreshError()
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.refresh()
+            }
+        }
     }
 
-    NotificationsContent(
-        state = state,
-        onBack = onBack,
-        onNotificationEnabledChanged = { enabled ->
-            if (!enabled) {
-                viewModel.disableNotifications()
-            } else if (viewModel.onEnableRequested()) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            NotificationsTopBar(onBack = onBack)
+        }
+    ) { innerPadding ->
+        PullToRefreshBox(
+            isRefreshing = state.refreshState == NotificationRefreshState.Refreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            when (val contentState = state.contentState) {
+                NotificationsContentState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                text = stringResource(R.string.notifications_loading),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+
+                NotificationsContentState.NoFollowedSeries -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyState(
+                            title = stringResource(R.string.notifications_title),
+                            body = stringResource(R.string.notifications_empty_no_followed_series),
+                            modifier = Modifier.padding(BingeeDimensions.screenPadding)
+                        )
+                    }
+                }
+
+                NotificationsContentState.NoEvents -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyState(
+                            title = stringResource(R.string.notifications_title),
+                            body = stringResource(R.string.notifications_empty_no_events),
+                            modifier = Modifier.padding(BingeeDimensions.screenPadding)
+                        )
+                    }
+                }
+
+                is NotificationsContentState.Content -> {
+                    NotificationsList(
+                        groups = contentState.groups,
+                        today = state.today,
+                        onItemClick = { event -> onOpenDetails(event.mediaRef, MediaType.SERIES) },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
-        },
-        onLeadTimeChanged = viewModel::setLeadTime,
-        onMovieReleasesChanged = viewModel::setMovieReleases,
-        onSeasonPremieresChanged = viewModel::setSeasonPremieres,
-        onEpisodeAiringsChanged = viewModel::setEpisodeAirings,
-        onOpenSystemSettings = viewModel::openSystemSettings,
+        }
+    }
+}
+
+@Composable
+private fun NotificationsTopBar(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = BingeeDimensions.screenPadding, vertical = BingeeDimensions.elementSpacing),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.detail_back)
+            )
+        }
+        Text(
+            text = stringResource(R.string.notifications_title),
+            modifier = Modifier.weight(1f).semantics { heading() },
+            style = MaterialTheme.typography.headlineMedium
+        )
+    }
+}
+
+@Composable
+private fun NotificationsList(
+    groups: List<NotificationGroup>,
+    today: LocalDate,
+    onItemClick: (ReleaseEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.padding(horizontal = BingeeDimensions.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
+    ) {
+        groups.forEach { group ->
+            item(key = "header_${group.category}") {
+                Text(
+                    text = group.category.headerText(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(top = BingeeDimensions.elementSpacing, bottom = 4.dp)
+                        .semantics { heading() }
+                )
+            }
+
+            items(
+                items = group.items,
+                key = { event -> event.stableKey }
+            ) { event ->
+                NotificationItemCard(
+                    event = event,
+                    today = today,
+                    onClick = { onItemClick(event) }
+                )
+            }
+        }
+        item {
+            Spacer(modifier = Modifier.height(BingeeDimensions.screenPadding))
+        }
+    }
+}
+
+@Composable
+private fun NotificationGroupCategory.headerText(): String = when (this) {
+    NotificationGroupCategory.UPCOMING -> stringResource(R.string.notifications_group_upcoming)
+    NotificationGroupCategory.TODAY -> stringResource(R.string.notifications_group_today)
+    NotificationGroupCategory.THIS_WEEK -> stringResource(R.string.notifications_group_this_week)
+    NotificationGroupCategory.EARLIER -> stringResource(R.string.notifications_group_earlier)
+}
+
+@Composable
+private fun NotificationItemCard(
+    event: ReleaseEvent,
+    today: LocalDate,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(BingeeDimensions.elementSpacing),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MediaPoster(
+                title = event.title,
+                posterUrl = event.posterUrl,
+                modifier = Modifier
+                    .size(width = 48.dp, height = 72.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+
+            Spacer(modifier = Modifier.width(BingeeDimensions.elementSpacing))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = event.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                NotificationEventCopy(event = event, today = today)
+
+                if (!event.subjectTitle.isNullOrBlank()) {
+                    val detailInfo = buildSeasonEpisodeDetail(event)
+                    if (detailInfo.isNotBlank()) {
+                        Text(
+                            text = detailInfo,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = formatEventDateBadge(event.eventDate, today),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotificationEventCopy(event: ReleaseEvent, today: LocalDate, modifier: Modifier = Modifier) {
+    val eventText = when (event.subject.eventType) {
+        ReleaseEventType.EPISODE_AIRING -> {
+            val epNum = event.episodeNumber ?: 1
+            when {
+                event.eventDate == today -> stringResource(R.string.notification_item_new_episode_today)
+                event.eventDate > today -> stringResource(
+                    R.string.notification_item_episode_starts,
+                    epNum,
+                    formatLocalizedDate(event.eventDate)
+                )
+                else -> stringResource(R.string.notification_item_episode_available, epNum)
+            }
+        }
+
+        ReleaseEventType.SEASON_PREMIERE -> {
+            val seasonNum = event.seasonNumber ?: 1
+            when {
+                event.eventDate == today -> stringResource(R.string.notification_item_new_season_today)
+                event.eventDate > today -> stringResource(
+                    R.string.notification_item_season_starts,
+                    seasonNum,
+                    formatLocalizedDate(event.eventDate)
+                )
+                else -> stringResource(R.string.notification_item_new_season_available)
+            }
+        }
+
+        ReleaseEventType.MOVIE_RELEASE -> ""
+    }
+
+    Text(
+        text = eventText,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
     )
 }
 
-@Composable
-internal fun NotificationsContent(
-    state: ReleaseNotificationSettingsUiState,
-    onBack: () -> Unit,
-    onNotificationEnabledChanged: (Boolean) -> Unit,
-    onLeadTimeChanged: (ReleaseNotificationLeadTime) -> Unit,
-    onMovieReleasesChanged: (Boolean) -> Unit,
-    onSeasonPremieresChanged: (Boolean) -> Unit,
-    onEpisodeAiringsChanged: (Boolean) -> Unit,
-    onOpenSystemSettings: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(BingeeDimensions.screenPadding),
-        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.detail_back)
-                )
-            }
-            Text(
-                text = stringResource(R.string.notifications_title),
-                modifier = Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.headlineMedium
-            )
-        }
+private fun buildSeasonEpisodeDetail(event: ReleaseEvent): String {
+    val season = event.seasonNumber
+    val episode = event.episodeNumber
+    val title = event.subjectTitle
 
-        SettingSwitchRow(
-            label = stringResource(R.string.settings_notifications_enable),
-            checked = state.preferences.enabled,
-            enabled = !state.isUpdating,
-            onCheckedChange = onNotificationEnabledChanged
-        )
-        Text(
-            text = stringResource(R.string.settings_notifications_approximate),
-            style = MaterialTheme.typography.bodyMedium
-        )
-        val blocked = state.permanentlyDenied ||
-            state.capability == NotificationCapabilityStatus.SYSTEM_BLOCKED ||
-            state.capability == NotificationCapabilityStatus.CHANNEL_BLOCKED
-        Text(
-            text = stringResource(
-                when {
-                    state.preferences.enabled && state.capability == NotificationCapabilityStatus.AVAILABLE ->
-                        R.string.settings_notifications_permission_granted
-                    blocked -> R.string.settings_notifications_permission_blocked
-                    else -> R.string.settings_notifications_permission_required
-                }
-            ),
-            style = MaterialTheme.typography.bodySmall
-        )
-        if (blocked) {
-            Button(onClick = onOpenSystemSettings) {
-                Text(stringResource(R.string.settings_notifications_open_system))
-            }
-        }
-
-        HorizontalDivider()
-
-        Text(
-            stringResource(R.string.settings_notifications_lead_time),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleMedium
-        )
-        ReleaseNotificationLeadTime.entries.forEach { leadTime ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectable(
-                        selected = state.preferences.leadTime == leadTime,
-                        enabled = !state.isUpdating,
-                        role = Role.RadioButton,
-                        onClick = { onLeadTimeChanged(leadTime) }
-                    )
-                    .semantics(mergeDescendants = true) {},
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = state.preferences.leadTime == leadTime,
-                    onClick = null,
-                    enabled = !state.isUpdating
-                )
-                Text(stringResource(leadTime.labelRes()))
-            }
-        }
-
-        HorizontalDivider()
-
-        Text(
-            stringResource(R.string.settings_notifications_categories),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleMedium
-        )
-        SettingSwitchRow(
-            stringResource(R.string.settings_notifications_movies),
-            state.preferences.movieReleases,
-            !state.isUpdating,
-            onMovieReleasesChanged
-        )
-        SettingSwitchRow(
-            stringResource(R.string.settings_notifications_seasons),
-            state.preferences.seasonPremieres,
-            !state.isUpdating,
-            onSeasonPremieresChanged
-        )
-        SettingSwitchRow(
-            stringResource(R.string.settings_notifications_episodes),
-            state.preferences.episodeAirings,
-            !state.isUpdating,
-            onEpisodeAiringsChanged
-        )
-
-        HorizontalDivider()
-
-        Text(
-            stringResource(R.string.notifications_recent_title),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleMedium
-        )
-        Text(
-            stringResource(R.string.notifications_none),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    return when {
+        season != null && episode != null && !title.isNullOrBlank() -> "S$season E$episode • $title"
+        season != null && episode != null -> "S$season E$episode"
+        season != null && !title.isNullOrBlank() -> "Season $season • $title"
+        !title.isNullOrBlank() -> title
+        else -> ""
     }
 }
 
 @Composable
-private fun SettingSwitchRow(label: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                enabled = enabled,
-                role = Role.Switch,
-                onValueChange = onCheckedChange
-            )
-            .semantics(mergeDescendants = true) {},
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
-    }
+private fun formatEventDateBadge(eventDate: LocalDate, today: LocalDate): String = when {
+    eventDate == today -> stringResource(R.string.notifications_group_today)
+    eventDate == today.minusDays(1) -> "Yesterday"
+    eventDate == today.plusDays(1) -> "Tomorrow"
+    else -> formatLocalizedDate(eventDate)
 }
 
-private fun ReleaseNotificationLeadTime.labelRes(): Int = when (this) {
-    ReleaseNotificationLeadTime.SAME_DAY -> R.string.settings_notifications_same_day
-    ReleaseNotificationLeadTime.ONE_DAY -> R.string.settings_notifications_one_day
-    ReleaseNotificationLeadTime.THREE_DAYS -> R.string.settings_notifications_three_days
-    ReleaseNotificationLeadTime.SEVEN_DAYS -> R.string.settings_notifications_seven_days
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
+private fun formatLocalizedDate(date: LocalDate): String {
+    val formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+    return date.format(formatter)
 }

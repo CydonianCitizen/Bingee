@@ -34,6 +34,29 @@ class NotificationDetailIntentTest {
         assertTrue(NotificationDetailIntent.pendingIntent(context, target, 7).isImmutable)
     }
 
+    @Test
+    fun unsupportedOrMalformedDetailsIdentityIsRejected() {
+        listOf(
+            rawIntent("IMDB", "MOVIE", "tt123"),
+            rawIntent("UNKNOWN", "MOVIE", "42"),
+            rawIntent("TMDB", "UNKNOWN", "42"),
+            rawIntent("TMDB", "MOVIE", "abc"),
+            rawIntent("TMDB", "MOVIE", "0"),
+            rawIntent("TMDB", "MOVIE", "-10"),
+            rawIntent("TMDB", "MOVIE", "12.5"),
+            rawIntent("TMDB", "MOVIE", " "),
+            rawIntent("TMDB", "MOVIE", null)
+        ).forEach { assertNull(NotificationDetailIntent.parse(it)) }
+    }
+
+    private fun rawIntent(source: String?, mediaType: String?, externalId: String?) =
+        android.content.Intent(context, com.cydoniancitizen.bingee.MainActivity::class.java).apply {
+            action = NotificationDetailIntent.ACTION_OPEN_DETAILS
+            source?.let { putExtra("notification_source", it) }
+            mediaType?.let { putExtra("notification_media_type", it) }
+            externalId?.let { putExtra("notification_external_id", it) }
+        }
+
     private fun assertFalseExtras(keys: Set<String>) {
         assertTrue(keys.none { it.contains("token", ignoreCase = true) })
         assertTrue(keys.none { it.contains("json", ignoreCase = true) })

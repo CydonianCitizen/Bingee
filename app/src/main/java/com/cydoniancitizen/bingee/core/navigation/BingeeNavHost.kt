@@ -118,7 +118,12 @@ fun BingeeNavHost(
             com.cydoniancitizen.bingee.feature.settings.AboutSettingsScreen(onBack = navController::popBackStack)
         }
         composable(AppRoute.NOTIFICATIONS) {
-            NotificationsScreen(onBack = navController::popBackStack)
+            NotificationsScreen(
+                onBack = navController::popBackStack,
+                onOpenDetails = { reference, mediaType ->
+                    navController.navigate(DetailRoute.create(reference, mediaType))
+                }
+            )
         }
         composable(AppRoute.TV_TIME_IMPORT) {
             TvTimeImportScreen(onBack = navController::popBackStack)

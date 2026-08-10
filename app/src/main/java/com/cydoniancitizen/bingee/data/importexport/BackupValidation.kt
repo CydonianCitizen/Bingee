@@ -236,6 +236,11 @@ internal object BackupValidator {
         require(ref.source == MediaSource.TMDB, BackupFailureKind.VALIDATION)
         require(ref.externalId.isNotBlank(), BackupFailureKind.VALIDATION)
         require(ref.externalId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
+        require(
+            ref.externalId.all { it in '0'..'9' } &&
+                ref.externalId.toLongOrNull()?.let { it > 0 } == true,
+            BackupFailureKind.VALIDATION
+        )
     }
 
     private fun checkMediaIdentity(identity: BackupMediaIdentity) {
@@ -245,6 +250,11 @@ internal object BackupValidator {
         )
         require(identity.externalId.isNotBlank(), BackupFailureKind.VALIDATION)
         require(identity.externalId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
+        require(
+            identity.externalId.all { it in '0'..'9' } &&
+                identity.externalId.toLongOrNull()?.let { it > 0 } == true,
+            BackupFailureKind.VALIDATION
+        )
     }
 
     private fun checkText(value: String?) {

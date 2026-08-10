@@ -7,7 +7,6 @@ import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationPreferences
-import com.cydoniancitizen.bingee.feature.notifications.NotificationsContent
 
 @Preview(showBackground = true)
 @Composable
@@ -41,7 +40,7 @@ private fun NotificationsBlockedPreview() = PreviewNotifications(
 @Composable
 private fun PreviewNotifications(notificationState: ReleaseNotificationSettingsUiState, darkTheme: Boolean = false) {
     BingeeTheme(darkTheme = darkTheme) {
-        NotificationsContent(
+        NotificationSettingsContent(
             state = notificationState,
             onBack = {},
             onNotificationEnabledChanged = {},

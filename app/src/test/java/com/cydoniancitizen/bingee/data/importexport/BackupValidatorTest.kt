@@ -14,9 +14,48 @@ class BackupValidatorTest {
             media = listOf(series()),
             seasons = listOf(season()),
             episodes = listOf(episode()),
-            episodeProgress = listOf(BackupEpisodeProgress(ref("episode"), instant))
+            episodeProgress = listOf(BackupEpisodeProgress(ref("20001"), instant))
         )
         assertTrue(BackupValidator.validate(document(data)) is BackupValidationResult.Success)
+    }
+
+    @Test
+    fun acceptsPositiveTmdbId() {
+        assertTrue(
+            BackupValidator.validate(
+                document(baseData().copy(media = listOf(movieWithId("550"))))
+            ) is BackupValidationResult.Success
+        )
+    }
+
+    @Test
+    fun rejectsZeroTmdbId() {
+        assertTmdbIdRejected("0")
+    }
+
+    @Test
+    fun rejectsWhitespaceTmdbId() {
+        assertTmdbIdRejected("   ")
+    }
+
+    @Test
+    fun rejectsNegativeTmdbId() {
+        assertTmdbIdRejected("-10")
+    }
+
+    @Test
+    fun rejectsAlphanumericTmdbId() {
+        assertTmdbIdRejected("abc")
+    }
+
+    @Test
+    fun rejectsDecimalTmdbId() {
+        assertTmdbIdRejected("12.5")
+    }
+
+    @Test
+    fun rejectsOverflowTmdbId() {
+        assertTmdbIdRejected("999999999999999999999999999999")
     }
 
     @Test
@@ -27,7 +66,7 @@ class BackupValidatorTest {
             failure(duplicate)
         )
         val missing = baseData().copy(
-            library = listOf(BackupLibraryEntry(ref("missing"), instant))
+            library = listOf(BackupLibraryEntry(ref("99999"), instant))
         )
         assertEquals(BackupFailureKind.MISSING_REFERENCE, failure(missing))
     }
@@ -39,7 +78,7 @@ class BackupValidatorTest {
             failure(
                 baseData().copy(
                     media = listOf(movie()),
-                    ratings = listOf(BackupRating(ref("movie"), 11, instant, instant))
+                    ratings = listOf(BackupRating(ref("550"), 11, instant, instant))
                 )
             )
         )
@@ -48,7 +87,7 @@ class BackupValidatorTest {
             failure(
                 baseData().copy(
                     media = listOf(series()),
-                    movieProgress = listOf(BackupMovieProgress(ref("series"), instant))
+                    movieProgress = listOf(BackupMovieProgress(ref("1399"), instant))
                 )
             )
         )
@@ -70,6 +109,10 @@ class BackupValidatorTest {
     private fun failure(data: BackupData): BackupFailureKind =
         ((BackupValidator.validate(document(data)) as BackupValidationResult.Failure).failure.kind)
 
+    private fun assertTmdbIdRejected(id: String) {
+        assertEquals(BackupFailureKind.VALIDATION, failure(baseData().copy(media = listOf(movieWithId(id)))))
+    }
+
     private fun document(data: BackupData) = BackupDocument(BACKUP_FORMAT_ID, 1, instant, data)
 
     private fun baseData() = BackupData(
@@ -83,11 +126,12 @@ class BackupValidatorTest {
         BackupPreferences(1, true, true, true)
     )
     private fun ref(id: String) = BackupRef(MediaSource.TMDB, id)
-    private fun movie() =
-        BackupMedia(ref("movie"), listOf(ref("movie")), MediaType.MOVIE, "Movie", null, null, null, null)
+    private fun movie() = movieWithId("550")
+    private fun movieWithId(id: String) =
+        BackupMedia(ref(id), listOf(ref(id)), MediaType.MOVIE, "Movie", null, null, null, null)
     private fun series() =
-        BackupMedia(ref("series"), listOf(ref("series")), MediaType.SERIES, "Series", null, null, null, null)
-    private fun season() = BackupSeason(ref("series"), ref("season"), 0, "Specials", null, null, null, 1)
-    private fun episode() = BackupEpisode(ref("season"), ref("episode"), 1, "Episode", null, null, null, null)
+        BackupMedia(ref("1399"), listOf(ref("1399")), MediaType.SERIES, "Series", null, null, null, null)
+    private fun season() = BackupSeason(ref("1399"), ref("10001"), 0, "Specials", null, null, null, 1)
+    private fun episode() = BackupEpisode(ref("10001"), ref("20001"), 1, "Episode", null, null, null, null)
     private val instant = Instant.parse("2026-08-04T10:00:00Z")
 }
