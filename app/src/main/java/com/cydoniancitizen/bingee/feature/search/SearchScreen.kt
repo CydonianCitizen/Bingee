@@ -82,11 +82,11 @@ internal fun SearchContent(
     onRetryInitial: () -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
     onToggleLibrary: (MediaSearchResult) -> Unit = {},
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
-    onDismissLibraryError: () -> Unit = {},
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
+    onDismissLibraryError: () -> Unit = {}
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(BingeeDimensions.screenPadding),
@@ -381,8 +381,8 @@ internal fun SearchResultItem(
     isInLibrary: Boolean,
     isLibraryActionPending: Boolean,
     onToggleLibrary: () -> Unit,
-    onOpenDetails: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenDetails: () -> Unit = {}
 ) {
     val openDetailsDescription = stringResource(R.string.open_details, result.title)
     Card(

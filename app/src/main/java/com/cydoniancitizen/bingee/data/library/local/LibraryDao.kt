@@ -69,9 +69,6 @@ internal abstract class LibraryDao {
     @Query("SELECT COUNT(*) FROM library_entries")
     abstract fun observeLibraryEntryCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM library_entries")
-    abstract fun observeSupportedLibraryEntryCount(): Flow<Int>
-
     @Transaction
     @Query(
         """
@@ -211,61 +208,62 @@ internal abstract class LibraryDao {
 
     @Query(
         """
+        WITH personal_state AS (
+            SELECT local_media_id FROM library_entries
+            UNION
+            SELECT local_media_id FROM movie_watch_progress
+            UNION
+            SELECT local_media_id FROM series_watch_progress
+            UNION
+            SELECT local_media_id FROM media_entries WHERE is_favorite = 1
+            UNION
+            SELECT seasons.local_media_id
+            FROM seasons
+            INNER JOIN episodes USING(local_season_id)
+            INNER JOIN episode_watch_progress USING(local_episode_id)
+        ),
+        season_progress AS (
+            SELECT seasons.local_media_id,
+                   seasons.local_season_id,
+                   COUNT(*) AS trackable_episodes,
+                   SUM(
+                       CASE WHEN episode_watch_progress.local_episode_id IS NOT NULL
+                            THEN 1 ELSE 0 END
+                   ) AS watched_episodes
+            FROM seasons
+            INNER JOIN personal_state USING(local_media_id)
+            INNER JOIN episodes USING(local_season_id)
+            LEFT JOIN episode_watch_progress USING(local_episode_id)
+            WHERE seasons.season_number > 0
+              AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+            GROUP BY seasons.local_media_id, seasons.local_season_id
+        ),
+        series_progress AS (
+            SELECT season_progress.local_media_id,
+                   SUM(season_progress.watched_episodes) AS watched_episodes,
+                   SUM(season_progress.trackable_episodes) AS trackable_episodes,
+                   SUM(
+                       CASE WHEN season_progress.watched_episodes = season_progress.trackable_episodes
+                            THEN 1 ELSE 0 END
+                   ) AS completed_seasons,
+                   COUNT(*) AS trackable_seasons
+            FROM season_progress
+            GROUP BY season_progress.local_media_id
+        )
         SELECT media_entries.local_media_id,
                media_entries.media_type,
                movie_watch_progress.watched_at AS movie_watched_at,
                movie_watch_progress.watched_date AS movie_watched_date,
                series_watch_progress.watched_date AS series_watched_date,
-               (
-                   SELECT COUNT(*)
-                   FROM episodes
-                   INNER JOIN seasons USING(local_season_id)
-                   INNER JOIN episode_watch_progress USING(local_episode_id)
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-               ) AS watched_episodes,
-               (
-                   SELECT COUNT(*)
-                   FROM episodes
-                   INNER JOIN seasons USING(local_season_id)
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-               ) AS trackable_episodes,
-               (
-                   SELECT COUNT(*)
-                   FROM seasons
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND EXISTS (
-                         SELECT 1 FROM episodes
-                         WHERE episodes.local_season_id = seasons.local_season_id
-                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-                     )
-                     AND NOT EXISTS (
-                         SELECT 1 FROM episodes
-                         LEFT JOIN episode_watch_progress USING(local_episode_id)
-                         WHERE episodes.local_season_id = seasons.local_season_id
-                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-                           AND episode_watch_progress.local_episode_id IS NULL
-                     )
-               ) AS completed_seasons,
-               (
-                   SELECT COUNT(*)
-                   FROM seasons
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND EXISTS (
-                         SELECT 1 FROM episodes
-                         WHERE episodes.local_season_id = seasons.local_season_id
-                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-                     )
-               ) AS trackable_seasons
+               COALESCE(series_progress.watched_episodes, 0) AS watched_episodes,
+               COALESCE(series_progress.trackable_episodes, 0) AS trackable_episodes,
+               COALESCE(series_progress.completed_seasons, 0) AS completed_seasons,
+               COALESCE(series_progress.trackable_seasons, 0) AS trackable_seasons
         FROM media_entries
-        LEFT JOIN library_entries USING(local_media_id)
+        INNER JOIN personal_state USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
         LEFT JOIN series_watch_progress USING(local_media_id)
+        LEFT JOIN series_progress USING(local_media_id)
         """
     )
     abstract fun observeLibraryProgress(today: LocalDate): Flow<List<LibraryProgressRow>>

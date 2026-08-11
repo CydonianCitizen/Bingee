@@ -9,6 +9,7 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.core.model.isWatched
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
@@ -132,7 +133,7 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun presentationFiltersReuseStatisticsSnapshot() = runTest {
+    fun statisticsStateUsesSingleProfileLibraryObservation() = runTest {
         val watchedMovie = entry("1", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
         val watchedSeries = entry("2", MediaType.SERIES, LibraryProgress.Series(SeriesProgress(1, 10, 0, 1, false)))
         val repo = FakeLibraryRepo(listOf(watchedMovie, watchedSeries))
@@ -140,6 +141,8 @@ class ProfileViewModelTest {
 
         testDispatcher.scheduler.advanceUntilIdle()
         val statistics = viewModel.uiState.value.statistics
+        assertEquals(1, statistics.moviesWatchedCount)
+        assertEquals(1, statistics.episodesWatchedCount)
 
         viewModel.onSearchQueryChanged("watched")
         assertSame(statistics, viewModel.uiState.value.statistics)
@@ -267,7 +270,6 @@ class ProfileViewModelTest {
                     ProfileCategory.MOVIES -> current.copy(favoritesMovies = mode)
                     ProfileCategory.TV_SERIES -> current.copy(favoritesTvSeries = mode)
                 }
-                ProfileCollection.STATISTICS -> current
             }
             modes.value = updated
         }

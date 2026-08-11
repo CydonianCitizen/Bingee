@@ -3,12 +3,8 @@ package com.cydoniancitizen.bingee.domain.model
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.data.settings.ProfileCategory
-import com.cydoniancitizen.bingee.feature.profile.belongsToCategory
-import com.cydoniancitizen.bingee.feature.profile.isWatched
+import com.cydoniancitizen.bingee.core.model.isWatched
 import java.time.ZoneId
-
-data class GenreCount(val genre: String, val count: Int)
 
 data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
     val total: Int get() = movieCount + tvSeriesCount
@@ -18,8 +14,6 @@ data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
 
 data class MonthYearCount(val year: Int, val month: Int, val count: Int)
 
-data class YearCount(val year: Int, val count: Int)
-
 data class WatchedStatistics(
     val moviesWatchedCount: Int = 0,
     val tvSeriesCompletedCount: Int = 0,
@@ -28,10 +22,8 @@ data class WatchedStatistics(
     val isWatchTimeIncomplete: Boolean = false,
     val averagePersonalRating: Double? = null,
     val ratedTitlesPercentage: Double = 0.0,
-    val mostWatchedGenres: List<GenreCount> = emptyList(),
     val mediaTypeDistribution: MediaTypeDistribution = MediaTypeDistribution(0, 0),
     val watchedByMonthYear: List<MonthYearCount> = emptyList(),
-    val watchedByYear: List<YearCount> = emptyList(),
     val recentlyCompletedTitles: List<LibraryEntry> = emptyList()
 ) {
     val isEmpty: Boolean
@@ -50,8 +42,8 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
         return WatchedStatistics()
     }
 
-    val movies = watchedEntries.filter { it.belongsToCategory(ProfileCategory.MOVIES) }
-    val tvSeries = watchedEntries.filter { it.belongsToCategory(ProfileCategory.TV_SERIES) }
+    val movies = watchedEntries.filter { it.mediaType == MediaType.MOVIE }
+    val tvSeries = watchedEntries.filter { it.mediaType == MediaType.SERIES }
 
     val moviesWatchedCount = movies.size
     val tvSeriesCompletedCount = tvSeries.count { entry ->
@@ -65,6 +57,7 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
     var totalWatchTimeMinutes = 0L
     var isIncompleteWatchTime = false
 
+    // ponytail: fixed movie/episode durations; use persisted runtime data when available.
     watchedEntries.forEach { entry ->
         when (val p = entry.progress) {
             is LibraryProgress.Movie -> {
@@ -100,12 +93,6 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
         .map { (ym, count) -> MonthYearCount(ym.first, ym.second, count) }
         .sortedWith(compareByDescending<MonthYearCount> { it.year }.thenByDescending { it.month })
 
-    val yearCounts = watchedEntries.mapNotNull { entry ->
-        entry.watchedDate?.year
-    }.groupingBy { it }.eachCount()
-        .map { (year, count) -> YearCount(year, count) }
-        .sortedByDescending { it.year }
-
     val recentlyCompleted = watchedEntries.sortedWith(
         compareByDescending<LibraryEntry> {
             it.watchedDate ?: it.addedAt.atZone(ZoneId.systemDefault()).toLocalDate()
@@ -120,10 +107,8 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
         isWatchTimeIncomplete = isIncompleteWatchTime,
         averagePersonalRating = averageRating,
         ratedTitlesPercentage = ratedPercentage,
-        mostWatchedGenres = emptyList(),
         mediaTypeDistribution = MediaTypeDistribution(moviesWatchedCount, tvSeries.size),
         watchedByMonthYear = monthYearCounts,
-        watchedByYear = yearCounts,
         recentlyCompletedTitles = recentlyCompleted
     )
 }

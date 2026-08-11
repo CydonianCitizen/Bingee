@@ -13,6 +13,7 @@ import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonWithEpisodesRelation
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
+import com.cydoniancitizen.bingee.data.library.local.StoredSeasonEpisodes
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
 import java.time.Clock
@@ -203,10 +204,11 @@ class DefaultSeriesRepositoryTest {
             season: SeasonEntity,
             episodes: List<EpisodeEntity>,
             fetchedAt: Instant
-        ) {
+        ): StoredSeasonEpisodes {
             if (failWrites) throw RuntimeException("persistence failed")
             storedAt = fetchedAt
             cachedAt = fetchedAt
+            return StoredSeasonEpisodes(season, episodes)
         }
 
         override suspend fun upsertSeasonSummaries(
@@ -220,9 +222,17 @@ class DefaultSeriesRepositoryTest {
         override suspend fun insertSeason(season: SeasonEntity): Long = 1
         override suspend fun updateSeason(season: SeasonEntity) = Unit
         override suspend fun getEpisode(source: MediaSource, externalId: String): EpisodeEntity? = null
-        override suspend fun getEpisodeByNumber(localSeasonId: Long, episodeNumber: Int): EpisodeEntity? = null
-        override suspend fun insertEpisode(episode: EpisodeEntity): Long = 1
-        override suspend fun updateEpisode(episode: EpisodeEntity) = Unit
+        override suspend fun getEpisodesForSeason(localSeasonId: Long): List<EpisodeEntity> = emptyList()
+
+        override suspend fun getEpisodesByExternalIds(
+            source: MediaSource,
+            externalIds: List<String>
+        ): List<EpisodeEntity> = emptyList()
+
+        override suspend fun insertEpisodes(episodes: List<EpisodeEntity>): List<Long> =
+            episodes.indices.map { it + 1L }
+
+        override suspend fun updateEpisodes(episodes: List<EpisodeEntity>) = Unit
         override suspend fun updateEpisodesFetchedAt(localSeasonId: Long, fetchedAt: Instant) = Unit
 
         private fun seasonEntity(number: Int, fetchedAt: Instant) = SeasonEntity(

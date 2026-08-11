@@ -79,11 +79,11 @@ import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.isWatched
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
-import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
 import com.cydoniancitizen.bingee.feature.details.WatchedDateDialog
 
 @Composable
@@ -127,14 +127,14 @@ internal fun ProfileContent(
     onSearchQueryChanged: (String) -> Unit,
     onClearSearch: () -> Unit,
     onRemove: (LibraryEntry) -> Unit,
-    onToggleFavorite: (LibraryEntry) -> Unit = {},
-    onSetWatchedDate: (LibraryEntry, java.time.LocalDate?) -> Unit = { _, _ -> },
     onOpenSettings: () -> Unit,
-    onOpenStatistics: () -> Unit = {},
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     onNavigateToSearch: () -> Unit,
     onDismissActionError: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onToggleFavorite: (LibraryEntry) -> Unit = {},
+    onSetWatchedDate: (LibraryEntry, java.time.LocalDate?) -> Unit = { _, _ -> },
+    onOpenStatistics: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -243,17 +243,6 @@ internal fun ProfileContent(
                         null
                     }
                 )
-                FilterChip(
-                    selected = state.collection == ProfileCollection.STATISTICS,
-                    onClick = { onCollectionSelected(ProfileCollection.STATISTICS) },
-                    label = { Text(stringResource(R.string.profile_tab_statistics)) },
-                    leadingIcon = if (state.collection == ProfileCollection.STATISTICS) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else {
-                        null
-                    }
-                )
-
                 // Category Chips
                 FilterChip(
                     selected = state.category == ProfileCategory.MOVIES,
@@ -351,12 +340,6 @@ internal fun ProfileContent(
                 ErrorState(
                     title = stringResource(R.string.library_error_title),
                     message = stringResource(uiError.messageRes)
-                )
-            }
-            state.collection == ProfileCollection.STATISTICS -> {
-                StatisticsContent(
-                    statistics = state.statistics,
-                    onOpenDetails = onOpenDetails
                 )
             }
             state.entries.isEmpty() -> {

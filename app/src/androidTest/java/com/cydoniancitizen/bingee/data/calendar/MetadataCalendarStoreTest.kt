@@ -115,6 +115,7 @@ class MetadataCalendarStoreTest {
         )
 
         assertEquals("2026-08-07", text("SELECT event_date FROM release_events WHERE subject_type = 'EPISODE'"))
+        assertEquals(1, count("release_events", "subject_type = 'EPISODE'"))
         assertEquals(1, count("media_ratings"))
         assertEquals(1, count("episode_watch_progress"))
         assertEquals(1, count("library_entries"))
@@ -174,11 +175,12 @@ class MetadataCalendarStoreTest {
 
     private fun sql(statement: String) = database.openHelper.writableDatabase.execSQL(statement)
 
-    private fun count(table: String): Int =
-        database.openHelper.writableDatabase.query("SELECT COUNT(*) FROM $table").use {
-            it.moveToFirst()
-            it.getInt(0)
-        }
+    private fun count(table: String, where: String? = null): Int = database.openHelper.writableDatabase.query(
+        "SELECT COUNT(*) FROM $table" + where?.let { " WHERE $it" }.orEmpty()
+    ).use {
+        it.moveToFirst()
+        it.getInt(0)
+    }
 
     private fun text(statement: String): String = database.openHelper.writableDatabase.query(statement).use {
         it.moveToFirst()

@@ -31,3 +31,6 @@ secrets.xml
 # Operating-system files
 .DS_Store
 Thumbs.db
+
+
+AGENTS.md

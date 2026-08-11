@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
+import com.cydoniancitizen.bingee.core.ui.toUiError
 
 @Composable
 internal fun NotificationSettingsScreen(
@@ -78,6 +80,7 @@ internal fun NotificationSettingsScreen(
         onSeasonPremieresChanged = viewModel::setSeasonPremieres,
         onEpisodeAiringsChanged = viewModel::setEpisodeAirings,
         onOpenSystemSettings = viewModel::openSystemSettings,
+        onDismissError = viewModel::clearError,
         modifier = modifier
     )
 }
@@ -92,6 +95,7 @@ internal fun NotificationSettingsContent(
     onSeasonPremieresChanged: (Boolean) -> Unit,
     onEpisodeAiringsChanged: (Boolean) -> Unit,
     onOpenSystemSettings: () -> Unit,
+    onDismissError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -116,6 +120,23 @@ internal fun NotificationSettingsContent(
                 modifier = Modifier.weight(1f).semantics { heading() },
                 style = MaterialTheme.typography.headlineMedium
             )
+        }
+
+        state.error?.let { error ->
+            val uiError = error.toUiError()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(uiError.messageRes),
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.error
+                )
+                TextButton(onClick = onDismissError) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            }
         }
 
         SettingSwitchRow(

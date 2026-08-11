@@ -212,6 +212,18 @@ internal abstract class ReleaseEventDao {
     }
 
     @Transaction
+    open suspend fun reconcileSeason(season: SeasonEntity, event: ProjectedReleaseEvent?) {
+        replaceProjection(
+            source = season.source,
+            subjectType = ReleaseSubjectType.SEASON,
+            subjectExternalId = season.externalId,
+            eventType = ReleaseEventType.SEASON_PREMIERE,
+            event = event,
+            ids = ReleaseSubjectLocalIds(season.localMediaId, season.localSeasonId, null)
+        )
+    }
+
+    @Transaction
     open suspend fun reconcileEpisode(episodeRef: ExternalMediaRef, event: ProjectedReleaseEvent?) {
         replaceProjection(
             source = episodeRef.source,
@@ -222,12 +234,25 @@ internal abstract class ReleaseEventDao {
         )
     }
 
+    @Transaction
+    open suspend fun reconcileEpisode(episode: EpisodeEntity, localMediaId: Long, event: ProjectedReleaseEvent?) {
+        replaceProjection(
+            source = episode.source,
+            subjectType = ReleaseSubjectType.EPISODE,
+            subjectExternalId = episode.externalId,
+            eventType = ReleaseEventType.EPISODE_AIRING,
+            event = event,
+            ids = ReleaseSubjectLocalIds(localMediaId, episode.localSeasonId, episode.localEpisodeId)
+        )
+    }
+
     private suspend fun replaceProjection(
         source: MediaSource,
         subjectType: ReleaseSubjectType,
         subjectExternalId: String,
         eventType: ReleaseEventType,
-        event: ProjectedReleaseEvent?
+        event: ProjectedReleaseEvent?,
+        ids: ReleaseSubjectLocalIds? = null
     ) {
         require(subjectExternalId.isNotBlank())
         if (event == null) {
@@ -238,7 +263,7 @@ internal abstract class ReleaseEventDao {
         check(event.identity.subjectType == subjectType)
         check(event.identity.externalId == subjectExternalId)
         check(event.identity.eventType == eventType)
-        val ids = when (subjectType) {
+        val localIds = ids ?: when (subjectType) {
             ReleaseSubjectType.MEDIA -> getMediaIds(source, subjectExternalId)
             ReleaseSubjectType.SEASON -> getSeasonIds(source, subjectExternalId)
             ReleaseSubjectType.EPISODE -> getEpisodeIds(source, subjectExternalId)
@@ -248,9 +273,9 @@ internal abstract class ReleaseEventDao {
             subjectType = subjectType,
             subjectExternalId = subjectExternalId,
             eventType = eventType,
-            localMediaId = ids.localMediaId,
-            localSeasonId = ids.localSeasonId,
-            localEpisodeId = ids.localEpisodeId,
+            localMediaId = localIds.localMediaId,
+            localSeasonId = localIds.localSeasonId,
+            localEpisodeId = localIds.localEpisodeId,
             eventDate = event.eventDate,
             projectedAt = event.projectedAt,
             sourceMetadataUpdatedAt = event.sourceMetadataUpdatedAt
@@ -258,9 +283,9 @@ internal abstract class ReleaseEventDao {
         if (updated == 0) {
             insertEvent(
                 ReleaseEventEntity(
-                    localMediaId = ids.localMediaId,
-                    localSeasonId = ids.localSeasonId,
-                    localEpisodeId = ids.localEpisodeId,
+                    localMediaId = localIds.localMediaId,
+                    localSeasonId = localIds.localSeasonId,
+                    localEpisodeId = localIds.localEpisodeId,
                     source = source,
                     subjectType = subjectType,
                     subjectExternalId = subjectExternalId,

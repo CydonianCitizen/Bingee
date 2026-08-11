@@ -40,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
@@ -56,8 +55,8 @@ import java.util.Locale
 internal fun StatisticsScreen(
     onBack: () -> Unit,
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
-    modifier: Modifier = Modifier,
-    viewModel: ProfileViewModel = hiltViewModel()
+    viewModel: ProfileViewModel,
+    modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier = modifier.fillMaxSize()) {
@@ -247,20 +246,22 @@ internal fun StatisticsContent(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Movies: ${dist.movieCount} (${String.format(
-                                    currentLocale,
-                                    "%.0f%%",
-                                    dist.moviePercentage
-                                )})",
+                                text = stringResource(
+                                    R.string.statistics_distribution_item,
+                                    stringResource(R.string.profile_tab_movies),
+                                    dist.movieCount,
+                                    String.format(currentLocale, "%.0f%%", dist.moviePercentage)
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "TV: ${dist.tvSeriesCount} (${String.format(
-                                    currentLocale,
-                                    "%.0f%%",
-                                    dist.tvSeriesPercentage
-                                )})",
+                                text = stringResource(
+                                    R.string.statistics_distribution_item,
+                                    stringResource(R.string.profile_tab_tv_series),
+                                    dist.tvSeriesCount,
+                                    String.format(currentLocale, "%.0f%%", dist.tvSeriesPercentage)
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.secondary
                             )

@@ -60,6 +60,33 @@ class ProfileScreenTest {
     }
 
     @Test
+    fun profileStatisticsActionOpensTheCanonicalStatisticsDestination() {
+        val statisticsClicked = AtomicBoolean(false)
+        composeRule.setContent {
+            BingeeTheme {
+                ProfileContent(
+                    state = ProfileUiState(isLoading = false),
+                    onCollectionSelected = {},
+                    onCategorySelected = {},
+                    onSortSelected = {},
+                    onViewModeSelected = {},
+                    onSearchQueryChanged = {},
+                    onClearSearch = {},
+                    onRemove = {},
+                    onOpenSettings = {},
+                    onOpenStatistics = { statisticsClicked.set(true) },
+                    onOpenDetails = { _, _ -> },
+                    onNavigateToSearch = {},
+                    onDismissActionError = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Watch Statistics").performClick()
+        assertTrue(statisticsClicked.get())
+    }
+
+    @Test
     fun collectionAndCategorySwitchingWork() {
         val selectedCollection = AtomicReference<ProfileCollection>()
         val selectedCategory = AtomicReference<ProfileCategory>()

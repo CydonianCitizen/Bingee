@@ -48,7 +48,8 @@ private fun PreviewNotifications(notificationState: ReleaseNotificationSettingsU
             onMovieReleasesChanged = {},
             onSeasonPremieresChanged = {},
             onEpisodeAiringsChanged = {},
-            onOpenSystemSettings = {}
+            onOpenSystemSettings = {},
+            onDismissError = {}
         )
     }
 }

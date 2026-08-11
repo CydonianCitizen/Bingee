@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
-enum class ProfileCollection { WATCHED, WATCH_LATER, FAVORITES, STATISTICS }
+enum class ProfileCollection { WATCHED, WATCH_LATER, FAVORITES }
 enum class ProfileCategory { MOVIES, TV_SERIES }
 enum class ProfileViewMode { LIST, GRID }
 
@@ -36,7 +36,6 @@ data class ProfileDisplayModes(
             ProfileCategory.MOVIES -> favoritesMovies
             ProfileCategory.TV_SERIES -> favoritesTvSeries
         }
-        ProfileCollection.STATISTICS -> ProfileViewMode.LIST
     }
 }
 
@@ -74,7 +73,6 @@ internal class DataStoreProfileDisplayModePreferences @Inject constructor(
         category: ProfileCategory,
         mode: ProfileViewMode
     ) {
-        if (collection == ProfileCollection.STATISTICS) return
         val key = when (collection) {
             ProfileCollection.WATCHED -> when (category) {
                 ProfileCategory.MOVIES -> KEY_WATCHED_MOVIES
@@ -88,7 +86,6 @@ internal class DataStoreProfileDisplayModePreferences @Inject constructor(
                 ProfileCategory.MOVIES -> KEY_FAVORITES_MOVIES
                 ProfileCategory.TV_SERIES -> KEY_FAVORITES_TV
             }
-            ProfileCollection.STATISTICS -> return
         }
         context.bingeePreferences.edit { prefs ->
             prefs[key] = mode.name

@@ -59,10 +59,10 @@ import java.util.Locale
 
 @Composable
 internal fun HomeScreen(
-    onOpenNotifications: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenNotifications: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -86,11 +86,11 @@ internal fun HomeContent(
     onRefresh: () -> Unit,
     onRetryLocal: () -> Unit,
     onDismissFeedback: () -> Unit,
-    onOpenNotifications: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
-    onAddToWatchlist: (MediaSearchResult) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenNotifications: () -> Unit = {},
+    onAddToWatchlist: (MediaSearchResult) -> Unit = {}
 ) {
     PullToRefreshBox(
         isRefreshing = state.refresh == HomeRefreshState.Refreshing,

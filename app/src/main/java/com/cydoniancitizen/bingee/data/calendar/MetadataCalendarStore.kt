@@ -69,7 +69,7 @@ internal class RoomMetadataCalendarStore @Inject constructor(
 
     override suspend fun storeSeason(seriesRef: ExternalMediaRef, payload: TmdbSeasonPayload, fetchedAt: Instant) {
         database.withTransaction {
-            seriesDao.storeSeasonEpisodes(
+            val stored = seriesDao.storeSeasonEpisodes(
                 source = seriesRef.source,
                 seriesExternalId = seriesRef.externalId,
                 season = payload.season.toEntity(fetchedAt),
@@ -77,11 +77,16 @@ internal class RoomMetadataCalendarStore @Inject constructor(
                 fetchedAt = fetchedAt
             )
             releaseEventDao.reconcileSeason(
-                payload.season.externalRef,
+                stored.season,
                 projector.season(payload.season, fetchedAt)
             )
+            val persistedEpisodes = stored.episodes.associateBy { it.externalId }
             payload.episodes.forEach { episode ->
-                releaseEventDao.reconcileEpisode(episode.externalRef, projector.episode(episode, fetchedAt))
+                releaseEventDao.reconcileEpisode(
+                    episode = checkNotNull(persistedEpisodes[episode.externalRef.externalId]),
+                    localMediaId = stored.season.localMediaId,
+                    event = projector.episode(episode, fetchedAt)
+                )
             }
         }
     }

@@ -24,3 +24,25 @@ data class LibraryEntry(
 
     val libraryState: LibraryState get() = progress.deriveLibraryState()
 }
+
+/** Any watched TV episode counts as watched until granular serial states are introduced. */
+internal enum class PersonalLibraryStatus { UNWATCHED, WATCHED }
+
+internal fun LibraryEntry.personalLibraryStatus(): PersonalLibraryStatus = when (val p = progress) {
+    is LibraryProgress.Movie ->
+        if (p.state is MovieWatchState.Watched) PersonalLibraryStatus.WATCHED else PersonalLibraryStatus.UNWATCHED
+    is LibraryProgress.Series ->
+        if (p.progress.watchedEpisodes > 0 || p.progress.isComplete) {
+            PersonalLibraryStatus.WATCHED
+        } else {
+            PersonalLibraryStatus.UNWATCHED
+        }
+    LibraryProgress.Unavailable ->
+        if (libraryState == LibraryState.COMPLETED || libraryState == LibraryState.IN_PROGRESS) {
+            PersonalLibraryStatus.WATCHED
+        } else {
+            PersonalLibraryStatus.UNWATCHED
+        }
+}
+
+fun LibraryEntry.isWatched(): Boolean = personalLibraryStatus() == PersonalLibraryStatus.WATCHED

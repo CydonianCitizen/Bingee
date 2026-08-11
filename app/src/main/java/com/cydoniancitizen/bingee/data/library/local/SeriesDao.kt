@@ -11,6 +11,8 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 
+internal data class StoredSeasonEpisodes(val season: SeasonEntity, val episodes: List<EpisodeEntity>)
+
 @Dao
 internal abstract class SeriesDao : SeasonSummaryStore {
     @Transaction
@@ -111,20 +113,25 @@ internal abstract class SeriesDao : SeasonSummaryStore {
     suspend fun getEpisodeForImport(source: MediaSource, externalId: String): EpisodeEntity? =
         getEpisode(source, externalId)
 
+    @Query("SELECT * FROM episodes WHERE local_season_id = :localSeasonId")
+    protected abstract suspend fun getEpisodesForSeason(localSeasonId: Long): List<EpisodeEntity>
+
     @Query(
         """
         SELECT * FROM episodes
-        WHERE local_season_id = :localSeasonId AND episode_number = :episodeNumber
-        LIMIT 1
+        WHERE source = :source AND external_id IN (:externalIds)
         """
     )
-    protected abstract suspend fun getEpisodeByNumber(localSeasonId: Long, episodeNumber: Int): EpisodeEntity?
+    protected abstract suspend fun getEpisodesByExternalIds(
+        source: MediaSource,
+        externalIds: List<String>
+    ): List<EpisodeEntity>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    protected abstract suspend fun insertEpisode(episode: EpisodeEntity): Long
+    protected abstract suspend fun insertEpisodes(episodes: List<EpisodeEntity>): List<Long>
 
     @Update(onConflict = OnConflictStrategy.ABORT)
-    protected abstract suspend fun updateEpisode(episode: EpisodeEntity)
+    protected abstract suspend fun updateEpisodes(episodes: List<EpisodeEntity>)
 
     @Query(
         """
@@ -153,34 +160,84 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         season: SeasonEntity,
         episodes: List<EpisodeEntity>,
         fetchedAt: Instant
-    ) {
+    ): StoredSeasonEpisodes {
         val media = checkNotNull(getMedia(source, seriesExternalId)) { "Series metadata is missing" }
         check(media.mediaType == MediaType.SERIES) { "Episode metadata requires a TV series" }
         val storedSeason = upsertSeason(media.localMediaId, season)
         episodes.forEach { candidate ->
             check(candidate.source == storedSeason.source) { "Episode provider differs from season provider" }
-            val byRef = getEpisode(candidate.source, candidate.externalId)
-            val byNumber = getEpisodeByNumber(storedSeason.localSeasonId, candidate.episodeNumber)
-            check(byRef == null || byRef.localSeasonId == storedSeason.localSeasonId) {
+        }
+
+        val storedEpisodes = getEpisodesForSeason(storedSeason.localSeasonId)
+        val referencedEpisodes = episodes
+            .map { it.externalId }
+            .distinct()
+            .takeIf { it.isNotEmpty() }
+            ?.let { getEpisodesByExternalIds(storedSeason.source, it) }
+            .orEmpty()
+        val statesById = mutableMapOf<Long, EpisodeState>()
+        (storedEpisodes + referencedEpisodes).forEach { episode ->
+            statesById.getOrPut(episode.localEpisodeId) { EpisodeState(episode) }
+        }
+        val byRef = statesById.values.associateBy { it.episode.externalId }.toMutableMap()
+        val byNumber = storedEpisodes
+            .map { statesById.getValue(it.localEpisodeId) }
+            .associateBy { it.episode.episodeNumber }
+            .toMutableMap()
+        val candidateStates = linkedSetOf<EpisodeState>()
+        val newStates = linkedSetOf<EpisodeState>()
+        val updatesById = linkedMapOf<Long, EpisodeEntity>()
+
+        episodes.forEach { candidate ->
+            val byRefState = byRef[candidate.externalId]
+            val byNumberState = byNumber[candidate.episodeNumber]
+            check(byRefState == null || byRefState.episode.localSeasonId == storedSeason.localSeasonId) {
                 "Episode provider identity belongs to another season"
             }
-            check(byRef == null || byNumber == null || byRef.localEpisodeId == byNumber.localEpisodeId) {
+            check(byRefState == null || byNumberState == null || sameEpisode(byRefState, byNumberState)) {
                 "Episode identity conflicts with its season number"
             }
-            val existing = byRef ?: byNumber
-            if (existing == null) {
-                insertEpisode(candidate.copy(localEpisodeId = 0, localSeasonId = storedSeason.localSeasonId))
+            val state = byRefState ?: byNumberState ?: EpisodeState(
+                candidate.copy(localSeasonId = storedSeason.localSeasonId),
+                localEpisodeId = null
+            )
+            candidateStates += state
+            byRef.entries.removeIf { it.value === state }
+            byNumber.entries.removeIf { it.value === state }
+            state.episode = candidate.copy(
+                localEpisodeId = state.localEpisodeId ?: 0,
+                localSeasonId = storedSeason.localSeasonId
+            )
+            if (state.localEpisodeId == null) {
+                newStates += state
             } else {
-                updateEpisode(
-                    candidate.copy(
-                        localEpisodeId = existing.localEpisodeId,
-                        localSeasonId = storedSeason.localSeasonId
-                    )
-                )
+                updatesById[checkNotNull(state.localEpisodeId)] = state.episode
+            }
+            byRef[candidate.externalId] = state
+            byNumber[candidate.episodeNumber] = state
+        }
+
+        if (updatesById.isNotEmpty()) updateEpisodes(updatesById.values.toList())
+        if (newStates.isNotEmpty()) {
+            val ids = insertEpisodes(newStates.map { it.episode })
+            newStates.forEachIndexed { index, state ->
+                state.localEpisodeId = ids[index]
+                state.episode = state.episode.copy(localEpisodeId = ids[index])
             }
         }
         updateEpisodesFetchedAt(storedSeason.localSeasonId, fetchedAt)
+        return StoredSeasonEpisodes(
+            season = storedSeason.copy(episodesFetchedAt = fetchedAt),
+            episodes = candidateStates.map { it.episode }
+        )
     }
+
+    private class EpisodeState(var episode: EpisodeEntity, var localEpisodeId: Long? = episode.localEpisodeId)
+
+    private fun sameEpisode(first: EpisodeState, second: EpisodeState): Boolean = first === second || (
+        first.localEpisodeId != null &&
+            first.localEpisodeId == second.localEpisodeId
+        )
 
     private suspend fun upsertSeason(localMediaId: Long, candidate: SeasonEntity): SeasonEntity {
         check(candidate.externalId.isNotBlank())

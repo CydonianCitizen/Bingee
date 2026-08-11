@@ -6,9 +6,9 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
-import com.cydoniancitizen.bingee.core.model.LibraryState
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.isWatched
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
@@ -51,28 +51,6 @@ internal data class ProfileUiState(
 ) {
     val currentViewMode: ProfileViewMode get() = displayModes.getMode(collection, category)
 }
-
-/** Current Profile semantics: any watched TV episode counts as watched; add granular serial states here later. */
-internal enum class PersonalLibraryStatus { UNWATCHED, WATCHED }
-
-internal fun LibraryEntry.personalLibraryStatus(): PersonalLibraryStatus = when (val p = progress) {
-    is LibraryProgress.Movie ->
-        if (p.state is MovieWatchState.Watched) PersonalLibraryStatus.WATCHED else PersonalLibraryStatus.UNWATCHED
-    is LibraryProgress.Series ->
-        if (p.progress.watchedEpisodes > 0 || p.progress.isComplete) {
-            PersonalLibraryStatus.WATCHED
-        } else {
-            PersonalLibraryStatus.UNWATCHED
-        }
-    LibraryProgress.Unavailable ->
-        if (libraryState == LibraryState.COMPLETED || libraryState == LibraryState.IN_PROGRESS) {
-            PersonalLibraryStatus.WATCHED
-        } else {
-            PersonalLibraryStatus.UNWATCHED
-        }
-}
-
-fun LibraryEntry.isWatched(): Boolean = personalLibraryStatus() == PersonalLibraryStatus.WATCHED
 
 fun LibraryEntry.belongsToCategory(category: ProfileCategory): Boolean = when (category) {
     ProfileCategory.MOVIES -> mediaType == MediaType.MOVIE
@@ -229,7 +207,6 @@ internal class ProfileViewModel @Inject constructor(
                 ProfileCollection.WATCHED -> entry.isWatched()
                 ProfileCollection.WATCH_LATER -> !entry.isWatched() && entry.inLibrary
                 ProfileCollection.FAVORITES -> entry.isFavorite
-                ProfileCollection.STATISTICS -> false
             }
             val matchesCategory = entry.belongsToCategory(state.category)
             val matchesSearch = if (state.searchQuery.isBlank()) {

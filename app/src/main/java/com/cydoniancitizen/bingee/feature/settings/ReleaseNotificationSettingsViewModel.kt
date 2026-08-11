@@ -5,11 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.domain.background.BackgroundWorkScheduler
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationCapability
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +22,8 @@ internal data class ReleaseNotificationSettingsUiState(
     val preferences: ReleaseNotificationPreferences = ReleaseNotificationPreferences(),
     val capability: NotificationCapabilityStatus = NotificationCapabilityStatus.PERMISSION_DENIED,
     val permanentlyDenied: Boolean = false,
-    val isUpdating: Boolean = false
+    val isUpdating: Boolean = false,
+    val error: AppError? = null
 )
 
 @HiltViewModel
@@ -38,7 +41,7 @@ internal class ReleaseNotificationSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesRepository.preferences.collect { preferences ->
                 mutableUiState.update {
-                    it.copy(preferences = preferences, capability = capability.status(), isUpdating = false)
+                    it.copy(preferences = preferences, capability = capability.status())
                 }
             }
         }
@@ -65,21 +68,18 @@ internal class ReleaseNotificationSettingsViewModel @Inject constructor(
             mutableUiState.update { it.copy(permanentlyDenied = false) }
             enableNotifications()
         } else {
-            scheduler.reconcileNotificationWork(false)
             mutableUiState.update {
                 it.copy(
                     capability = NotificationCapabilityStatus.PERMISSION_DENIED,
-                    permanentlyDenied = permanentlyDenied,
-                    isUpdating = false
+                    permanentlyDenied = permanentlyDenied
                 )
             }
+            runUpdate { scheduler.reconcileNotificationWork(false) }
         }
     }
 
     fun disableNotifications() {
-        if (mutableUiState.value.isUpdating) return
-        mutableUiState.update { it.copy(isUpdating = true) }
-        viewModelScope.launch {
+        runUpdate {
             preferencesRepository.setEnabled(false)
             scheduler.reconcileNotificationWork(false)
         }
@@ -106,11 +106,8 @@ internal class ReleaseNotificationSettingsViewModel @Inject constructor(
     }
 
     private fun enableNotifications() {
-        if (mutableUiState.value.isUpdating) return
-        mutableUiState.update {
-            it.copy(isUpdating = true, capability = NotificationCapabilityStatus.AVAILABLE)
-        }
-        viewModelScope.launch {
+        mutableUiState.update { it.copy(capability = NotificationCapabilityStatus.AVAILABLE) }
+        runUpdate {
             preferencesRepository.setEnabled(true)
             scheduler.reconcileNotificationWork(true)
             scheduler.enqueueImmediateNotificationEvaluation()
@@ -118,15 +115,33 @@ internal class ReleaseNotificationSettingsViewModel @Inject constructor(
     }
 
     private fun updatePreference(update: suspend () -> Unit) {
-        if (mutableUiState.value.isUpdating) return
-        mutableUiState.update { it.copy(isUpdating = true) }
-        viewModelScope.launch {
+        runUpdate {
             update()
             if (mutableUiState.value.preferences.enabled &&
                 capability.status() == NotificationCapabilityStatus.AVAILABLE
             ) {
                 scheduler.reconcileNotificationWork(true)
                 scheduler.enqueueImmediateNotificationEvaluation()
+            }
+        }
+    }
+
+    fun clearError() {
+        mutableUiState.update { it.copy(error = null) }
+    }
+
+    private fun runUpdate(operation: suspend () -> Unit) {
+        if (mutableUiState.value.isUpdating) return
+        mutableUiState.update { it.copy(isUpdating = true, error = null) }
+        viewModelScope.launch {
+            try {
+                operation()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                mutableUiState.update { it.copy(error = AppError.LocalStorageFailure) }
+            } finally {
+                mutableUiState.update { it.copy(isUpdating = false) }
             }
         }
     }

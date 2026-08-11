@@ -38,7 +38,8 @@ class ReleaseNotificationSettingsScreenTest {
                     onMovieReleasesChanged = {},
                     onSeasonPremieresChanged = {},
                     onEpisodeAiringsChanged = {},
-                    onOpenSystemSettings = {}
+                    onOpenSystemSettings = {},
+                    onDismissError = {}
                 )
             }
         }
@@ -71,7 +72,8 @@ class ReleaseNotificationSettingsScreenTest {
                     onMovieReleasesChanged = {},
                     onSeasonPremieresChanged = {},
                     onEpisodeAiringsChanged = {},
-                    onOpenSystemSettings = { opened.set(true) }
+                    onOpenSystemSettings = { opened.set(true) },
+                    onDismissError = {}
                 )
             }
         }
@@ -95,7 +97,8 @@ class ReleaseNotificationSettingsScreenTest {
                     onMovieReleasesChanged = {},
                     onSeasonPremieresChanged = {},
                     onEpisodeAiringsChanged = {},
-                    onOpenSystemSettings = {}
+                    onOpenSystemSettings = {},
+                    onDismissError = {}
                 )
             }
         }

@@ -114,6 +114,76 @@ class SeriesAndProgressDaoTest {
     }
 
     @Test
+    fun seasonBatchAddsEpisodesAndRepeatedPersistenceIsIdempotent() = runBlocking {
+        storeRegularEpisodes()
+        val watchedAt = now.minusSeconds(1800)
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, watchedAt)
+        val refresh = listOf(
+            episode("101", 1, title = "Updated first"),
+            episode("104", 4, title = "New fourth")
+        )
+
+        repeat(2) {
+            seriesDao.storeSeasonEpisodes(
+                MediaSource.TMDB,
+                "100",
+                season("11", 1, name = "Updated"),
+                refresh,
+                now.plusSeconds(60)
+            )
+        }
+
+        val stored = seriesDao.observeSeason(MediaSource.TMDB, "100", "11").first()!!
+        assertEquals(listOf(1, 2, 3, 4), stored.episodes.map { it.episode.episodeNumber })
+        assertEquals("Updated first", stored.episodes.first().episode.title)
+        assertEquals("New fourth", stored.episodes.last().episode.title)
+        assertEquals(4, stored.episodes.map { it.episode.localEpisodeId }.distinct().size)
+        assertEquals(watchedAt, stored.episodes.first().progress?.watchedAt)
+    }
+
+    @Test
+    fun libraryProgressAggregatesPersonalRowsAndSkipsMetadataOnlyCache() = runBlocking {
+        storeRegularEpisodes()
+        val watchedAt = now.minusSeconds(900)
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, watchedAt)
+        progressDao.markMovieWatched(MediaSource.TMDB, "200", now)
+
+        addMedia("300", MediaType.SERIES, "Cached only")
+        seriesDao.storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "300",
+            season("31", 1),
+            listOf(episode("301", 1)),
+            now
+        )
+        libraryDao.removeMembership(MediaSource.TMDB, "300")
+
+        addMedia("400", MediaType.MOVIE, "Favorite only")
+        libraryDao.updateFavoriteState(MediaSource.TMDB, "400", true)
+        libraryDao.removeMembership(MediaSource.TMDB, "400")
+
+        val rows = libraryDao.observeLibraryProgress(today).first()
+        val seriesId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "100")!!.localMediaId
+        val movieId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "200")!!.localMediaId
+        val cachedId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "300")!!.localMediaId
+        val favoriteId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "400")!!.localMediaId
+
+        assertEquals(setOf(seriesId, movieId, favoriteId), rows.map { it.localMediaId }.toSet())
+        assertFalse(rows.any { it.localMediaId == cachedId })
+        rows.first { it.localMediaId == movieId }.also {
+            assertEquals(now, it.movieWatchedAt)
+            assertEquals(0, it.trackableEpisodes)
+        }
+        rows.first { it.localMediaId == seriesId }.also {
+            assertEquals(1, it.watchedEpisodes)
+            assertEquals(2, it.trackableEpisodes)
+            assertEquals(0, it.completedSeasons)
+            assertEquals(1, it.trackableSeasons)
+        }
+        assertNull(rows.first { it.localMediaId == favoriteId }.movieWatchedAt)
+    }
+
+    @Test
     fun episodeAndBulkActionsEnforceTrackabilityTimestampAndSeasonIsolation() = runBlocking {
         storeRegularEpisodes()
         seriesDao.storeSeasonEpisodes(

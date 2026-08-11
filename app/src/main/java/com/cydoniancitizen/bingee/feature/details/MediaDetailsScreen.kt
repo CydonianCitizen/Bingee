@@ -103,6 +103,9 @@ internal fun MediaDetailsContent(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onToggleLibrary: () -> Unit,
+    onDismissLibraryError: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
     onToggleFavorite: () -> Unit = {},
     onSetWatchedDate: (LocalDate?) -> Unit = {},
     onToggleMovieWatched: () -> Unit = {},
@@ -114,10 +117,7 @@ internal fun MediaDetailsContent(
     onSaveRating: () -> Unit = {},
     onRemoveRating: () -> Unit = {},
     onDismissRatingError: () -> Unit = {},
-    onDismissLibraryError: () -> Unit,
-    onDismissProgressError: () -> Unit = {},
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
+    onDismissProgressError: () -> Unit = {}
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         Row(

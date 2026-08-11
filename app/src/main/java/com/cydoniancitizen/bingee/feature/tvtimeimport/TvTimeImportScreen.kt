@@ -95,8 +95,8 @@ internal fun TvTimeImportContent(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onSetFilter: (TvTimeMatchFilter) -> Unit,
-    onSkipSeason: (String, Int) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSkipSeason: (String, Int) -> Unit = { _, _ -> }
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(BingeeDimensions.screenPadding),

@@ -28,7 +28,6 @@ class WatchedStatisticsTest {
         assertNull(stats.averagePersonalRating)
         assertEquals(0.0, stats.ratedTitlesPercentage, 0.01)
         assertTrue(stats.watchedByMonthYear.isEmpty())
-        assertTrue(stats.watchedByYear.isEmpty())
         assertTrue(stats.isEmpty)
     }
 
@@ -82,10 +81,8 @@ class WatchedStatisticsTest {
             isWatchTimeIncomplete = true,
             averagePersonalRating = 8.0,
             ratedTitlesPercentage = 100.0,
-            mostWatchedGenres = listOf(GenreCount("Drama", 1)),
             mediaTypeDistribution = MediaTypeDistribution(0, 0),
-            watchedByMonthYear = listOf(MonthYearCount(2026, 1, 1)),
-            watchedByYear = listOf(YearCount(2026, 1))
+            watchedByMonthYear = listOf(MonthYearCount(2026, 1, 1))
         )
 
         assertTrue(stats.isEmpty)
@@ -151,8 +148,5 @@ class WatchedStatisticsTest {
 
         // Temporal history must ONLY include entries with an explicit watchedDate (2 titles)
         assertEquals(2, stats.watchedByMonthYear.size)
-        assertEquals(1, stats.watchedByYear.size)
-        assertEquals(2026, stats.watchedByYear.first().year)
-        assertEquals(2, stats.watchedByYear.first().count)
     }
 }

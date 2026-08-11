@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -24,8 +26,9 @@ import com.cydoniancitizen.bingee.feature.home.HomeScreen
 import com.cydoniancitizen.bingee.feature.notifications.NotificationsScreen
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingRoute
 import com.cydoniancitizen.bingee.feature.profile.ProfileScreen
+import com.cydoniancitizen.bingee.feature.profile.StatisticsScreen
 import com.cydoniancitizen.bingee.feature.search.SearchScreen
-import com.cydoniancitizen.bingee.feature.settings.SettingsScreen
+import com.cydoniancitizen.bingee.feature.settings.SettingsIndexScreen
 import com.cydoniancitizen.bingee.feature.tvtimeimport.TvTimeImportScreen
 
 @Composable
@@ -80,16 +83,20 @@ fun BingeeNavHost(
                 }
             )
         }
-        composable(AppRoute.STATISTICS) {
-            com.cydoniancitizen.bingee.feature.profile.StatisticsScreen(
+        composable(AppRoute.STATISTICS) { entry ->
+            val profileEntry = remember(entry) {
+                navController.getBackStackEntry(TopLevelDestination.PROFILE.route)
+            }
+            StatisticsScreen(
                 onBack = navController::popBackStack,
                 onOpenDetails = { reference, mediaType ->
                     navController.navigate(DetailRoute.create(reference, mediaType))
-                }
+                },
+                viewModel = hiltViewModel(profileEntry)
             )
         }
         composable(AppRoute.SETTINGS) {
-            SettingsScreen(
+            SettingsIndexScreen(
                 onNavigateToAppearance = { navController.navigate(AppRoute.SETTINGS_APPEARANCE) },
                 onNavigateToNotifications = { navController.navigate(AppRoute.SETTINGS_NOTIFICATIONS) },
                 onNavigateToDataBackup = { navController.navigate(AppRoute.SETTINGS_DATA_BACKUP) },
