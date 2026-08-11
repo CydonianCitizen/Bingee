@@ -1,12 +1,17 @@
 package com.cydoniancitizen.bingee.domain.repository
 
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 interface LibraryRepository {
     fun observeEntries(query: LibraryQuery = LibraryQuery()): Flow<AppResult<List<LibraryEntry>>>
@@ -16,6 +21,16 @@ interface LibraryRepository {
     fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>>
 
     fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>>
+
+    fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
+        observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.TV_SERIES)).map { result ->
+            when (result) {
+                is AppResult.Success -> AppResult.Success(
+                    ContinueWatchingPolicy.select(result.value.mapNotNull(LibraryEntry::toContinueWatchingItem))
+                )
+                is AppResult.Failure -> result
+            }
+        }
 
     suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry>
 
@@ -30,4 +45,17 @@ interface LibraryRepository {
     suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit>
 
     suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit>
+}
+
+private fun LibraryEntry.toContinueWatchingItem(): ContinueWatchingItem? = (progress as? LibraryProgress.Series)?.let {
+    ContinueWatchingItem(
+        mediaRef = mediaRef,
+        mediaType = mediaType,
+        title = title,
+        posterUrl = posterUrl,
+        progress = it.progress,
+        nextEpisode = null,
+        updatedAt = null,
+        inLibrary = inLibrary
+    )
 }

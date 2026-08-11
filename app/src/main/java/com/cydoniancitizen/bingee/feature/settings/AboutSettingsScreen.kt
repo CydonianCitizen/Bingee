@@ -34,6 +34,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.data.update.isValidGitHubReleaseUrl
 
 private const val GITHUB_REPO_URL = "https://github.com/CydonianCitizen/Bingee"
 
@@ -188,7 +190,12 @@ private fun UpdateCheckerSection(
                     )
                 }
                 Button(
-                    onClick = { openUrlInBrowser(context, updateState.releaseUrl) },
+                    onClick = {
+                        if (isValidGitHubReleaseUrl(updateState.releaseUrl)) {
+                            openUrlInBrowser(context, updateState.releaseUrl)
+                        }
+                    },
+                    enabled = isValidGitHubReleaseUrl(updateState.releaseUrl),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(R.string.update_view_release))
@@ -198,7 +205,7 @@ private fun UpdateCheckerSection(
             is UpdateCheckUiState.Error -> {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = updateState.message ?: stringResource(R.string.update_error),
+                        text = stringResource(updateState.error.toUpdateMessageRes()),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -212,6 +219,14 @@ private fun UpdateCheckerSection(
             }
         }
     }
+}
+
+private fun AppError.toUpdateMessageRes(): Int = when (this) {
+    AppError.NetworkUnavailable -> R.string.update_error_network
+    AppError.RateLimited -> R.string.update_error_rate_limited
+    AppError.RemoteServiceFailure -> R.string.update_error_github
+    AppError.InvalidRemoteResponse -> R.string.update_error_invalid_response
+    else -> R.string.update_error_unexpected
 }
 
 @Composable

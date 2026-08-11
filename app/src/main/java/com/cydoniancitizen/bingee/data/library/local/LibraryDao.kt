@@ -15,6 +15,21 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal abstract class LibraryDao {
+    internal data class ContinueWatchingRow(
+        @ColumnInfo(name = "media_type") val mediaType: MediaType,
+        val title: String,
+        @ColumnInfo(name = "poster_url") val posterUrl: String?,
+        val source: MediaSource,
+        @ColumnInfo(name = "external_id") val externalId: String,
+        @ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
+        @ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
+        @ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
+        @ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int,
+        @ColumnInfo(name = "last_progress_at") val lastProgressAt: Instant?,
+        @ColumnInfo(name = "next_season_number") val nextSeasonNumber: Int?,
+        @ColumnInfo(name = "next_episode_number") val nextEpisodeNumber: Int?
+    )
+
     internal data class LibraryProgressRow(
         @ColumnInfo(name = "local_media_id") val localMediaId: Long,
         @ColumnInfo(name = "media_type") val mediaType: MediaType,
@@ -81,6 +96,100 @@ internal abstract class LibraryDao {
         """
     )
     abstract fun observeMembershipRefs(): Flow<List<ExternalRefEntity>>
+
+    @Query(
+        """
+        SELECT media_entries.media_type,
+               media_entries.title,
+               media_entries.poster_url,
+               external_refs.source,
+               external_refs.external_id,
+               (
+                   SELECT COUNT(*)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+               ) AS watched_episodes,
+               (
+                   SELECT COUNT(*)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+               ) AS trackable_episodes,
+               (
+                   SELECT COUNT(*)
+                   FROM seasons
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND EXISTS (
+                         SELECT 1 FROM episodes
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1 FROM episodes
+                         LEFT JOIN episode_watch_progress USING(local_episode_id)
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                           AND episode_watch_progress.local_episode_id IS NULL
+                     )
+               ) AS completed_seasons,
+               (
+                   SELECT COUNT(*)
+                   FROM seasons
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND EXISTS (
+                         SELECT 1 FROM episodes
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                           AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     )
+               ) AS trackable_seasons,
+               (
+                   SELECT MAX(episode_watch_progress.watched_at)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+               ) AS last_progress_at,
+               (
+                   SELECT seasons.season_number
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   LEFT JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     AND episode_watch_progress.local_episode_id IS NULL
+                   ORDER BY seasons.season_number, episodes.episode_number
+                   LIMIT 1
+               ) AS next_season_number,
+               (
+                   SELECT episodes.episode_number
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   LEFT JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     AND episode_watch_progress.local_episode_id IS NULL
+                   ORDER BY seasons.season_number, episodes.episode_number
+                   LIMIT 1
+               ) AS next_episode_number
+        FROM media_entries
+        INNER JOIN library_entries USING(local_media_id)
+        INNER JOIN external_refs USING(local_media_id)
+        WHERE external_refs.source = :source
+        """
+    )
+    abstract fun observeContinueWatchingRows(source: MediaSource, today: LocalDate): Flow<List<ContinueWatchingRow>>
 
     @Query(
         """

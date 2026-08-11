@@ -221,7 +221,7 @@ private fun ReviewContent(
     onSetFilter: (TvTimeMatchFilter) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val report = state.matchReport ?: return
+    val reviewState = state.reviewState ?: return
     val filterScrollState = rememberScrollState()
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -252,15 +252,15 @@ private fun ReviewContent(
         Text(
             stringResource(
                 R.string.tvtime_import_review_counts,
-                report.exactCount,
-                report.highConfidenceCount,
-                report.needsReviewCount,
-                report.unmatchedCount
+                reviewState.filterCounts[TvTimeMatchFilter.EXACT] ?: 0,
+                reviewState.filterCounts[TvTimeMatchFilter.HIGH_CONFIDENCE] ?: 0,
+                reviewState.filterCounts[TvTimeMatchFilter.NEEDS_REVIEW] ?: 0,
+                reviewState.filterCounts[TvTimeMatchFilter.UNMATCHED] ?: 0
             )
         )
         Row(modifier = Modifier.horizontalScroll(filterScrollState)) {
             TvTimeMatchFilter.entries.forEach { filter ->
-                val count = filterCount(report, state.summary?.invalidRecordCount ?: 0, filter)
+                val count = reviewState.filterCounts[filter] ?: 0
                 FilterChip(
                     selected = state.selectedFilter == filter,
                     onClick = { onSetFilter(filter) },
@@ -288,7 +288,7 @@ private fun ReviewContent(
             modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
         ) {
-            items(filteredMedia(report.media, state.selectedFilter), key = { it.source.recordId }) { review ->
+            items(reviewState.visibleMedia, key = { it.source.recordId }) { review ->
                 MediaReviewCard(
                     review,
                     state.manualCandidates[review.source.recordId].orEmpty(),
@@ -298,31 +298,20 @@ private fun ReviewContent(
                     onSearch
                 )
             }
-            val filteredEpisodes = filteredEpisodes(report.episodes, state.selectedFilter)
-            val parentTitles = report.media.associate { it.source.recordId to it.source.title }
-            filteredEpisodes.groupBy { it.source.parentRecordId to it.source.seasonNumber }
-                .entries
-                .sortedWith(
-                    compareBy<Map.Entry<Pair<String, Int>, List<TvTimeEpisodeReview>>> {
-                        parentTitles[it.key.first].orEmpty().lowercase()
-                    }.thenBy { it.key.second }
-                )
-                .forEach { (group, reviews) ->
-                    item(key = "episode-group:${group.first}:${group.second}") {
-                        EpisodeGroupHeader(
-                            seriesTitle = parentTitles[group.first].orEmpty(),
-                            seasonNumber = group.second,
-                            count = reviews.size,
-                            onSkip = { onSkipSeason(group.first, group.second) }
-                        )
-                    }
-                    items(reviews, key = { it.source.recordId }) { review ->
-                        EpisodeReviewCard(review, onSkip, onSelectEpisodeCandidate)
-                    }
+            reviewState.visibleEpisodeGroups.forEach { group ->
+                item(key = "episode-group:${group.parentRecordId}:${group.seasonNumber}") {
+                    EpisodeGroupHeader(
+                        seriesTitle = group.seriesTitle,
+                        seasonNumber = group.seasonNumber,
+                        count = group.reviews.size,
+                        onSkip = { onSkipSeason(group.parentRecordId, group.seasonNumber) }
+                    )
                 }
-            if (state.selectedFilter in setOf(TvTimeMatchFilter.ALL, TvTimeMatchFilter.INVALID) &&
-                (state.summary?.invalidRecordCount ?: 0) > 0
-            ) {
+                items(group.reviews, key = { it.source.recordId }) { review ->
+                    EpisodeReviewCard(review, onSkip, onSelectEpisodeCandidate)
+                }
+            }
+            if (reviewState.showInvalidRecordSummary) {
                 item(key = "invalid-source-summary") {
                     Text(
                         stringResource(
@@ -599,42 +588,6 @@ private fun FailureContent(state: TvTimeImportUiState, onSelectArchive: () -> Un
         Button(onClick = onSelectArchive) { Text(stringResource(R.string.tvtime_import_select_archive)) }
         TextButton(onClick = onBack) { Text(stringResource(R.string.action_cancel)) }
     }
-}
-
-private fun filteredMedia(items: List<TvTimeMediaReview>, filter: TvTimeMatchFilter): List<TvTimeMediaReview> =
-    items.filter { it.matches(filter) }
-
-private fun filteredEpisodes(items: List<TvTimeEpisodeReview>, filter: TvTimeMatchFilter): List<TvTimeEpisodeReview> =
-    items.filter { it.matches(filter) }
-
-private fun filterCount(
-    report: com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReport,
-    invalid: Int,
-    filter: TvTimeMatchFilter
-): Int = when (filter) {
-    TvTimeMatchFilter.ALL -> report.media.size + report.episodes.size + invalid
-    TvTimeMatchFilter.INVALID -> invalid
-    else -> filteredMedia(report.media, filter).size + filteredEpisodes(report.episodes, filter).size
-}
-
-private fun TvTimeMediaReview.matches(filter: TvTimeMatchFilter): Boolean = when (filter) {
-    TvTimeMatchFilter.ALL -> true
-    TvTimeMatchFilter.EXACT -> confidence == TvTimeMatchConfidence.EXACT
-    TvTimeMatchFilter.HIGH_CONFIDENCE -> confidence == TvTimeMatchConfidence.HIGH_CONFIDENCE
-    TvTimeMatchFilter.NEEDS_REVIEW -> confidence == TvTimeMatchConfidence.AMBIGUOUS
-    TvTimeMatchFilter.UNMATCHED -> confidence == TvTimeMatchConfidence.UNMATCHED
-    TvTimeMatchFilter.INVALID -> confidence == TvTimeMatchConfidence.INVALID
-    TvTimeMatchFilter.SKIPPED -> action == TvTimeReviewAction.SKIP
-}
-
-private fun TvTimeEpisodeReview.matches(filter: TvTimeMatchFilter): Boolean = when (filter) {
-    TvTimeMatchFilter.ALL -> true
-    TvTimeMatchFilter.EXACT -> confidence == TvTimeMatchConfidence.EXACT
-    TvTimeMatchFilter.HIGH_CONFIDENCE -> confidence == TvTimeMatchConfidence.HIGH_CONFIDENCE
-    TvTimeMatchFilter.NEEDS_REVIEW -> confidence == TvTimeMatchConfidence.AMBIGUOUS
-    TvTimeMatchFilter.UNMATCHED -> confidence == TvTimeMatchConfidence.UNMATCHED
-    TvTimeMatchFilter.INVALID -> confidence == TvTimeMatchConfidence.INVALID
-    TvTimeMatchFilter.SKIPPED -> action == TvTimeReviewAction.SKIP
 }
 
 private fun TvTimeMatchFilter.labelRes(): Int = when (this) {

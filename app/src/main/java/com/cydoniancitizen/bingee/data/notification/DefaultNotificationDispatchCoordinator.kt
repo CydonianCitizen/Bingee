@@ -53,8 +53,7 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
         val events = when (
             val result = calendarRepository.getEvents(
                 fromDate = today,
-                throughDate = today.plusDays(MAX_LEAD_DAYS.toLong()),
-                limit = MAX_CANDIDATES
+                throughDate = today.plusDays(MAX_LEAD_DAYS.toLong())
             )
         ) {
             is AppResult.Success -> result.value
@@ -62,37 +61,37 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
                 return NotificationDispatchSummary(failed = 1, transientFailure = true)
         }
 
+        val skippedCategory = events.count { !preferences.includes(it.subject.eventType) }
+        val dueEvents = events
+            .filter { preferences.includes(it.subject.eventType) }
+            .filter { isNotificationDue(it.eventDate, today, preferences.leadTime) }
+            .distinctBy { it.toDeliveryIdentity(preferences.leadTime.days) }
+        val deliveredIdentities = when (
+            val result = deliveryRepository.findDelivered(
+                dueEvents.mapTo(mutableSetOf()) { it.toDeliveryIdentity(preferences.leadTime.days) }
+            )
+        ) {
+            is AppResult.Success -> result.value.toMutableSet()
+            is AppResult.Failure -> return NotificationDispatchSummary(
+                candidates = events.size,
+                skippedByCategory = skippedCategory,
+                failed = dueEvents.size,
+                capability = capabilityStatus,
+                transientFailure = true
+            )
+        }
+        val alreadyDelivered = dueEvents.count {
+            it.toDeliveryIdentity(preferences.leadTime.days) in deliveredIdentities
+        }
+        val dispatchCandidates = dueEvents.filter {
+            it.toDeliveryIdentity(preferences.leadTime.days) !in deliveredIdentities
+        }.take(MAX_CANDIDATES)
+
         var posted = 0
-        var delivered = 0
-        var skippedCategory = 0
         var failed = 0
         var transientFailure = false
-        for (event in events) {
-            if (!preferences.includes(event.subject.eventType)) {
-                skippedCategory++
-                continue
-            }
-            if (!isNotificationDue(event.eventDate, today, preferences.leadTime)) continue
-
-            val identity = NotificationDeliveryIdentity(
-                source = event.subject.source,
-                subjectType = event.subject.subjectType,
-                subjectExternalId = event.subject.externalId,
-                eventType = event.subject.eventType,
-                eventDate = event.eventDate,
-                leadDays = preferences.leadTime.days
-            )
-            when (val contains = deliveryRepository.contains(identity)) {
-                is AppResult.Success -> if (contains.value) {
-                    delivered++
-                    continue
-                }
-                is AppResult.Failure -> {
-                    failed++
-                    transientFailure = true
-                    continue
-                }
-            }
+        for (event in dispatchCandidates) {
+            val identity = event.toDeliveryIdentity(preferences.leadTime.days)
 
             val notificationId = deterministicNotificationId(identity)
             val content = contentMapper.map(
@@ -111,12 +110,14 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
             if (record is AppResult.Failure) {
                 failed++
                 transientFailure = true
+            } else {
+                deliveredIdentities += identity
             }
         }
         return NotificationDispatchSummary(
             candidates = events.size,
             posted = posted,
-            alreadyDelivered = delivered,
+            alreadyDelivered = alreadyDelivered,
             skippedByCategory = skippedCategory,
             failed = failed,
             capability = capabilityStatus,
@@ -130,3 +131,13 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
         const val RETENTION_DAYS = 30
     }
 }
+
+private fun com.cydoniancitizen.bingee.core.model.ReleaseEvent.toDeliveryIdentity(leadDays: Int) =
+    NotificationDeliveryIdentity(
+        source = subject.source,
+        subjectType = subject.subjectType,
+        subjectExternalId = subject.externalId,
+        eventType = subject.eventType,
+        eventDate = eventDate,
+        leadDays = leadDays
+    )

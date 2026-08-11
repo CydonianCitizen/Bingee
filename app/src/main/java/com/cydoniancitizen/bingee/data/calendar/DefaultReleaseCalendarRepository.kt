@@ -26,7 +26,13 @@ internal class DefaultReleaseCalendarRepository @Inject constructor(
     private val clock: Clock
 ) : ReleaseCalendarRepository {
     override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
-        dao.observeActiveEvents(fromDate)
+        observeMappedEvents(fromDate, throughDate = null)
+
+    override fun observeEvents(fromDate: LocalDate, throughDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
+        observeMappedEvents(fromDate, throughDate)
+
+    private fun observeMappedEvents(fromDate: LocalDate, throughDate: LocalDate?): Flow<AppResult<List<ReleaseEvent>>> =
+        dao.observeActiveEvents(fromDate, throughDate)
             .map<List<ReleaseEventRow>, AppResult<List<ReleaseEvent>>> { rows ->
                 val events = rows.map(ReleaseEventRow::toDomain)
                 AppResult.Success(events)
@@ -37,14 +43,11 @@ internal class DefaultReleaseCalendarRepository @Inject constructor(
         .map<Instant?, AppResult<Instant?>> { AppResult.Success(it) }
         .catchPersistence()
 
-    override suspend fun getEvents(
-        fromDate: LocalDate,
-        throughDate: LocalDate,
-        limit: Int
-    ): AppResult<List<ReleaseEvent>> = persistenceRead {
-        dao.getActiveEventsBetween(fromDate, throughDate, limit)
-            .map(ReleaseEventRow::toDomain)
-    }
+    override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> =
+        persistenceRead {
+            dao.getActiveEventsBetween(fromDate, throughDate)
+                .map(ReleaseEventRow::toDomain)
+        }
 
     override suspend fun backfill(): AppResult<Unit> = persistenceWrite {
         dao.backfill(clock.instant())

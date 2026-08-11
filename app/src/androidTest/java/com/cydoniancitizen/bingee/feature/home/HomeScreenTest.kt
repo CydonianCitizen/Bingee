@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.Density
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
+import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
@@ -24,6 +26,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import java.time.Instant
 import java.time.LocalDate
@@ -80,6 +83,41 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Remind me").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("Open title details for Title episode").performClick()
         assertEquals(events.last().mediaRef to MediaType.SERIES, opened.get())
+    }
+
+    @Test
+    fun continueWatchingCardShowsProgressNextEpisodeAndOpensSeriesDetails() {
+        val opened = AtomicReference<Pair<ExternalMediaRef, MediaType>>()
+        val item = ContinueWatchingItem(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "continue-1"),
+            mediaType = MediaType.SERIES,
+            title = "Continuing Series",
+            posterUrl = null,
+            progress = SeriesProgress(3, 8, 0, 1, false),
+            nextEpisode = EpisodePosition(2, 5),
+            updatedAt = Instant.parse("2026-08-03T12:00:00Z")
+        )
+        setHome(
+            HomeUiState(
+                content = HomeContentState.Empty,
+                continueWatching = listOf(item),
+                today = today
+            ),
+            onOpenDetails = { ref, type -> opened.set(ref to type) }
+        )
+
+        composeRule.onNodeWithText("Continue Watching").assertIsDisplayed()
+        composeRule.onNodeWithText("3 of 8 episodes").assertIsDisplayed()
+        composeRule.onNodeWithText("Next: Season 2 • Episode 5").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Open details for Continuing Series").performClick()
+        assertEquals(item.mediaRef to MediaType.SERIES, opened.get())
+    }
+
+    @Test
+    fun continueWatchingSectionIsAbsentWhenEmpty() {
+        setHome(HomeUiState(content = HomeContentState.Empty, today = today))
+
+        composeRule.onNodeWithText("Continue Watching").assertDoesNotExist()
     }
 
     @Test

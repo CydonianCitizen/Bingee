@@ -24,12 +24,15 @@ import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -98,6 +101,44 @@ class HomeViewModelTest {
         assertEquals(1, coordinator.calls)
         assertTrue(viewModel.uiState.value.refresh is HomeRefreshState.Partial)
         assertTrue(viewModel.uiState.value.content is HomeContentState.Events)
+    }
+
+    @Test
+    fun newestRefreshWinsAndCancelledRefreshDoesNotSurfaceAsError() = runTest(mainDispatcherRule.dispatcher) {
+        val firstResult = CompletableDeferred<CalendarRefreshSummary>()
+        val secondResult = CompletableDeferred<CalendarRefreshSummary>()
+        val secondStarted = CompletableDeferred<Unit>()
+        val coordinator = FakeCoordinator(success()).apply {
+            refreshAction = { call ->
+                when (call) {
+                    1 -> withContext(NonCancellable) { firstResult.await() }
+                    2 -> {
+                        secondStarted.complete(Unit)
+                        secondResult.await()
+                    }
+                    else -> success()
+                }
+            }
+        }
+        val viewModel = viewModel(FakeCalendarRepository(emptyList()), coordinator)
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        viewModel.refresh()
+        runCurrent()
+        secondStarted.await()
+
+        secondResult.complete(success())
+        runCurrent()
+        assertEquals(HomeRefreshState.Complete, viewModel.uiState.value.refresh)
+
+        firstResult.complete(
+            CalendarRefreshSummary(CalendarRefreshOutcome.COMPLETE_FAILURE, 1, 0, 1, 0, AppError.Unknown)
+        )
+        runCurrent()
+        assertEquals(HomeRefreshState.Complete, viewModel.uiState.value.refresh)
+        assertEquals(2, coordinator.calls)
     }
 
     @Test
@@ -272,11 +313,8 @@ class HomeViewModelTest {
         }
 
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = last
-        override suspend fun getEvents(
-            fromDate: LocalDate,
-            throughDate: LocalDate,
-            limit: Int
-        ): AppResult<List<ReleaseEvent>> = AppResult.Success(emptyList())
+        override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> =
+            AppResult.Success(emptyList())
         override suspend fun backfill(): AppResult<Unit> {
             backfillCalls++
             return AppResult.Success(Unit)
@@ -286,9 +324,10 @@ class HomeViewModelTest {
 
     private class FakeCoordinator(var summary: CalendarRefreshSummary) : CalendarRefreshCoordinator {
         var calls = 0
+        var refreshAction: suspend (Int) -> CalendarRefreshSummary = { summary }
         override suspend fun refresh(): CalendarRefreshSummary {
             calls++
-            return summary
+            return refreshAction(calls)
         }
 
         override suspend fun refresh(

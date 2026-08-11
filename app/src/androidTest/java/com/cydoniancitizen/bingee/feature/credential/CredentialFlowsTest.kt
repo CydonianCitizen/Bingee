@@ -25,7 +25,7 @@ import com.cydoniancitizen.bingee.feature.search.SearchContent
 import com.cydoniancitizen.bingee.feature.search.SearchCredentialAvailability
 import com.cydoniancitizen.bingee.feature.search.SearchUiState
 import com.cydoniancitizen.bingee.feature.settings.PrivacySettingsContent
-import com.cydoniancitizen.bingee.feature.settings.SettingsUiState
+import com.cydoniancitizen.bingee.feature.settings.PrivacyUiState
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -176,7 +176,7 @@ class CredentialFlowsTest {
         composeRule.setContent {
             BingeeTheme {
                 PrivacySettingsContent(
-                    state = SettingsUiState(credentialStatus = TmdbCredentialStatus.Valid),
+                    state = PrivacyUiState(credentialStatus = TmdbCredentialStatus.Valid),
                     onInputChanged = {},
                     onSubmit = {},
                     onRetry = {},

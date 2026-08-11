@@ -24,7 +24,7 @@ class LanguageAndThemeTest {
     }
 
     @Test
-    fun persistedLanguageValuesMapSafelyAndMigrateSystemDefaultToEnglish() {
+    fun persistedLanguageValuesMapSafelyAndNormalizeSystemDefaultWithoutSideEffect() {
         assertEquals("ENGLISH", AppLanguage.ENGLISH.name)
         assertEquals("ITALIAN", AppLanguage.ITALIAN.name)
         assertEquals(AppLanguage.ENGLISH, AppLanguage.fromPreferenceValue("SYSTEM"))

@@ -38,7 +38,7 @@ internal interface TmdbSearchService {
     @GET("3/discover/movie")
     suspend fun discoverMovies(
         @Header("Authorization") authorization: String,
-        @Query("region") region: String = "IT",
+        @Query("region") region: String? = null,
         @Query("include_adult") includeAdult: Boolean = false,
         @Query("sort_by") sortBy: String = "popularity.desc",
         @Query("vote_count.gte") voteCountGte: Int = 10,

@@ -1,11 +1,19 @@
 package com.cydoniancitizen.bingee.data.update
 
+import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.domain.repository.AppUpdateResult
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 
 class AppUpdateRepositoryTest {
 
@@ -34,90 +42,142 @@ class AppUpdateRepositoryTest {
 
     @Test
     fun checkForUpdatesReturnsUpToDateWhenInstalledIsEqualOrNewer() = runTest {
-        val fakeService = FakeGitHubReleaseService(
-            response = GitHubReleaseDto(
-                tagName = "Bingee-v1.0.1-stable",
-                htmlUrl = "https://github.com/CydonianCitizen/Bingee/releases/tag/Bingee-v1.0.1-stable"
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(
+                response = release("Bingee-v1.0.1-stable")
             )
         )
-        val repository = DefaultAppUpdateRepository(fakeService)
 
         val result = repository.checkForUpdates("1.0.1")
 
-        assertTrue(result is AppUpdateResult.UpToDate)
-        assertEquals("1.0.1", (result as AppUpdateResult.UpToDate).installedVersion)
+        assertEquals(AppUpdateResult.UpToDate("1.0.1"), result)
     }
 
     @Test
     fun checkForUpdatesReturnsUpdateAvailableWhenNewerStableExists() = runTest {
-        val fakeService = FakeGitHubReleaseService(
-            response = GitHubReleaseDto(
-                tagName = "Bingee-v1.1.0-stable",
-                htmlUrl = "https://github.com/CydonianCitizen/Bingee/releases/tag/Bingee-v1.1.0-stable"
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(
+                response = release("Bingee-v1.1.0-stable")
             )
         )
-        val repository = DefaultAppUpdateRepository(fakeService)
 
         val result = repository.checkForUpdates("1.0.1")
 
-        assertTrue(result is AppUpdateResult.UpdateAvailable)
-        val updateAvailable = result as AppUpdateResult.UpdateAvailable
-        assertEquals("1.0.1", updateAvailable.installedVersion)
-        assertEquals("1.1.0", updateAvailable.latestVersion)
         assertEquals(
-            "https://github.com/CydonianCitizen/Bingee/releases/tag/Bingee-v1.1.0-stable",
-            updateAvailable.releaseUrl
+            AppUpdateResult.UpdateAvailable(
+                installedVersion = "1.0.1",
+                latestVersion = "1.1.0",
+                releaseUrl = "https://github.com/CydonianCitizen/Bingee/releases/tag/Bingee-v1.1.0-stable"
+            ),
+            result
         )
     }
 
     @Test
-    fun checkForUpdatesIgnoresDraftAndPrereleaseReleases() = runTest {
-        val fakeService = FakeGitHubReleaseService(
-            response = GitHubReleaseDto(
-                tagName = "Bingee-v2.0.0-beta",
-                htmlUrl = "https://github.com/CydonianCitizen/Bingee/releases/tag/v2.0.0-beta",
-                prerelease = true
+    fun checkForUpdatesDoesNotTreatDraftOrPrereleaseAsStable() = runTest {
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(
+                response = release("Bingee-v2.0.0-beta", prerelease = true)
             )
         )
-        val repository = DefaultAppUpdateRepository(fakeService)
 
-        val result = repository.checkForUpdates("1.0.1")
-
-        assertTrue(result is AppUpdateResult.Error)
+        assertEquals(
+            AppUpdateResult.Error(AppError.InvalidRemoteResponse),
+            repository.checkForUpdates("1.0.1")
+        )
     }
 
     @Test
-    fun checkForUpdatesHandlesMalformedVersionGracefully() = runTest {
-        val fakeService = FakeGitHubReleaseService(
-            response = GitHubReleaseDto(
-                tagName = "invalid-release-tag",
-                htmlUrl = "https://github.com/CydonianCitizen/Bingee/releases"
+    fun malformedReleaseResponseMapsToStableError() = runTest {
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(response = GitHubReleaseDto(tagName = "invalid-release-tag"))
+        )
+
+        assertEquals(
+            AppUpdateResult.Error(AppError.InvalidRemoteResponse),
+            repository.checkForUpdates("1.0.1")
+        )
+    }
+
+    @Test
+    fun networkFailureMapsWithoutExposingExceptionText() = runTest {
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(throwable = IOException("secret network details"))
+        )
+
+        assertEquals(
+            AppUpdateResult.Error(AppError.NetworkUnavailable),
+            repository.checkForUpdates("1.0.1")
+        )
+    }
+
+    @Test
+    fun githubHttpAndRateLimitFailuresMapCorrectly() = runTest {
+        val rateLimited = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(
+                throwable = HttpException(Response.error<GitHubReleaseDto>(429, "".toResponseBody()))
             )
         )
-        val repository = DefaultAppUpdateRepository(fakeService)
+        val apiFailure = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(
+                throwable = HttpException(Response.error<GitHubReleaseDto>(500, "".toResponseBody()))
+            )
+        )
 
-        val result = repository.checkForUpdates("1.0.1")
-
-        assertTrue(result is AppUpdateResult.Error)
+        assertEquals(AppUpdateResult.Error(AppError.RateLimited), rateLimited.checkForUpdates("1.0.1"))
+        assertEquals(AppUpdateResult.Error(AppError.RemoteServiceFailure), apiFailure.checkForUpdates("1.0.1"))
     }
 
     @Test
-    fun checkForUpdatesHandlesNetworkErrorGracefully() = runTest {
-        val fakeService = FakeGitHubReleaseService(shouldThrow = true)
-        val repository = DefaultAppUpdateRepository(fakeService)
+    fun cancellationPropagates() = runTest {
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(throwable = CancellationException("cancelled"))
+        )
 
-        val result = repository.checkForUpdates("1.0.1")
-
-        assertTrue(result is AppUpdateResult.Error)
-        assertEquals("Network connection failed", (result as AppUpdateResult.Error).message)
+        try {
+            repository.checkForUpdates("1.0.1")
+            fail("CancellationException should propagate")
+        } catch (_: CancellationException) {
+        }
     }
+
+    @Test
+    fun releaseUrlsRequireHttpsGithubAndExpectedRepository() {
+        assertTrue(isValidGitHubReleaseUrl("https://github.com/CydonianCitizen/Bingee/releases/tag/v1.1.0"))
+        assertFalse(isValidGitHubReleaseUrl("http://github.com/CydonianCitizen/Bingee/releases/tag/v1.1.0"))
+        assertFalse(isValidGitHubReleaseUrl("https://evil.example/CydonianCitizen/Bingee/releases/tag/v1.1.0"))
+        assertFalse(isValidGitHubReleaseUrl("https://github.com/Other/Bingee/releases/tag/v1.1.0"))
+    }
+
+    @Test
+    fun invalidReleaseUrlMapsToMalformedResponse() = runTest {
+        val repository = DefaultAppUpdateRepository(
+            FakeGitHubReleaseService(
+                response = GitHubReleaseDto(
+                    tagName = "Bingee-v1.1.0-stable",
+                    htmlUrl = "http://github.com/CydonianCitizen/Bingee/releases/tag/v1.1.0"
+                )
+            )
+        )
+
+        assertEquals(
+            AppUpdateResult.Error(AppError.InvalidRemoteResponse),
+            repository.checkForUpdates("1.0.1")
+        )
+    }
+
+    private fun release(tag: String, prerelease: Boolean = false) = GitHubReleaseDto(
+        tagName = tag,
+        htmlUrl = "https://github.com/CydonianCitizen/Bingee/releases/tag/$tag",
+        prerelease = prerelease
+    )
 
     private class FakeGitHubReleaseService(
         private val response: GitHubReleaseDto = GitHubReleaseDto(),
-        private val shouldThrow: Boolean = false
+        private val throwable: Throwable? = null
     ) : GitHubReleaseService {
         override suspend fun getLatestRelease(): GitHubReleaseDto {
-            if (shouldThrow) throw Exception("Network connection failed")
+            throwable?.let { throw it }
             return response
         }
     }

@@ -16,6 +16,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
@@ -23,10 +24,12 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -47,6 +50,7 @@ class NotificationsViewModelTest {
     private val fakeLibraryRepository = FakeLibraryRepository()
     private val fakeCalendarRepository = FakeReleaseCalendarRepository()
     private val fakeRefreshCoordinator = FakeCalendarRefreshCoordinator()
+    private val fakeDateSource = FakeDateSource(today)
 
     @Before
     fun setUp() {
@@ -81,6 +85,63 @@ class NotificationsViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(NotificationsContentState.NoEvents, state.contentState)
+    }
+
+    @Test
+    fun initialLoadFailureShowsErrorNotEmptyState() = runTest {
+        fakeLibraryRepository.setEntries(listOf(createLibraryEntry("101", MediaType.SERIES)))
+        fakeCalendarRepository.setFailure(AppError.LocalStorageFailure)
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.contentState is NotificationsContentState.Error)
+        assertEquals(NotificationRefreshState.Failed, viewModel.uiState.value.refreshState)
+    }
+
+    @Test
+    fun loadFailurePreservesCachedContent() = runTest {
+        val series = createLibraryEntry("101", MediaType.SERIES)
+        fakeLibraryRepository.setEntries(listOf(series))
+        fakeCalendarRepository.setEvents(listOf(createEvent("101", MediaType.SERIES, today)))
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        fakeCalendarRepository.setFailure(AppError.LocalStorageFailure)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.contentState is NotificationsContentState.Content)
+        assertEquals(NotificationRefreshState.Failed, viewModel.uiState.value.refreshState)
+    }
+
+    @Test
+    fun retryRecoversFromLoadFailure() = runTest {
+        val series = createLibraryEntry("101", MediaType.SERIES)
+        val event = createEvent("101", MediaType.SERIES, today)
+        fakeLibraryRepository.setEntries(listOf(series))
+        fakeCalendarRepository.setFailure(AppError.LocalStorageFailure)
+        fakeCalendarRepository.completeObservationAfterFailure = true
+        fakeRefreshCoordinator.refreshAction = { fakeCalendarRepository.setEvents(listOf(event)) }
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.refresh()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.contentState is NotificationsContentState.Content)
+        assertEquals(NotificationRefreshState.Idle, viewModel.uiState.value.refreshState)
+        assertEquals(null, viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun cancellationDoesNotBecomeLoadError() = runTest {
+        fakeCalendarRepository.cancelOnObserve = true
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(NotificationsContentState.Loading, viewModel.uiState.value.contentState)
+        assertEquals(null, viewModel.uiState.value.error)
     }
 
     @Test
@@ -160,6 +221,43 @@ class NotificationsViewModelTest {
     }
 
     @Test
+    fun observationUsesBoundedPastAndFutureWindow() = runTest {
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(today.minusDays(NotificationsViewModel.RECENT_WINDOW_DAYS), fakeCalendarRepository.observedFrom)
+        assertEquals(
+            today.plusDays(NotificationsViewModel.UPCOMING_WINDOW_DAYS),
+            fakeCalendarRepository.observedThrough
+        )
+        assertEquals(today, viewModel.uiState.value.today)
+    }
+
+    @Test
+    fun dateRolloverUpdatesGroupingWithoutWallClockWait() = runTest {
+        val series = createLibraryEntry("101", MediaType.SERIES)
+        fakeLibraryRepository.setEntries(listOf(series))
+        fakeCalendarRepository.setEvents(listOf(createEvent("101", MediaType.SERIES, today.plusDays(1))))
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(today, viewModel.uiState.value.today)
+        assertEquals(
+            NotificationGroupCategory.UPCOMING,
+            (viewModel.uiState.value.contentState as NotificationsContentState.Content).groups.single().category
+        )
+
+        fakeDateSource.advanceTo(today.plusDays(1))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(today.plusDays(1), viewModel.uiState.value.today)
+        assertEquals(
+            NotificationGroupCategory.TODAY,
+            (viewModel.uiState.value.contentState as NotificationsContentState.Content).groups.single().category
+        )
+    }
+
+    @Test
     fun refreshSuccessUpdatesState() = runTest {
         val series = createLibraryEntry("101", MediaType.SERIES)
         fakeLibraryRepository.setEntries(listOf(series))
@@ -209,7 +307,7 @@ class NotificationsViewModelTest {
         calendarRepository = fakeCalendarRepository,
         libraryRepository = fakeLibraryRepository,
         refreshCoordinator = fakeRefreshCoordinator,
-        clock = fixedClock
+        dateSource = fakeDateSource
     )
 
     private fun createLibraryEntry(
@@ -269,26 +367,60 @@ class NotificationsViewModelTest {
 
     private class FakeReleaseCalendarRepository : ReleaseCalendarRepository {
         private val eventsFlow = MutableStateFlow<AppResult<List<ReleaseEvent>>>(AppResult.Success(emptyList()))
+        var cancelOnObserve = false
+        var completeObservationAfterFailure = false
+        var observedFrom: LocalDate? = null
+        var observedThrough: LocalDate? = null
 
         fun setEvents(list: List<ReleaseEvent>) {
             eventsFlow.value = AppResult.Success(list)
         }
 
-        override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> = eventsFlow
+        fun setFailure(error: AppError) {
+            eventsFlow.value = AppResult.Failure(error)
+        }
+
+        override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> = observe()
+
+        override fun observeEvents(fromDate: LocalDate, throughDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> {
+            observedFrom = fromDate
+            observedThrough = throughDate
+            return observe()
+        }
+
+        private fun observe(): Flow<AppResult<List<ReleaseEvent>>> = when {
+            cancelOnObserve -> flow { throw CancellationException("test cancellation") }
+            completeObservationAfterFailure -> flow { emit(eventsFlow.value) }
+            else -> eventsFlow
+        }
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> =
             MutableStateFlow(AppResult.Success(null))
-        override suspend fun getEvents(
-            fromDate: LocalDate,
-            throughDate: LocalDate,
-            limit: Int
-        ): AppResult<List<ReleaseEvent>> = eventsFlow.value
+        override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> =
+            eventsFlow.value
         override suspend fun backfill(): AppResult<Unit> = AppResult.Success(Unit)
         override suspend fun markRefreshSuccessful(at: Instant): AppResult<Unit> = AppResult.Success(Unit)
     }
 
+    private class FakeDateSource(initial: LocalDate) : CalendarDateSource {
+        private val dates = MutableStateFlow(initial)
+
+        override fun currentDate(): LocalDate = dates.value
+
+        override fun observeDate(): Flow<LocalDate> = dates
+
+        fun advanceTo(date: LocalDate) {
+            dates.value = date
+        }
+    }
+
     private class FakeCalendarRefreshCoordinator : CalendarRefreshCoordinator {
         var summaryToReturn = CalendarRefreshSummary(CalendarRefreshOutcome.COMPLETE_SUCCESS, 0, 0, 0, 0, null)
-        override suspend fun refresh(): CalendarRefreshSummary = summaryToReturn
+        var refreshAction: () -> Unit = {}
+
+        override suspend fun refresh(): CalendarRefreshSummary {
+            refreshAction()
+            return summaryToReturn
+        }
         override suspend fun refresh(
             targets: List<com.cydoniancitizen.bingee.core.model.BackgroundRefreshTarget>
         ): CalendarRefreshSummary = summaryToReturn

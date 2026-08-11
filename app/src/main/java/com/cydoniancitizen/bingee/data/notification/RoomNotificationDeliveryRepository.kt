@@ -27,6 +27,23 @@ internal class RoomNotificationDeliveryRepository @Inject constructor(private va
         )
     }
 
+    override suspend fun findDelivered(
+        identities: Set<NotificationDeliveryIdentity>
+    ): AppResult<Set<NotificationDeliveryIdentity>> {
+        if (identities.isEmpty()) return AppResult.Success(emptySet())
+        return read {
+            identities.groupBy(NotificationDeliveryIdentity::leadDays)
+                .flatMapTo(mutableSetOf()) { (leadDays, candidates) ->
+                    val rows = dao.findBetween(
+                        fromDate = candidates.minOf(NotificationDeliveryIdentity::eventDate),
+                        throughDate = candidates.maxOf(NotificationDeliveryIdentity::eventDate),
+                        leadDays = leadDays
+                    )
+                    rows.map { it.toIdentity() }.filter(candidates::contains)
+                }
+        }
+    }
+
     override suspend fun record(delivery: NotificationDelivery): AppResult<Unit> = read {
         val identity = delivery.identity
         dao.insert(
@@ -58,3 +75,12 @@ internal class RoomNotificationDeliveryRepository @Inject constructor(private va
         AppResult.Failure(AppError.Unknown)
     }
 }
+
+private fun NotificationDeliveryEntity.toIdentity() = NotificationDeliveryIdentity(
+    source = source,
+    subjectType = subjectType,
+    subjectExternalId = subjectExternalId,
+    eventType = eventType,
+    eventDate = eventDate,
+    leadDays = leadDays
+)

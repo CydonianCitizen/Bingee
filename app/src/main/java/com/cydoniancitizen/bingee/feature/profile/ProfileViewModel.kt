@@ -52,11 +52,27 @@ internal data class ProfileUiState(
     val currentViewMode: ProfileViewMode get() = displayModes.getMode(collection, category)
 }
 
-fun LibraryEntry.isWatched(): Boolean = when (val p = progress) {
-    is LibraryProgress.Movie -> p.state is MovieWatchState.Watched
-    is LibraryProgress.Series -> p.progress.watchedEpisodes > 0 || p.progress.isComplete
-    LibraryProgress.Unavailable -> libraryState == LibraryState.COMPLETED || libraryState == LibraryState.IN_PROGRESS
+/** Current Profile semantics: any watched TV episode counts as watched; add granular serial states here later. */
+internal enum class PersonalLibraryStatus { UNWATCHED, WATCHED }
+
+internal fun LibraryEntry.personalLibraryStatus(): PersonalLibraryStatus = when (val p = progress) {
+    is LibraryProgress.Movie ->
+        if (p.state is MovieWatchState.Watched) PersonalLibraryStatus.WATCHED else PersonalLibraryStatus.UNWATCHED
+    is LibraryProgress.Series ->
+        if (p.progress.watchedEpisodes > 0 || p.progress.isComplete) {
+            PersonalLibraryStatus.WATCHED
+        } else {
+            PersonalLibraryStatus.UNWATCHED
+        }
+    LibraryProgress.Unavailable ->
+        if (libraryState == LibraryState.COMPLETED || libraryState == LibraryState.IN_PROGRESS) {
+            PersonalLibraryStatus.WATCHED
+        } else {
+            PersonalLibraryStatus.UNWATCHED
+        }
 }
+
+fun LibraryEntry.isWatched(): Boolean = personalLibraryStatus() == PersonalLibraryStatus.WATCHED
 
 fun LibraryEntry.belongsToCategory(category: ProfileCategory): Boolean = when (category) {
     ProfileCategory.MOVIES -> mediaType == MediaType.MOVIE
@@ -187,7 +203,13 @@ internal class ProfileViewModel @Inject constructor(
                 when (result) {
                     is AppResult.Success -> {
                         rawEntries.value = result.value
-                        mutableUiState.update { it.copy(isLoading = false, loadError = null) }
+                        mutableUiState.update {
+                            it.copy(
+                                isLoading = false,
+                                loadError = null,
+                                statistics = calculateWatchedStatistics(result.value)
+                            )
+                        }
                         refilter()
                     }
                     is AppResult.Failure -> {
@@ -201,7 +223,6 @@ internal class ProfileViewModel @Inject constructor(
     private fun refilter() {
         val state = mutableUiState.value
         val allRaw = rawEntries.value
-        val stats = calculateWatchedStatistics(allRaw)
 
         val filtered = allRaw.filter { entry ->
             val matchesCollection = when (state.collection) {
@@ -234,6 +255,6 @@ internal class ProfileViewModel @Inject constructor(
             )
         }
 
-        mutableUiState.update { it.copy(entries = sorted, statistics = stats) }
+        mutableUiState.update { it.copy(entries = sorted) }
     }
 }

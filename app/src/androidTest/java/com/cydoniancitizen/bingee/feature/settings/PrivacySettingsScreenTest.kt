@@ -17,7 +17,7 @@ class PrivacySettingsScreenTest {
         composeRule.setContent {
             BingeeTheme {
                 PrivacySettingsContent(
-                    state = SettingsUiState(),
+                    state = PrivacyUiState(),
                     onInputChanged = {},
                     onSubmit = {},
                     onRetry = {},

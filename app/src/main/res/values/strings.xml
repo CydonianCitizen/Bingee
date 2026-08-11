@@ -75,7 +75,6 @@
     <string name="library_action_updating">Updating library…</string>
     <string name="search_action_add_watch_later">Add to Watch Later</string>
     <string name="search_action_in_watch_later">In Watch Later</string>
-    <string name="library_title">Library</string>
     <string name="profile_title">Profile</string>
     <string name="profile_tab_watched">Watched</string>
     <string name="profile_tab_watch_later">Watch Later</string>
@@ -100,6 +99,10 @@
     <string name="profile_empty_action_search">Explore in Search</string>
     <string name="profile_empty_action_clear">Clear search</string>
     <string name="home_featured_releases">Featured Releases</string>
+    <string name="home_continue_watching">Continue Watching</string>
+    <string name="home_continue_watching_progress">%1$d of %2$d episodes</string>
+    <string name="home_continue_watching_next_episode">Next: Season %1$d • Episode %2$d</string>
+    <string name="home_open_continue_details">Open details for %1$s</string>
     <string name="action_add_to_watchlist">Add to Watchlist</string>
     <string name="action_in_watchlist">In Watchlist</string>
     <string name="notifications_title">Notifications</string>
@@ -447,6 +450,11 @@
     <string name="update_latest_version">Latest version: %1$s</string>
     <string name="update_view_release">View release</string>
     <string name="update_error">Unable to check for updates.</string>
+    <string name="update_error_network">No network connection. Check your connection and try again.</string>
+    <string name="update_error_github">GitHub is temporarily unavailable. Try again later.</string>
+    <string name="update_error_rate_limited">GitHub request limit reached. Try again later.</string>
+    <string name="update_error_invalid_response">GitHub returned an invalid release.</string>
+    <string name="update_error_unexpected">Unable to check for updates.</string>
     <string name="statistics_title">Watch Statistics</string>
     <string name="statistics_movies_watched">Movies Watched</string>
     <string name="statistics_tv_completed">TV Series Completed</string>

@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.feature.settings
 
+import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.domain.repository.AppUpdateRepository
 import com.cydoniancitizen.bingee.domain.repository.AppUpdateResult
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +72,7 @@ class AboutViewModelTest {
     @Test
     fun checkForUpdatesUpdatesUiStateToErrorOnFailure() = runTest {
         val fakeRepo = FakeAppUpdateRepository(
-            result = AppUpdateResult.Error("Network error")
+            result = AppUpdateResult.Error(AppError.NetworkUnavailable)
         )
         val viewModel = AboutViewModel(fakeRepo)
 
@@ -80,7 +81,7 @@ class AboutViewModelTest {
 
         val state = viewModel.uiState.value.updateState
         assertTrue(state is UpdateCheckUiState.Error)
-        assertEquals("Network error", (state as UpdateCheckUiState.Error).message)
+        assertEquals(AppError.NetworkUnavailable, (state as UpdateCheckUiState.Error).error)
     }
 
     private class FakeAppUpdateRepository(private val result: AppUpdateResult) : AppUpdateRepository {

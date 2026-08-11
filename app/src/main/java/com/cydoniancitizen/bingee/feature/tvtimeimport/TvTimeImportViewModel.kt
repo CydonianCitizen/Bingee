@@ -60,6 +60,22 @@ internal enum class TvTimeImportUiFailure {
     UNKNOWN
 }
 
+internal enum class TvTimeMatchFilter { ALL, EXACT, HIGH_CONFIDENCE, NEEDS_REVIEW, UNMATCHED, INVALID, SKIPPED }
+
+internal data class TvTimeEpisodeReviewGroup(
+    val parentRecordId: String,
+    val seasonNumber: Int,
+    val seriesTitle: String,
+    val reviews: List<TvTimeEpisodeReview>
+)
+
+internal data class TvTimeReviewUiState(
+    val visibleMedia: List<TvTimeMediaReview>,
+    val visibleEpisodeGroups: List<TvTimeEpisodeReviewGroup>,
+    val filterCounts: Map<TvTimeMatchFilter, Int>,
+    val showInvalidRecordSummary: Boolean
+)
+
 internal data class TvTimeImportUiState(
     val stage: TvTimeImportStage = TvTimeImportStage.IDLE,
     val summary: com.cydoniancitizen.bingee.data.imports.model.ImportedSourceSummary? = null,
@@ -69,10 +85,104 @@ internal data class TvTimeImportUiState(
     val failure: TvTimeImportUiFailure? = null,
     val manualCandidates: Map<String, List<TmdbImportCandidate>> = emptyMap(),
     val manualSearchFailures: Set<String> = emptySet(),
-    val selectedFilter: TvTimeMatchFilter = TvTimeMatchFilter.ALL
+    val selectedFilter: TvTimeMatchFilter = TvTimeMatchFilter.ALL,
+    val reviewState: TvTimeReviewUiState? = matchReport?.let {
+        deriveTvTimeReviewUiState(it, summary?.invalidRecordCount ?: 0, selectedFilter)
+    }
 )
 
-internal enum class TvTimeMatchFilter { ALL, EXACT, HIGH_CONFIDENCE, NEEDS_REVIEW, UNMATCHED, INVALID, SKIPPED }
+internal fun deriveTvTimeReviewUiState(
+    report: TvTimeMatchReport,
+    invalidRecordCount: Int,
+    filter: TvTimeMatchFilter
+): TvTimeReviewUiState {
+    val counts = TvTimeMatchFilter.entries.associateWith { 0 }.toMutableMap()
+    val parentTitles = report.media.associate { it.source.recordId to it.source.title }
+    val visibleMedia = if (filter == TvTimeMatchFilter.ALL) {
+        null
+    } else {
+        ArrayList<TvTimeMediaReview>()
+    }
+    val visibleEpisodeGroups = linkedMapOf<Pair<String, Int>, MutableList<TvTimeEpisodeReview>>()
+
+    fun addCounts(confidence: TvTimeMatchConfidence, action: TvTimeReviewAction) {
+        when (confidence) {
+            TvTimeMatchConfidence.EXACT -> counts[TvTimeMatchFilter.EXACT] =
+                counts.getValue(TvTimeMatchFilter.EXACT) + 1
+            TvTimeMatchConfidence.HIGH_CONFIDENCE -> counts[TvTimeMatchFilter.HIGH_CONFIDENCE] =
+                counts.getValue(TvTimeMatchFilter.HIGH_CONFIDENCE) + 1
+            TvTimeMatchConfidence.AMBIGUOUS -> counts[TvTimeMatchFilter.NEEDS_REVIEW] =
+                counts.getValue(TvTimeMatchFilter.NEEDS_REVIEW) + 1
+            TvTimeMatchConfidence.UNMATCHED -> counts[TvTimeMatchFilter.UNMATCHED] =
+                counts.getValue(TvTimeMatchFilter.UNMATCHED) + 1
+            TvTimeMatchConfidence.INVALID,
+            TvTimeMatchConfidence.SKIPPED -> Unit
+        }
+        if (action == TvTimeReviewAction.SKIP) {
+            counts[TvTimeMatchFilter.SKIPPED] = counts.getValue(TvTimeMatchFilter.SKIPPED) + 1
+        }
+    }
+
+    report.media.forEach { review ->
+        addCounts(review.confidence, review.action)
+        if (visibleMedia != null && review.matches(filter)) visibleMedia += review
+    }
+    report.episodes.forEach { review ->
+        addCounts(review.confidence, review.action)
+        if (review.matches(filter)) {
+            visibleEpisodeGroups.getOrPut(review.source.parentRecordId to review.source.seasonNumber) {
+                mutableListOf()
+            }
+                .add(review)
+        }
+    }
+
+    counts[TvTimeMatchFilter.ALL] = report.media.size + report.episodes.size + invalidRecordCount
+    counts[TvTimeMatchFilter.INVALID] = invalidRecordCount
+
+    val groups = visibleEpisodeGroups.entries
+        .sortedWith(
+            compareBy<Map.Entry<Pair<String, Int>, MutableList<TvTimeEpisodeReview>>> {
+                parentTitles[it.key.first].orEmpty().lowercase()
+            }.thenBy { it.key.second }
+        )
+        .map { (key, reviews) ->
+            TvTimeEpisodeReviewGroup(
+                parentRecordId = key.first,
+                seasonNumber = key.second,
+                seriesTitle = parentTitles[key.first].orEmpty(),
+                reviews = reviews.toList()
+            )
+        }
+
+    return TvTimeReviewUiState(
+        visibleMedia = visibleMedia ?: report.media,
+        visibleEpisodeGroups = groups,
+        filterCounts = counts.toMap(),
+        showInvalidRecordSummary = filter in setOf(TvTimeMatchFilter.ALL, TvTimeMatchFilter.INVALID) &&
+            invalidRecordCount > 0
+    )
+}
+
+private fun TvTimeMediaReview.matches(filter: TvTimeMatchFilter): Boolean = when (filter) {
+    TvTimeMatchFilter.ALL -> true
+    TvTimeMatchFilter.EXACT -> confidence == TvTimeMatchConfidence.EXACT
+    TvTimeMatchFilter.HIGH_CONFIDENCE -> confidence == TvTimeMatchConfidence.HIGH_CONFIDENCE
+    TvTimeMatchFilter.NEEDS_REVIEW -> confidence == TvTimeMatchConfidence.AMBIGUOUS
+    TvTimeMatchFilter.UNMATCHED -> confidence == TvTimeMatchConfidence.UNMATCHED
+    TvTimeMatchFilter.INVALID -> confidence == TvTimeMatchConfidence.INVALID
+    TvTimeMatchFilter.SKIPPED -> action == TvTimeReviewAction.SKIP
+}
+
+private fun TvTimeEpisodeReview.matches(filter: TvTimeMatchFilter): Boolean = when (filter) {
+    TvTimeMatchFilter.ALL -> true
+    TvTimeMatchFilter.EXACT -> confidence == TvTimeMatchConfidence.EXACT
+    TvTimeMatchFilter.HIGH_CONFIDENCE -> confidence == TvTimeMatchConfidence.HIGH_CONFIDENCE
+    TvTimeMatchFilter.NEEDS_REVIEW -> confidence == TvTimeMatchConfidence.AMBIGUOUS
+    TvTimeMatchFilter.UNMATCHED -> confidence == TvTimeMatchConfidence.UNMATCHED
+    TvTimeMatchFilter.INVALID -> confidence == TvTimeMatchConfidence.INVALID
+    TvTimeMatchFilter.SKIPPED -> action == TvTimeReviewAction.SKIP
+}
 
 @HiltViewModel
 internal class TvTimeImportViewModel @Inject constructor(
@@ -131,7 +241,18 @@ internal class TvTimeImportViewModel @Inject constructor(
                 com.cydoniancitizen.bingee.core.result.AppError.RateLimited -> TvTimeImportUiFailure.RATE_LIMIT
                 else -> null
             }
-            mutableState.update { it.copy(stage = TvTimeImportStage.REVIEW, matchReport = report, failure = failure) }
+            mutableState.update { state ->
+                state.copy(
+                    stage = TvTimeImportStage.REVIEW,
+                    matchReport = report,
+                    failure = failure,
+                    reviewState = deriveTvTimeReviewUiState(
+                        report,
+                        state.summary?.invalidRecordCount ?: 0,
+                        state.selectedFilter
+                    )
+                )
+            }
         }
     }
 
@@ -209,21 +330,37 @@ internal class TvTimeImportViewModel @Inject constructor(
             }
         }
         if (isBusy()) return
+        val nextReport = current.copy(media = updatedMedia)
         operation?.cancel()
         mutableState.update {
             it.copy(
                 stage = TvTimeImportStage.MATCHING,
                 failure = null,
-                matchReport = current.copy(media = updatedMedia)
+                matchReport = nextReport,
+                reviewState = deriveTvTimeReviewUiState(
+                    nextReport,
+                    it.summary?.invalidRecordCount ?: 0,
+                    it.selectedFilter
+                )
             )
         }
         operation = viewModelScope.launch {
             val episodes = matcher.rematchEpisodes(source, updatedMedia)
             mutableState.update { state ->
-                state.copy(
-                    stage = TvTimeImportStage.REVIEW,
-                    matchReport = state.matchReport?.copy(episodes = episodes)
-                )
+                val report = state.matchReport?.copy(episodes = episodes)
+                if (report == null) {
+                    state
+                } else {
+                    state.copy(
+                        stage = TvTimeImportStage.REVIEW,
+                        matchReport = report,
+                        reviewState = deriveTvTimeReviewUiState(
+                            report,
+                            state.summary?.invalidRecordCount ?: 0,
+                            state.selectedFilter
+                        )
+                    )
+                }
             }
         }
     }
@@ -334,10 +471,29 @@ internal class TvTimeImportViewModel @Inject constructor(
         mutableState.value = TvTimeImportUiState()
     }
 
-    fun setFilter(filter: TvTimeMatchFilter) = mutableState.update { it.copy(selectedFilter = filter) }
+    fun setFilter(filter: TvTimeMatchFilter) = mutableState.update { state ->
+        state.copy(
+            selectedFilter = filter,
+            reviewState = state.matchReport?.let {
+                deriveTvTimeReviewUiState(it, state.summary?.invalidRecordCount ?: 0, filter)
+            }
+        )
+    }
 
     private fun updateReport(transform: (TvTimeMatchReport) -> TvTimeMatchReport) {
-        mutableState.update { state -> state.matchReport?.let { state.copy(matchReport = transform(it)) } ?: state }
+        mutableState.update { state ->
+            state.matchReport?.let { report ->
+                val updatedReport = transform(report)
+                state.copy(
+                    matchReport = updatedReport,
+                    reviewState = deriveTvTimeReviewUiState(
+                        updatedReport,
+                        state.summary?.invalidRecordCount ?: 0,
+                        state.selectedFilter
+                    )
+                )
+            } ?: state
+        }
     }
 
     private fun isBusy(): Boolean = mutableState.value.stage in setOf(

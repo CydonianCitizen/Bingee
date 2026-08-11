@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
@@ -193,6 +194,56 @@ class DefaultLibraryRepositoryTest {
     }
 
     @Test
+    fun continueWatchingUsesLocalProgressAndNextEpisodeWithoutMoviesOrCompletedSeries() = runBlocking {
+        val partial = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Partial Series"
+        )
+        val completed = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "200"),
+            mediaType = MediaType.SERIES,
+            title = "Completed Series"
+        )
+        val animated = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "300"),
+            mediaType = MediaType.SERIES,
+            title = "Animated Series"
+        )
+        repository.add(mediaResult())
+        repository.add(partial)
+        repository.add(completed)
+        repository.add(animated)
+        storeSeries("100", 3)
+        storeSeries("200", 2)
+        storeSeries("300", 2)
+
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-episode-1", today(), now)
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "200-episode-1", today(), now)
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "200-episode-2",
+            today(),
+            now.plusSeconds(1)
+        )
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "300-episode-1",
+            today(),
+            now.minusSeconds(1)
+        )
+
+        val items = (repository.observeContinueWatching().first() as AppResult.Success).value
+
+        assertEquals(
+            listOf(partial.externalRef, animated.externalRef),
+            items.map { it.mediaRef }
+        )
+        assertEquals(1, items.first().progress.watchedEpisodes)
+        assertEquals(EpisodePosition(1, 2), items.first().nextEpisode)
+    }
+
+    @Test
     fun ratingSurvivesRemovalAndReAddAndAppearsInLibraryProjection() = runBlocking {
         val result = mediaResult()
         repository.add(result)
@@ -221,4 +272,41 @@ class DefaultLibraryRepositoryTest {
         releaseDate = LocalDate.of(2016, 11, 11),
         overview = "First contact."
     )
+
+    private suspend fun storeSeries(seriesId: String, episodeCount: Int) {
+        database.seriesDao().storeSeasonEpisodes(
+            MediaSource.TMDB,
+            seriesId,
+            SeasonEntity(
+                localMediaId = 0,
+                source = MediaSource.TMDB,
+                externalId = "$seriesId-season-1",
+                seasonNumber = 1,
+                name = "Season 1",
+                overview = null,
+                posterUrl = null,
+                airDate = null,
+                episodeCount = episodeCount,
+                metadataUpdatedAt = now,
+                episodesFetchedAt = null
+            ),
+            (1..episodeCount).map { number ->
+                EpisodeEntity(
+                    localSeasonId = 0,
+                    source = MediaSource.TMDB,
+                    externalId = "$seriesId-episode-$number",
+                    episodeNumber = number,
+                    title = "Episode $number",
+                    overview = null,
+                    airDate = null,
+                    runtimeMinutes = null,
+                    stillUrl = null,
+                    metadataUpdatedAt = now
+                )
+            },
+            now
+        )
+    }
+
+    private fun today(): LocalDate = LocalDate.of(2026, 8, 1)
 }

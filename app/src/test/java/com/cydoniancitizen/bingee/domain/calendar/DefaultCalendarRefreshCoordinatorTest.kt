@@ -1,11 +1,14 @@
 package com.cydoniancitizen.bingee.domain.calendar
 
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
+import com.cydoniancitizen.bingee.core.model.BackgroundRefreshTarget
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
 import com.cydoniancitizen.bingee.core.model.CachedSeason
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
+import com.cydoniancitizen.bingee.core.model.Episode
+import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaDetails
@@ -15,6 +18,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.model.SeasonProgress
+import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
@@ -89,7 +93,7 @@ class DefaultCalendarRefreshCoordinatorTest {
     fun seasonFailureIsPartialAndDoesNotCancelOtherSelectedSeasons() = runTest {
         val seriesRef = ref("10")
         val cached = listOf(
-            season(seriesRef, 1, LocalDate.of(2020, 1, 1), episodesCached = true),
+            season(seriesRef, 1, LocalDate.of(2026, 8, 1), episodesCached = true),
             season(seriesRef, 2, LocalDate.of(2026, 9, 1), episodesCached = false)
         )
         val series = FakeSeriesRepository(
@@ -110,6 +114,104 @@ class DefaultCalendarRefreshCoordinatorTest {
         assertTrue(summary.operationsSucceeded >= 2)
         assertEquals(1, summary.operationsFailed)
         assertEquals(1, calendar.markCalls)
+    }
+
+    @Test
+    fun oldFullyReleasedFreshSeasonIsSkipped() = runTest {
+        val seriesRef = ref("10")
+        val series = FakeSeriesRepository(
+            seasons = mapOf(
+                seriesRef to listOf(
+                    season(seriesRef, 1, LocalDate.of(2020, 1, 1), episodesCached = true),
+                    season(seriesRef, 2, LocalDate.of(2026, 9, 1), episodesCached = true)
+                )
+            )
+        )
+
+        coordinator(
+            listOf(entry("10", MediaType.SERIES)),
+            FakeDetailsRepository(),
+            series,
+            FakeCalendarRepository()
+        ).refresh()
+
+        assertEquals(listOf(2), series.calls)
+    }
+
+    @Test
+    fun staleSeasonStillRefreshesWhenItMayContainNewReleaseData() = runTest {
+        val seriesRef = ref("10")
+        val series = FakeSeriesRepository(
+            seasons = mapOf(
+                seriesRef to listOf(
+                    season(
+                        seriesRef,
+                        1,
+                        LocalDate.of(2020, 1, 1),
+                        episodesCached = true,
+                        fetchedAt = now.minusSeconds(86_400),
+                        freshness = CacheFreshness.STALE
+                    )
+                )
+            )
+        )
+
+        coordinator(
+            listOf(entry("10", MediaType.SERIES)),
+            FakeDetailsRepository(),
+            series,
+            FakeCalendarRepository()
+        ).refresh()
+
+        assertEquals(listOf(1), series.calls)
+    }
+
+    @Test
+    fun oldSeasonWithUpcomingEpisodeStillRefreshes() = runTest {
+        val seriesRef = ref("10")
+        val cached = season(seriesRef, 1, LocalDate.of(2020, 1, 1), episodesCached = true).copy(
+            episodes = listOf(
+                TrackedEpisode(
+                    episode = Episode(
+                        seriesRef = seriesRef,
+                        seasonRef = ref("s1"),
+                        externalRef = ref("e1"),
+                        seasonNumber = 1,
+                        episodeNumber = 1,
+                        title = "Upcoming",
+                        airDate = LocalDate.of(2026, 8, 10)
+                    ),
+                    watchState = EpisodeWatchState.Unavailable
+                )
+            )
+        )
+        val series = FakeSeriesRepository(mapOf(seriesRef to listOf(cached)))
+
+        coordinator(
+            listOf(entry("10", MediaType.SERIES)),
+            FakeDetailsRepository(),
+            series,
+            FakeCalendarRepository()
+        ).refresh()
+
+        assertEquals(listOf(1), series.calls)
+    }
+
+    @Test
+    fun manualRefreshIsBoundedToTwentyTargets() = runTest {
+        val details = FakeDetailsRepository()
+        val targets = (1..25).map {
+            BackgroundRefreshTarget(ref(it.toString()), MediaType.MOVIE)
+        }
+
+        coordinator(
+            emptyList(),
+            details,
+            FakeSeriesRepository(),
+            FakeCalendarRepository()
+        ).refresh(targets)
+
+        assertEquals(20, details.calls.size)
     }
 
     @Test
@@ -182,20 +284,26 @@ class DefaultCalendarRefreshCoordinatorTest {
         addedAt = now
     )
 
-    private fun season(seriesRef: ExternalMediaRef, number: Int, date: LocalDate?, episodesCached: Boolean) =
-        CachedSeason(
-            season = Season(
-                seriesRef = seriesRef,
-                externalRef = ref("s$number"),
-                seasonNumber = number,
-                airDate = date
-            ),
-            metadataUpdatedAt = now,
-            episodesFetchedAt = now.takeIf { episodesCached },
-            episodes = emptyList(),
-            progress = SeasonProgress.EMPTY,
-            episodeCacheFreshness = CacheFreshness.FRESH.takeIf { episodesCached }
-        )
+    private fun season(
+        seriesRef: ExternalMediaRef,
+        number: Int,
+        date: LocalDate?,
+        episodesCached: Boolean,
+        fetchedAt: Instant = now,
+        freshness: CacheFreshness? = CacheFreshness.FRESH.takeIf { episodesCached }
+    ) = CachedSeason(
+        season = Season(
+            seriesRef = seriesRef,
+            externalRef = ref("s$number"),
+            seasonNumber = number,
+            airDate = date
+        ),
+        metadataUpdatedAt = fetchedAt,
+        episodesFetchedAt = fetchedAt.takeIf { episodesCached },
+        episodes = emptyList(),
+        progress = SeasonProgress.EMPTY,
+        episodeCacheFreshness = freshness
+    )
 
     private fun ref(id: String) = ExternalMediaRef(MediaSource.TMDB, id)
 
@@ -251,11 +359,8 @@ class DefaultCalendarRefreshCoordinatorTest {
         override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
             flowOf(AppResult.Success(emptyList()))
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = flowOf(AppResult.Success(lastMarked))
-        override suspend fun getEvents(
-            fromDate: LocalDate,
-            throughDate: LocalDate,
-            limit: Int
-        ): AppResult<List<ReleaseEvent>> = AppResult.Success(emptyList())
+        override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> =
+            AppResult.Success(emptyList())
         override suspend fun backfill(): AppResult<Unit> {
             backfillCalls++
             return AppResult.Success(Unit)

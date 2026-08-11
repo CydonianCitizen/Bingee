@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.domain.calendar
 
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialStatus
 import com.cydoniancitizen.bingee.core.model.BackgroundRefreshTarget
+import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedSeason
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
@@ -48,7 +49,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     }
 
     override suspend fun refresh(targets: List<BackgroundRefreshTarget>): CalendarRefreshSummary {
-        val entries = targets.distinctBy { it.mediaRef to it.mediaType }
+        val entries = targets.distinctBy { it.mediaRef to it.mediaType }.take(MAX_REFRESH_TARGETS)
         if (entries.isEmpty()) return noWorkSummary()
         val tmdbAvailable = credentialRepository.status.value.canRefresh()
         val semaphore = Semaphore(REMOTE_CONCURRENCY_LIMIT)
@@ -131,6 +132,9 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
 
     companion object {
         const val REMOTE_CONCURRENCY_LIMIT = 3
+
+        // ponytail: manual refresh capped at 20 titles; page only if larger libraries need it.
+        const val MAX_REFRESH_TARGETS = 20
     }
 }
 
@@ -140,25 +144,21 @@ internal fun selectRelevantSeasonNumbers(
     today: LocalDate,
     window: ReleaseCalendarWindow
 ): List<Int> {
-    val selected = linkedSetOf<Int>()
-    beforeRefresh
-        .filter { it.episodesFetchedAt != null }
-        .forEach { selected += it.season.seasonNumber }
-    afterRefresh
-        .filter { it.season.seasonNumber > 0 && it.season.airDate?.let { date -> !date.isBefore(today) } == true }
-        .forEach { selected += it.season.seasonNumber }
-    afterRefresh
-        .filter { it.season.seasonNumber > 0 }
-        .maxByOrNull { it.season.seasonNumber }
-        ?.let { selected += it.season.seasonNumber }
-    afterRefresh
-        .firstOrNull { it.season.seasonNumber == 0 }
-        ?.takeIf { special ->
-            special.episodesFetchedAt != null ||
-                special.season.airDate?.let { !it.isBefore(window.startDate(today)) } == true
-        }
-        ?.let { selected += 0 }
-    return selected.sorted()
+    val seasons = (afterRefresh + beforeRefresh).distinctBy { it.season.seasonNumber }
+    val recentStart = window.startDate(today)
+    fun CachedSeason.hasUpcomingEpisode() = episodes.any { episode ->
+        episode.episode.airDate?.isBefore(today) != true
+    }
+    fun CachedSeason.isRelevant() = episodesFetchedAt == null ||
+        episodeCacheFreshness == CacheFreshness.STALE ||
+        season.airDate?.isBefore(recentStart) == false ||
+        hasUpcomingEpisode()
+
+    return seasons
+        .filter { it.isRelevant() }
+        .map { it.season.seasonNumber }
+        .distinct()
+        .sorted()
 }
 
 private fun TmdbCredentialStatus.canRefresh(): Boolean = when (this) {

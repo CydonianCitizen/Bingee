@@ -134,7 +134,7 @@ class ReleaseEventDaoTest {
         val from = LocalDate.of(2026, 8, 3)
         val through = LocalDate.of(2026, 8, 10)
 
-        val candidates = dao.getActiveEventsBetween(from, through, 200)
+        val candidates = dao.getActiveEventsBetween(from, through)
         assertEquals(3, candidates.size)
         assertEquals(
             listOf(
@@ -146,9 +146,9 @@ class ReleaseEventDaoTest {
         )
 
         database.libraryDao().removeMembership(MediaSource.TMDB, "42")
-        assertEquals(2, dao.getActiveEventsBetween(from, through, 200).size)
+        assertEquals(2, dao.getActiveEventsBetween(from, through).size)
         database.libraryDao().addExistingToLibrary(MediaSource.TMDB, "42", now)
-        assertEquals(3, dao.getActiveEventsBetween(from, through, 200).size)
+        assertEquals(3, dao.getActiveEventsBetween(from, through).size)
     }
 
     private fun insertFixture() {

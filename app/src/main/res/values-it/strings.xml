@@ -75,7 +75,6 @@
     <string name="library_action_updating">Aggiornamento libreria…</string>
     <string name="search_action_add_watch_later">Aggiungi a Da vedere</string>
     <string name="search_action_in_watch_later">In Da vedere</string>
-    <string name="library_title">Libreria</string>
     <string name="profile_title">Profilo</string>
     <string name="profile_tab_watched">Visti</string>
     <string name="profile_tab_watch_later">Da vedere</string>
@@ -107,6 +106,10 @@
     <string name="profile_empty_action_search">Esplora in Cerca</string>
     <string name="profile_empty_action_clear">Cancella ricerca</string>
     <string name="home_featured_releases">Uscite in evidenza</string>
+    <string name="home_continue_watching">Continua a vedere</string>
+    <string name="home_continue_watching_progress">%1$d di %2$d episodi</string>
+    <string name="home_continue_watching_next_episode">Prossimo: Stagione %1$d • Episodio %2$d</string>
+    <string name="home_open_continue_details">Apri dettagli per %1$s</string>
     <string name="action_add_to_watchlist">Aggiungi alla lista</string>
     <string name="action_in_watchlist">Nella lista</string>
     <string name="notifications_title">Notifiche</string>
@@ -227,6 +230,11 @@
     <string name="update_latest_version">Ultima versione: %1$s</string>
     <string name="update_view_release">Visualizza release</string>
     <string name="update_error">Impossibile controllare gli aggiornamenti.</string>
+    <string name="update_error_network">Nessuna connessione di rete. Controlla la connessione e riprova.</string>
+    <string name="update_error_github">GitHub non è temporaneamente disponibile. Riprova più tardi.</string>
+    <string name="update_error_rate_limited">Limite di richieste GitHub raggiunto. Riprova più tardi.</string>
+    <string name="update_error_invalid_response">GitHub ha restituito una release non valida.</string>
+    <string name="update_error_unexpected">Impossibile controllare gli aggiornamenti.</string>
     <string name="statistics_title">Statistiche visione</string>
     <string name="statistics_movies_watched">Film visti</string>
     <string name="statistics_tv_completed">Serie TV completate</string>

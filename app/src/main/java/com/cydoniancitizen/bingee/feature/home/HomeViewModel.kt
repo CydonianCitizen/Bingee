@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseDateGroup
 import com.cydoniancitizen.bingee.core.model.groupReleaseEvents
@@ -18,12 +19,13 @@ import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -50,6 +52,7 @@ internal data class HomeUiState(
     val lastSuccessfulRefreshAt: Instant? = null,
     val today: LocalDate,
     val featuredReleases: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
+    val continueWatching: List<ContinueWatchingItem> = emptyList(),
     val libraryMemberships: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet(),
     val addingToWatchlist: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet()
 )
@@ -66,22 +69,25 @@ internal class HomeViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(HomeUiState(today = dateSource.currentDate()))
     private val localRetry = MutableStateFlow(0)
+    private var refreshJob: Job? = null
+    private var refreshGeneration = 0L
     val uiState: StateFlow<HomeUiState> = mutableUiState.asStateFlow()
 
     init {
         observeLocalCalendar()
         observeLibraryMemberships()
-        loadFeaturedReleases()
-        runLocalBackfill()
+        observeContinueWatching()
+        replaceRefreshOperation { generation ->
+            coroutineScope {
+                launch { backfillLocalCalendar(generation) }
+                launch { loadFeaturedReleases(generation) }
+            }
+        }
     }
 
     fun refresh() {
-        while (true) {
-            val current = mutableUiState.value
-            if (current.refresh == HomeRefreshState.Refreshing) return
-            if (mutableUiState.compareAndSet(current, current.copy(refresh = HomeRefreshState.Refreshing))) break
-        }
-        viewModelScope.launch {
+        mutableUiState.update { it.copy(refresh = HomeRefreshState.Refreshing) }
+        replaceRefreshOperation { generation ->
             val summary = try {
                 refreshCoordinator.refresh()
             } catch (cancelled: CancellationException) {
@@ -96,8 +102,22 @@ internal class HomeViewModel @Inject constructor(
                     representativeError = AppError.Unknown
                 )
             }
-            mutableUiState.update { it.copy(refresh = summary.toUiState()) }
-            loadFeaturedReleases()
+            if (generation == refreshGeneration) {
+                mutableUiState.update { it.copy(refresh = summary.toUiState()) }
+                loadFeaturedReleases(generation)
+            }
+        }
+    }
+
+    private fun replaceRefreshOperation(block: suspend (Long) -> Unit) {
+        refreshJob?.cancel()
+        val generation = ++refreshGeneration
+        refreshJob = viewModelScope.launch {
+            try {
+                block(generation)
+            } finally {
+                if (generation == refreshGeneration) refreshJob = null
+            }
         }
     }
 
@@ -123,8 +143,12 @@ internal class HomeViewModel @Inject constructor(
 
     fun retryLocal() {
         localRetry.update { it + 1 }
-        runLocalBackfill()
-        loadFeaturedReleases()
+        replaceRefreshOperation { generation ->
+            coroutineScope {
+                launch { backfillLocalCalendar(generation) }
+                launch { loadFeaturedReleases(generation) }
+            }
+        }
     }
 
     fun dismissRefreshFeedback() {
@@ -168,12 +192,13 @@ internal class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun runLocalBackfill() {
-        viewModelScope.launch {
-            val result = calendarRepository.backfill()
-            if (result is AppResult.Failure && mutableUiState.value.content !is HomeContentState.Events) {
-                mutableUiState.update { it.copy(content = HomeContentState.Error(result.error)) }
-            }
+    private suspend fun backfillLocalCalendar(generation: Long) {
+        val result = calendarRepository.backfill()
+        if (generation == refreshGeneration &&
+            result is AppResult.Failure &&
+            mutableUiState.value.content !is HomeContentState.Events
+        ) {
+            mutableUiState.update { it.copy(content = HomeContentState.Error(result.error)) }
         }
     }
 
@@ -187,15 +212,23 @@ internal class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun loadFeaturedReleases() {
+    private fun observeContinueWatching() {
         viewModelScope.launch {
-            when (val result = featuredRepository.getFeaturedReleases()) {
-                is AppResult.Success -> {
-                    mutableUiState.update { it.copy(featuredReleases = result.value) }
+            libraryRepository.observeContinueWatching().collect { result ->
+                if (result is AppResult.Success) {
+                    mutableUiState.update { it.copy(continueWatching = result.value) }
                 }
-                is AppResult.Failure -> {
-                    // Keep existing or empty
-                }
+            }
+        }
+    }
+
+    private suspend fun loadFeaturedReleases(generation: Long) {
+        when (val result = featuredRepository.getFeaturedReleases()) {
+            is AppResult.Success -> if (generation == refreshGeneration) {
+                mutableUiState.update { it.copy(featuredReleases = result.value) }
+            }
+            is AppResult.Failure -> {
+                // Keep existing or empty
             }
         }
     }

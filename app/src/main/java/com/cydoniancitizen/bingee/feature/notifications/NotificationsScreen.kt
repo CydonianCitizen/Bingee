@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,8 +70,10 @@ internal fun NotificationsScreen(
     val refreshFailedText = stringResource(R.string.notifications_refresh_failed)
     val retryText = stringResource(R.string.action_retry)
 
-    LaunchedEffect(state.refreshState) {
-        if (state.refreshState == NotificationRefreshState.Failed) {
+    LaunchedEffect(state.refreshState, state.error) {
+        if (state.refreshState == NotificationRefreshState.Failed &&
+            state.contentState !is NotificationsContentState.Error
+        ) {
             val result = snackbarHostState.showSnackbar(
                 message = refreshFailedText,
                 actionLabel = retryText
@@ -148,6 +151,30 @@ internal fun NotificationsScreen(
                         onItemClick = { event -> onOpenDetails(event.mediaRef, MediaType.SERIES) },
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+
+                is NotificationsContentState.Error -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
+                            modifier = Modifier.padding(BingeeDimensions.screenPadding)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.notifications_refresh_failed),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Button(
+                                onClick = viewModel::refresh,
+                                enabled = state.refreshState != NotificationRefreshState.Refreshing
+                            ) {
+                                Text(stringResource(R.string.action_retry))
+                            }
+                        }
+                    }
                 }
             }
         }

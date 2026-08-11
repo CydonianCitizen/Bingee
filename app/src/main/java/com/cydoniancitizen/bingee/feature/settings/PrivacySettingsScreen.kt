@@ -39,7 +39,7 @@ import com.cydoniancitizen.bingee.feature.credential.CredentialEditor
 internal fun PrivacySettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: PrivacyViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -58,7 +58,7 @@ internal fun PrivacySettingsScreen(
 
 @Composable
 internal fun PrivacySettingsContent(
-    state: SettingsUiState,
+    state: PrivacyUiState,
     onInputChanged: (String) -> Unit,
     onSubmit: (String) -> Unit,
     onRetry: (String) -> Unit,

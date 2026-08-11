@@ -33,6 +33,16 @@ internal interface NotificationDeliveryDao {
         leadDays: Int
     ): Boolean
 
+    @Query(
+        "SELECT * FROM notification_deliveries " +
+            "WHERE event_date BETWEEN :fromDate AND :throughDate AND lead_days = :leadDays"
+    )
+    suspend fun findBetween(
+        fromDate: LocalDate,
+        throughDate: LocalDate,
+        leadDays: Int
+    ): List<NotificationDeliveryEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(delivery: NotificationDeliveryEntity): Long
 

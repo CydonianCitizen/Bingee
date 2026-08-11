@@ -1,12 +1,15 @@
 package com.cydoniancitizen.bingee.data.library
 
 import android.database.sqlite.SQLiteException
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
+import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.applyLibraryStateAndSort
 import com.cydoniancitizen.bingee.core.model.normalizeLibrarySearch
 import com.cydoniancitizen.bingee.core.result.AppError
@@ -16,6 +19,7 @@ import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
+import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Clock
 import java.time.Instant
@@ -69,6 +73,10 @@ internal class DefaultLibraryRepository @Inject constructor(
         libraryDao.observeMembershipRefs().asPersistenceResult { rows ->
             rows.mapTo(linkedSetOf()) { it.toDomain() }
         }
+
+    override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
+        libraryDao.observeContinueWatchingRows(MediaSource.TMDB, LocalDate.now(clock))
+            .asPersistenceResult { rows -> ContinueWatchingPolicy.select(rows.map { it.toDomain() }) }
 
     override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> {
         val prepared =
@@ -164,6 +172,26 @@ internal class DefaultLibraryRepository @Inject constructor(
             }
         }
 }
+
+private fun LibraryDao.ContinueWatchingRow.toDomain() = ContinueWatchingItem(
+    mediaRef = ExternalMediaRef(source, externalId),
+    mediaType = mediaType,
+    title = title,
+    posterUrl = posterUrl,
+    progress = SeriesProgress(
+        watchedEpisodes = watchedEpisodes,
+        trackableEpisodes = trackableEpisodes,
+        completedSeasons = completedSeasons,
+        trackableSeasons = trackableSeasons,
+        isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes
+    ),
+    nextEpisode = if (nextSeasonNumber != null && nextEpisodeNumber != null) {
+        EpisodePosition(nextSeasonNumber, nextEpisodeNumber)
+    } else {
+        null
+    },
+    updatedAt = lastProgressAt
+)
 
 internal fun String.toSqlLikePattern(): String {
     val normalized = normalizeLibrarySearch(this)

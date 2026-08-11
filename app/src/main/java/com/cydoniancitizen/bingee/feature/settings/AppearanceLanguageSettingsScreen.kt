@@ -42,7 +42,7 @@ import com.cydoniancitizen.bingee.data.settings.AppTheme
 internal fun AppearanceLanguageSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: AppearanceLanguageViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 

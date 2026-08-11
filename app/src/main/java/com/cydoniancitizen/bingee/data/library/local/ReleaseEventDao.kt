@@ -43,6 +43,7 @@ internal abstract class ReleaseEventDao {
         LEFT JOIN seasons ON seasons.local_season_id = release_events.local_season_id
         LEFT JOIN episodes ON episodes.local_episode_id = release_events.local_episode_id
         WHERE release_events.event_date >= :fromDate
+          AND (:throughDate IS NULL OR release_events.event_date <= :throughDate)
         ORDER BY release_events.event_date ASC,
                  CASE release_events.event_type
                      WHEN 'EPISODE_AIRING' THEN 0
@@ -56,7 +57,7 @@ internal abstract class ReleaseEventDao {
                  release_events.event_type ASC
         """
     )
-    abstract fun observeActiveEvents(fromDate: LocalDate): Flow<List<ReleaseEventRow>>
+    abstract fun observeActiveEvents(fromDate: LocalDate, throughDate: LocalDate? = null): Flow<List<ReleaseEventRow>>
 
     @Query(
         """
@@ -96,14 +97,9 @@ internal abstract class ReleaseEventDao {
                  release_events.subject_type ASC,
                  release_events.subject_external_id ASC,
                  release_events.event_type ASC
-        LIMIT :limit
         """
     )
-    abstract suspend fun getActiveEventsBetween(
-        fromDate: LocalDate,
-        throughDate: LocalDate,
-        limit: Int
-    ): List<ReleaseEventRow>
+    abstract suspend fun getActiveEventsBetween(fromDate: LocalDate, throughDate: LocalDate): List<ReleaseEventRow>
 
     @Query(
         "SELECT last_successful_refresh_at FROM calendar_refresh_state " +

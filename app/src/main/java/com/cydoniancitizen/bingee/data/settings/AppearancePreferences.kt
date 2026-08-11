@@ -8,8 +8,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -80,17 +78,6 @@ internal class DataStoreAppearancePreferences @Inject constructor(
         }
         .map { prefs ->
             val raw = prefs[KEY_LANGUAGE]
-            if (raw == "SYSTEM") {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        context.bingeePreferences.edit { p ->
-                            if (p[KEY_LANGUAGE] == "SYSTEM") {
-                                p[KEY_LANGUAGE] = AppLanguage.ENGLISH.name
-                            }
-                        }
-                    } catch (_: Exception) {}
-                }
-            }
             parseLanguage(raw)
         }
 

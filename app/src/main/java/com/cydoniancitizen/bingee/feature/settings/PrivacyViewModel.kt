@@ -8,9 +8,6 @@ import com.cydoniancitizen.bingee.core.credential.TmdbCredentialValidation
 import com.cydoniancitizen.bingee.core.credential.TmdbCredentialValidator
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
-import com.cydoniancitizen.bingee.data.settings.AppLanguage
-import com.cydoniancitizen.bingee.data.settings.AppTheme
-import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 import com.cydoniancitizen.bingee.domain.repository.TmdbCredentialRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -21,14 +18,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-internal data class SettingsUiState(
+internal data class PrivacyUiState(
     val credentialStatus: TmdbCredentialStatus = TmdbCredentialStatus.Checking,
     val inputStatus: TmdbCredentialInputStatus = TmdbCredentialInputStatus.EMPTY,
     val error: AppError? = null,
     val showRemovalConfirmation: Boolean = false,
-    val isRemoving: Boolean = false,
-    val theme: AppTheme = AppTheme.SYSTEM_DEFAULT,
-    val language: AppLanguage = AppLanguage.ENGLISH
+    val isRemoving: Boolean = false
 ) {
     val isSubmitting: Boolean
         get() = credentialStatus is TmdbCredentialStatus.Validating
@@ -48,13 +43,12 @@ internal data class SettingsUiState(
 }
 
 @HiltViewModel
-internal class SettingsViewModel @Inject constructor(
+internal class PrivacyViewModel @Inject constructor(
     private val repository: TmdbCredentialRepository,
-    private val validator: TmdbCredentialValidator,
-    private val appearancePreferences: AppearancePreferences
+    private val validator: TmdbCredentialValidator
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(SettingsUiState())
-    val uiState: StateFlow<SettingsUiState> = mutableUiState.asStateFlow()
+    private val mutableUiState = MutableStateFlow(PrivacyUiState())
+    val uiState: StateFlow<PrivacyUiState> = mutableUiState.asStateFlow()
     private var validationJob: Job? = null
     private var removalJob: Job? = null
 
@@ -62,16 +56,6 @@ internal class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.status.collect { status ->
                 mutableUiState.update { current -> current.copy(credentialStatus = status) }
-            }
-        }
-        viewModelScope.launch {
-            appearancePreferences.observeTheme().collect { theme ->
-                mutableUiState.update { it.copy(theme = theme) }
-            }
-        }
-        viewModelScope.launch {
-            appearancePreferences.observeLanguage().collect { language ->
-                mutableUiState.update { it.copy(language = language) }
             }
         }
     }
@@ -152,19 +136,6 @@ internal class SettingsViewModel @Inject constructor(
         if (validationJob?.isActive == true) {
             repository.cancelValidation()
             validationJob?.cancel()
-        }
-    }
-
-    fun setTheme(theme: AppTheme) {
-        viewModelScope.launch {
-            appearancePreferences.setTheme(theme)
-        }
-    }
-
-    fun setLanguage(language: AppLanguage) {
-        if (language == mutableUiState.value.language) return
-        viewModelScope.launch {
-            appearancePreferences.setLanguage(language)
         }
     }
 }

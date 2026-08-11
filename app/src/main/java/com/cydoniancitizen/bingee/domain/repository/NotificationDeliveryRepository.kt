@@ -8,6 +8,10 @@ import java.time.LocalDate
 interface NotificationDeliveryRepository {
     suspend fun contains(identity: NotificationDeliveryIdentity): AppResult<Boolean>
 
+    suspend fun findDelivered(
+        identities: Set<NotificationDeliveryIdentity>
+    ): AppResult<Set<NotificationDeliveryIdentity>>
+
     suspend fun record(delivery: NotificationDelivery): AppResult<Unit>
 
     suspend fun prune(eventDateBefore: LocalDate): AppResult<Int>

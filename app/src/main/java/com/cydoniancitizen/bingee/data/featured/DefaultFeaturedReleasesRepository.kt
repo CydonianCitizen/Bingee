@@ -10,6 +10,8 @@ import com.cydoniancitizen.bingee.data.tmdb.search.TmdbTvSearchMapper
 import com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 @Singleton
 internal class DefaultFeaturedReleasesRepository @Inject constructor(
@@ -26,34 +28,39 @@ internal class DefaultFeaturedReleasesRepository @Inject constructor(
         val auth = "Bearer ${credential.reveal()}"
         val language = appearancePreferences.getEffectiveTmdbLanguage()
 
-        val moviesResult = executeTmdbRequest(
-            request = {
-                service.discoverMovies(
-                    authorization = auth,
-                    region = "IT",
-                    includeAdult = false,
-                    sortBy = "popularity.desc",
-                    voteCountGte = 10,
-                    language = language,
-                    page = 1
+        val (moviesResult, tvResult) = coroutineScope {
+            val movies = async {
+                executeTmdbRequest(
+                    request = {
+                        service.discoverMovies(
+                            authorization = auth,
+                            includeAdult = false,
+                            sortBy = "popularity.desc",
+                            voteCountGte = 10,
+                            language = language,
+                            page = 1
+                        )
+                    },
+                    transform = { TmdbMovieSearchMapper.map(it, 1) }
                 )
-            },
-            transform = { TmdbMovieSearchMapper.map(it, 1) }
-        )
-
-        val tvResult = executeTmdbRequest(
-            request = {
-                service.discoverTvSeries(
-                    authorization = auth,
-                    includeAdult = false,
-                    sortBy = "popularity.desc",
-                    voteCountGte = 5,
-                    language = language,
-                    page = 1
+            }
+            val tv = async {
+                executeTmdbRequest(
+                    request = {
+                        service.discoverTvSeries(
+                            authorization = auth,
+                            includeAdult = false,
+                            sortBy = "popularity.desc",
+                            voteCountGte = 5,
+                            language = language,
+                            page = 1
+                        )
+                    },
+                    transform = { TmdbTvSearchMapper.map(it, 1) }
                 )
-            },
-            transform = { TmdbTvSearchMapper.map(it, 1) }
-        )
+            }
+            movies.await() to tv.await()
+        }
 
         val moviesList = (moviesResult as? AppResult.Success)?.value?.results.orEmpty()
         val tvList = (tvResult as? AppResult.Success)?.value?.results.orEmpty()

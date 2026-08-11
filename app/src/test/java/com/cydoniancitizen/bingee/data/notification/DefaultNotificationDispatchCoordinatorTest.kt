@@ -84,8 +84,59 @@ class DefaultNotificationDispatchCoordinatorTest {
         assertEquals(1, summary.alreadyDelivered)
         assertEquals(listOf("movie"), notifier.postedSubjects)
         assertTrue(delivery.rows.contains(movie.identity(1)))
+        assertEquals(1, delivery.batchLookupCalls)
+        assertEquals(0, delivery.singleLookupCalls)
         assertEquals(today.minusDays(30), delivery.prunedBefore)
         assertFalse(summary.transientFailure)
+    }
+
+    @Test
+    fun eligibleEventsAfterIrrelevantRowsAreNotLostToScanSafetyCap() = runTest {
+        val later = event("later", ReleaseEventType.MOVIE_RELEASE, today)
+        val calendar = FakeCalendar(
+            List(200) { event("season-$it", ReleaseEventType.SEASON_PREMIERE, today) } + later
+        )
+        val notifier = FakeNotifier()
+
+        val summary = coordinator(
+            FakePreferences(
+                ReleaseNotificationPreferences(enabled = true, seasonPremieres = false)
+            ),
+            FakeCapability(NotificationCapabilityStatus.AVAILABLE),
+            calendar,
+            notifier = notifier
+        ).dispatch()
+
+        assertEquals(1, summary.posted)
+        assertEquals(listOf("later"), notifier.postedSubjects)
+    }
+
+    @Test
+    fun dispatchCapAppliesAfterDeliveryFiltering() = runTest {
+        val events = (0..DefaultNotificationDispatchCoordinator.MAX_CANDIDATES).map {
+            event("movie-$it", ReleaseEventType.MOVIE_RELEASE, today)
+        }
+        val delivery = FakeDeliveryRepository().apply {
+            rows += events.first().identity(0)
+        }
+        val notifier = FakeNotifier()
+
+        val summary = coordinator(
+            FakePreferences(
+                ReleaseNotificationPreferences(
+                    enabled = true,
+                    leadTime = ReleaseNotificationLeadTime.SAME_DAY
+                )
+            ),
+            FakeCapability(NotificationCapabilityStatus.AVAILABLE),
+            FakeCalendar(events),
+            delivery,
+            notifier
+        ).dispatch()
+
+        assertEquals(DefaultNotificationDispatchCoordinator.MAX_CANDIDATES, summary.posted)
+        assertEquals(1, summary.alreadyDelivered)
+        assertFalse(notifier.postedSubjects.contains("movie-0"))
     }
 
     @Test
@@ -186,13 +237,9 @@ class DefaultNotificationDispatchCoordinatorTest {
         override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
             flowOf(AppResult.Success(events))
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = flowOf(AppResult.Success(null))
-        override suspend fun getEvents(
-            fromDate: LocalDate,
-            throughDate: LocalDate,
-            limit: Int
-        ): AppResult<List<ReleaseEvent>> {
+        override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> {
             calls++
-            return AppResult.Success(events.take(limit))
+            return AppResult.Success(events)
         }
         override suspend fun backfill(): AppResult<Unit> = AppResult.Success(Unit)
         override suspend fun markRefreshSuccessful(at: Instant): AppResult<Unit> = AppResult.Success(Unit)
@@ -202,8 +249,16 @@ class DefaultNotificationDispatchCoordinatorTest {
         NotificationDeliveryRepository {
         val rows = linkedSetOf<NotificationDeliveryIdentity>()
         var prunedBefore: LocalDate? = null
+        var batchLookupCalls = 0
+        var singleLookupCalls = 0
         override suspend fun contains(identity: NotificationDeliveryIdentity): AppResult<Boolean> =
-            AppResult.Success(identity in rows)
+            AppResult.Success(identity in rows).also { singleLookupCalls++ }
+        override suspend fun findDelivered(
+            identities: Set<NotificationDeliveryIdentity>
+        ): AppResult<Set<NotificationDeliveryIdentity>> {
+            batchLookupCalls++
+            return AppResult.Success(rows.intersect(identities))
+        }
         override suspend fun record(delivery: NotificationDelivery): AppResult<Unit> =
             if (delivery.identity.subjectExternalId in failRecordSubjects) {
                 AppResult.Failure(AppError.LocalStorageFailure)

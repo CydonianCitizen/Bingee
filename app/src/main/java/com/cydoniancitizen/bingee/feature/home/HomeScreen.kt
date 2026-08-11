@@ -19,6 +19,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +42,7 @@ import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
@@ -128,7 +130,66 @@ internal fun HomeContent(
                 onDismiss = onDismissFeedback
             )
 
-            // Featured Releases Section
+            if (state.continueWatching.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.home_continue_watching),
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
+                    contentPadding = PaddingValues(vertical = 4.dp)
+                ) {
+                    items(
+                        items = state.continueWatching,
+                        key = { "${it.mediaRef.source}:${it.mediaRef.externalId}" }
+                    ) { item ->
+                        ContinueWatchingCard(
+                            item = item,
+                            onClick = { onOpenDetails(item.mediaRef, item.mediaType) }
+                        )
+                    }
+                }
+            }
+
+            // Personal release calendar stays above general discovery content.
+            when (val content = state.content) {
+                HomeContentState.Loading -> LoadingState(stringResource(R.string.home_loading))
+                HomeContentState.Empty -> EmptyState(
+                    title = stringResource(R.string.home_empty_title),
+                    body = stringResource(R.string.home_empty_body)
+                )
+                is HomeContentState.Error -> {
+                    val error = content.error.toUiError()
+                    ErrorState(
+                        title = stringResource(R.string.home_local_error_title),
+                        message = stringResource(error.messageRes),
+                        retryLabel = stringResource(R.string.action_retry),
+                        onRetry = onRetryLocal
+                    )
+                }
+                is HomeContentState.Events -> {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+                    ) {
+                        content.groups.forEach { group ->
+                            stickyHeader(key = "date:${group.date}") {
+                                DateHeader(group)
+                            }
+                            items(group.events, key = ReleaseEvent::stableKey) { event ->
+                                ReleaseEventCard(
+                                    event = event,
+                                    category = group.category,
+                                    onClick = { onOpenDetails(event.mediaRef, event.mediaType) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // General TMDB discovery content stays below personal sections.
             if (state.featuredReleases.isNotEmpty()) {
                 Text(
                     text = stringResource(R.string.home_featured_releases),
@@ -153,42 +214,60 @@ internal fun HomeContent(
                     }
                 }
             }
+        }
+    }
+}
 
-            // Events Content
-            when (val content = state.content) {
-                HomeContentState.Loading -> LoadingState(stringResource(R.string.home_loading))
-                HomeContentState.Empty -> EmptyState(
-                    title = stringResource(R.string.home_empty_title),
-                    body = stringResource(R.string.home_empty_body)
+@Composable
+private fun ContinueWatchingCard(item: ContinueWatchingItem, onClick: () -> Unit) {
+    val openDescription = stringResource(R.string.home_open_continue_details, item.title)
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .size(width = 320.dp, height = 184.dp)
+            .semantics { contentDescription = openDescription }
+    ) {
+        Row(
+            modifier = Modifier.padding(BingeeDimensions.elementSpacing),
+            horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
+        ) {
+            MediaPoster(
+                title = item.title,
+                posterUrl = item.posterUrl,
+                modifier = Modifier.size(width = 88.dp, height = 132.dp)
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                is HomeContentState.Error -> {
-                    val error = content.error.toUiError()
-                    ErrorState(
-                        title = stringResource(R.string.home_local_error_title),
-                        message = stringResource(error.messageRes),
-                        retryLabel = stringResource(R.string.action_retry),
-                        onRetry = onRetryLocal
+                Text(
+                    text = stringResource(
+                        R.string.home_continue_watching_progress,
+                        item.progress.watchedEpisodes,
+                        item.progress.trackableEpisodes
+                    ),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                item.nextEpisode?.let {
+                    Text(
+                        text = stringResource(
+                            R.string.home_continue_watching_next_episode,
+                            it.seasonNumber,
+                            it.episodeNumber
+                        ),
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                is HomeContentState.Events -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
-                    ) {
-                        content.groups.forEach { group ->
-                            stickyHeader(key = "date:${group.date}") {
-                                DateHeader(group)
-                            }
-                            items(group.events, key = ReleaseEvent::stableKey) { event ->
-                                ReleaseEventCard(
-                                    event = event,
-                                    category = group.category,
-                                    onClick = { onOpenDetails(event.mediaRef, event.mediaType) }
-                                )
-                            }
-                        }
-                    }
-                }
+                LinearProgressIndicator(
+                    progress = { item.progress.fraction.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

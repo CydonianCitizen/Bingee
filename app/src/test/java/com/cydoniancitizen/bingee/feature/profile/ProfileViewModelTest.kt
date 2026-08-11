@@ -22,6 +22,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -29,6 +30,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -129,6 +132,57 @@ class ProfileViewModelTest {
     }
 
     @Test
+    fun presentationFiltersReuseStatisticsSnapshot() = runTest {
+        val watchedMovie = entry("1", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
+        val watchedSeries = entry("2", MediaType.SERIES, LibraryProgress.Series(SeriesProgress(1, 10, 0, 1, false)))
+        val repo = FakeLibraryRepo(listOf(watchedMovie, watchedSeries))
+        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        val statistics = viewModel.uiState.value.statistics
+
+        viewModel.onSearchQueryChanged("watched")
+        assertSame(statistics, viewModel.uiState.value.statistics)
+        viewModel.setSortOption(ProfileSortOption.TITLE)
+        assertSame(statistics, viewModel.uiState.value.statistics)
+        viewModel.setCollection(ProfileCollection.WATCH_LATER)
+        assertSame(statistics, viewModel.uiState.value.statistics)
+        viewModel.setCategory(ProfileCategory.TV_SERIES)
+        assertSame(statistics, viewModel.uiState.value.statistics)
+        assertEquals(1, repo.observeEntriesCalls)
+    }
+
+    @Test
+    fun repositoryChangesRecalculateStatisticsAndKeepFilteredItemsIndependent() = runTest {
+        val first = entry(
+            "1",
+            MediaType.MOVIE,
+            LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
+            title = "First 1"
+        )
+        val second = entry(
+            "2",
+            MediaType.MOVIE,
+            LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
+            title = "Second 2"
+        )
+        val repo = FakeLibraryRepo(listOf(first))
+        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        val initialStatistics = viewModel.uiState.value.statistics
+        viewModel.onSearchQueryChanged("First")
+        assertEquals(listOf("First 1"), viewModel.uiState.value.entries.map { it.title })
+
+        repo.emit(listOf(first, second))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotSame(initialStatistics, viewModel.uiState.value.statistics)
+        assertEquals(2, viewModel.uiState.value.statistics.moviesWatchedCount)
+        assertEquals(listOf("First 1"), viewModel.uiState.value.entries.map { it.title })
+    }
+
+    @Test
     fun displayModePersistenceDelegatesToPrefs() = runTest {
         val repo = FakeLibraryRepo(emptyList())
         val prefs = FakeDisplayModePrefs()
@@ -159,14 +213,21 @@ class ProfileViewModelTest {
         personalRating = rating?.let { PersonalRating(it) }
     )
 
-    private class FakeLibraryRepo(val items: List<LibraryEntry>) : LibraryRepository {
+    private class FakeLibraryRepo(items: List<LibraryEntry>) : LibraryRepository {
+        private val observedEntries = MutableStateFlow(items)
+        var observeEntriesCalls = 0
+
+        fun emit(items: List<LibraryEntry>) {
+            observedEntries.value = items
+        }
+
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
-            flowOf(AppResult.Success(items))
-        override fun observeEntryCount(): Flow<AppResult<Int>> = flowOf(AppResult.Success(items.size))
+            observedEntries.map { AppResult.Success(it) }.also { observeEntriesCalls++ }
+        override fun observeEntryCount(): Flow<AppResult<Int>> = flowOf(AppResult.Success(observedEntries.value.size))
         override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
-            flowOf(AppResult.Success(items.find { it.mediaRef == ref }))
+            flowOf(AppResult.Success(observedEntries.value.find { it.mediaRef == ref }))
         override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
-            flowOf(AppResult.Success(items.mapTo(mutableSetOf()) { it.mediaRef }))
+            flowOf(AppResult.Success(observedEntries.value.mapTo(mutableSetOf()) { it.mediaRef }))
         override suspend fun add(
             result: com.cydoniancitizen.bingee.core.model.MediaSearchResult
         ): AppResult<LibraryEntry> = AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.Unknown)
