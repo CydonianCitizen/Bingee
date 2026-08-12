@@ -21,8 +21,6 @@ internal object BackupLimits {
 
 internal data class BackupRef(val source: MediaSource, val externalId: String)
 
-internal data class BackupMediaIdentity(val source: MediaSource, val mediaType: MediaType, val externalId: String)
-
 internal data class BackupMedia(
     val primaryRef: BackupRef,
     val externalRefs: List<BackupRef>,

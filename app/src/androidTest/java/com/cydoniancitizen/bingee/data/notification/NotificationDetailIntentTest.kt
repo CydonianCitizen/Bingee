@@ -33,6 +33,25 @@ class NotificationDetailIntentTest {
     }
 
     @Test
+    fun legacyTmdbTargetNormalizesToCurrentTarget() {
+        assertEquals(
+            NotificationNavigationTarget(MediaType.SERIES, 1399),
+            NotificationDetailIntent.parse(rawIntent("TMDB", "SERIES", "1399"))
+        )
+    }
+
+    @Test
+    fun malformedExtraTypesAreIgnored() {
+        val malformed = android.content.Intent(context, com.cydoniancitizen.bingee.MainActivity::class.java).apply {
+            action = NotificationDetailIntent.ACTION_OPEN_DETAILS
+            putExtra("notification_media_type", 42)
+            putExtra("notification_tmdb_id", "1399")
+        }
+
+        assertNull(NotificationDetailIntent.parse(malformed))
+    }
+
+    @Test
     fun unsupportedOrMalformedDetailsIdentityIsRejected() {
         listOf(
             rawIntent("IMDB", "MOVIE", "tt123"),

@@ -196,14 +196,6 @@ internal object BackupValidator {
             require(ratingRefs.add(rating.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
-        val availableMediaIdentities = buildSet {
-            data.media.forEach { media ->
-                media.externalRefs.forEach { ref ->
-                    add("${ref.source.name}:${media.mediaType.name}:${ref.externalId}")
-                }
-            }
-        }
-
         require(data.preferences.notificationLeadDays in setOf(0, 1, 3, 7), BackupFailureKind.VALIDATION)
         BackupValidationResult.Success(ValidatedBackupPlan(document))
     } catch (failure: BackupValidationFailure) {
@@ -239,20 +231,6 @@ internal object BackupValidator {
         require(
             ref.externalId.all { it in '0'..'9' } &&
                 ref.externalId.toLongOrNull()?.let { it > 0 } == true,
-            BackupFailureKind.VALIDATION
-        )
-    }
-
-    private fun checkMediaIdentity(identity: BackupMediaIdentity) {
-        require(
-            identity.source == MediaSource.TMDB,
-            BackupFailureKind.VALIDATION
-        )
-        require(identity.externalId.isNotBlank(), BackupFailureKind.VALIDATION)
-        require(identity.externalId.length <= BackupLimits.MAX_STRING, BackupFailureKind.VALIDATION)
-        require(
-            identity.externalId.all { it in '0'..'9' } &&
-                identity.externalId.toLongOrNull()?.let { it > 0 } == true,
             BackupFailureKind.VALIDATION
         )
     }

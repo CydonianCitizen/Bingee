@@ -37,19 +37,23 @@ internal object NotificationDetailIntent {
         }
 
     fun parse(intent: Intent?): NotificationNavigationTarget? {
-        if (intent?.action != ACTION_OPEN_DETAILS) return null
-        val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)
-            ?.let { value -> MediaType.entries.firstOrNull { it.name == value } }
-            ?: return null
-        if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return null
-        val tmdbId = intent.getLongExtra(EXTRA_TMDB_ID, 0).takeIf { it > 0 } ?: run {
-            val source = intent.getStringExtra(EXTRA_LEGACY_SOURCE)
-                ?.let { value -> MediaSource.entries.firstOrNull { it.name == value } }
-            if (source != MediaSource.TMDB) return null
-            intent.getStringExtra(EXTRA_LEGACY_EXTERNAL_ID)
-                ?.takeIf { it.all(Char::isDigit) }
-                ?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+        try {
+            if (intent?.action != ACTION_OPEN_DETAILS) return null
+            val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)
+                ?.let { value -> MediaType.entries.firstOrNull { it.name == value } }
+                ?: return null
+            if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return null
+            val tmdbId = intent.getLongExtra(EXTRA_TMDB_ID, 0).takeIf { it > 0 } ?: run {
+                val source = intent.getStringExtra(EXTRA_LEGACY_SOURCE)
+                    ?.let { value -> MediaSource.entries.firstOrNull { it.name == value } }
+                if (source != MediaSource.TMDB) return null
+                intent.getStringExtra(EXTRA_LEGACY_EXTERNAL_ID)
+                    ?.takeIf { it.all(Char::isDigit) }
+                    ?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+            }
+            return NotificationNavigationTarget(mediaType, tmdbId)
+        } catch (_: RuntimeException) {
+            return null
         }
-        return NotificationNavigationTarget(mediaType, tmdbId)
     }
 }
