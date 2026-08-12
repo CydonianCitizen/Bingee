@@ -14,7 +14,6 @@ internal data class TmdbSeasonPayload(val season: Season, val episodes: List<Epi
 
 internal object TmdbSeasonSummaryMapper {
     fun mapAll(seriesRef: ExternalMediaRef, rows: List<TmdbSeasonSummaryDto>?): List<Season> {
-        if (seriesRef.source != MediaSource.TMDB) return emptyList()
         val seenIds = mutableSetOf<ExternalMediaRef>()
         val seenNumbers = mutableSetOf<Int>()
         return rows.orEmpty()
@@ -41,7 +40,7 @@ internal object TmdbSeasonSummaryMapper {
 
 internal object TmdbSeasonDetailsMapper {
     fun map(seriesRef: ExternalMediaRef, requestedSeasonNumber: Int, dto: TmdbSeasonDetailsDto): TmdbSeasonPayload? {
-        if (seriesRef.source != MediaSource.TMDB || requestedSeasonNumber < 0) return null
+        if (requestedSeasonNumber < 0) return null
         val seasonId = dto.id?.takeIf { it > 0 } ?: return null
         val responseNumber = dto.seasonNumber?.takeIf { it >= 0 } ?: requestedSeasonNumber
         if (responseNumber != requestedSeasonNumber) return null

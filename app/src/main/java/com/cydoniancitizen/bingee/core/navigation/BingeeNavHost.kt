@@ -20,6 +20,8 @@ import androidx.navigation.navArgument
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
@@ -55,7 +57,7 @@ fun BingeeNavHost(
                 onOpenNotifications = { navController.navigate(AppRoute.NOTIFICATIONS) },
                 onOpenSettings = onOpenSettings,
                 onOpenDetails = { reference, mediaType ->
-                    navController.navigate(DetailRoute.create(reference, mediaType))
+                    navController.openDetails(reference, mediaType)
                 }
             )
         }
@@ -63,7 +65,7 @@ fun BingeeNavHost(
             SearchScreen(
                 onOpenSettings = onOpenSettings,
                 onOpenDetails = { reference, mediaType ->
-                    navController.navigate(DetailRoute.create(reference, mediaType))
+                    navController.openDetails(reference, mediaType)
                 }
             )
         }
@@ -72,7 +74,7 @@ fun BingeeNavHost(
                 onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
                 onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
                 onOpenDetails = { reference, mediaType ->
-                    navController.navigate(DetailRoute.create(reference, mediaType))
+                    navController.openDetails(reference, mediaType)
                 },
                 onNavigateToSearch = {
                     navController.navigate(TopLevelDestination.SEARCH.route) {
@@ -90,7 +92,7 @@ fun BingeeNavHost(
             StatisticsScreen(
                 onBack = navController::popBackStack,
                 onOpenDetails = { reference, mediaType ->
-                    navController.navigate(DetailRoute.create(reference, mediaType))
+                    navController.openDetails(reference, mediaType)
                 },
                 viewModel = hiltViewModel(profileEntry)
             )
@@ -128,7 +130,7 @@ fun BingeeNavHost(
             NotificationsScreen(
                 onBack = navController::popBackStack,
                 onOpenDetails = { reference, mediaType ->
-                    navController.navigate(DetailRoute.create(reference, mediaType))
+                    navController.openDetails(reference, mediaType)
                 }
             )
         }
@@ -138,15 +140,13 @@ fun BingeeNavHost(
         composable(
             route = DetailRoute.TEMPLATE,
             arguments = listOf(
-                navArgument(DetailRoute.SOURCE_ARG) { type = NavType.StringType },
                 navArgument(DetailRoute.MEDIA_TYPE_ARG) { type = NavType.StringType },
-                navArgument(DetailRoute.EXTERNAL_ID_ARG) { type = NavType.StringType }
+                navArgument(DetailRoute.TMDB_ID_ARG) { type = NavType.StringType }
             )
         ) { entry ->
             val args = DetailRoute.parse(
-                entry.arguments?.getString(DetailRoute.SOURCE_ARG),
                 entry.arguments?.getString(DetailRoute.MEDIA_TYPE_ARG),
-                entry.arguments?.getString(DetailRoute.EXTERNAL_ID_ARG)
+                entry.arguments?.getString(DetailRoute.TMDB_ID_ARG)
             )
             if (args == null) {
                 InvalidDetailRoute(onBack = navController::popBackStack)
@@ -158,6 +158,12 @@ fun BingeeNavHost(
             }
         }
     }
+}
+
+private fun NavHostController.openDetails(reference: ExternalMediaRef, mediaType: MediaType) {
+    val tmdbId = reference.takeIf { it.source == MediaSource.TMDB }
+        ?.externalId?.toLongOrNull()?.takeIf { it > 0 } ?: return
+    navigate(DetailRoute.create(mediaType, tmdbId))
 }
 
 @Composable

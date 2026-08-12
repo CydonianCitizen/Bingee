@@ -45,6 +45,7 @@ class DefaultMediaDetailsRepositoryTest {
     private val now = Instant.parse("2026-08-03T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val movieRef = ExternalMediaRef(MediaSource.TMDB, "550")
+    private val movieId = 550L
 
     @Test
     fun cacheMissSuccessPersistsAndUpdatesSuccessfulFetchTimestamp() = runTest {
@@ -52,9 +53,9 @@ class DefaultMediaDetailsRepositoryTest {
         val remote = FakeRemote { ref, type -> AppResult.Success(details(ref, type, "Remote")) }
         val repository = repository(dao, remote)
 
-        assertNull((repository.observeDetails(movieRef).first() as AppResult.Success).value)
-        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieRef, MediaType.MOVIE))
-        val cached = (repository.observeDetails(movieRef).first() as AppResult.Success).value
+        assertNull((repository.observeDetails(movieId).first() as AppResult.Success).value)
+        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE))
+        val cached = (repository.observeDetails(movieId).first() as AppResult.Success).value
 
         assertEquals("Remote", cached?.details?.title)
         assertEquals(now, cached?.fetchedAt)
@@ -67,9 +68,9 @@ class DefaultMediaDetailsRepositoryTest {
         val remote = FakeRemote { ref, type -> AppResult.Success(details(ref, type, "Updated")) }
         val repository = repository(dao, remote)
 
-        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieRef, MediaType.MOVIE, force = false))
+        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE, force = false))
         assertEquals(0, remote.calls.size)
-        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieRef, MediaType.MOVIE, force = true))
+        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE, force = true))
         assertEquals(1, remote.calls.size)
         assertEquals("Updated", dao.cache.value?.media?.title)
     }
@@ -81,26 +82,25 @@ class DefaultMediaDetailsRepositoryTest {
         val remote = FakeRemote { _, _ -> AppResult.Failure(AppError.NetworkUnavailable) }
         val repository = repository(dao, remote)
 
-        val before = (repository.observeDetails(movieRef).first() as AppResult.Success).value
+        val before = (repository.observeDetails(movieId).first() as AppResult.Success).value
         assertEquals(CacheFreshness.STALE, before?.freshness)
         assertEquals(
             AppResult.Failure(AppError.NetworkUnavailable),
-            repository.refreshDetails(movieRef, MediaType.MOVIE)
+            repository.refreshDetails(movieId, MediaType.MOVIE)
         )
-        val after = (repository.observeDetails(movieRef).first() as AppResult.Success).value
+        val after = (repository.observeDetails(movieId).first() as AppResult.Success).value
 
         assertEquals("Cached", after?.details?.title)
         assertEquals(old, after?.fetchedAt)
     }
 
     @Test
-    fun unsupportedProviderFailsWithoutRemoteRequest() = runTest {
+    fun invalidTmdbIdFailsWithoutRemoteRequest() = runTest {
         val remote = FakeRemote { ref, type -> AppResult.Success(details(ref, type, "Unexpected")) }
         val repository = repository(FakeDetailsDao(), remote)
-        val imdb = ExternalMediaRef(MediaSource.IMDB, "550")
 
-        assertEquals(AppResult.Failure(AppError.UnsupportedData), repository.refreshDetails(imdb, MediaType.MOVIE))
-        assertEquals(AppResult.Failure(AppError.UnsupportedData), repository.observeDetails(imdb).first())
+        assertEquals(AppResult.Failure(AppError.InvalidInput), repository.refreshDetails(0, MediaType.MOVIE))
+        assertEquals(AppResult.Failure(AppError.InvalidInput), repository.observeDetails(0).first())
         assertTrue(remote.calls.isEmpty())
     }
 
@@ -111,7 +111,7 @@ class DefaultMediaDetailsRepositoryTest {
         val remote = FakeRemote { ref, type -> AppResult.Success(details(ref, type, "New")) }
         val repository = repository(dao, remote)
 
-        val result = repository.refreshDetails(movieRef, MediaType.MOVIE, force = true)
+        val result = repository.refreshDetails(movieId, MediaType.MOVIE, force = true)
 
         assertEquals(AppResult.Failure(AppError.Unknown), result)
         assertEquals("Old", dao.cache.value?.media?.title)
@@ -129,9 +129,9 @@ class DefaultMediaDetailsRepositoryTest {
         }
         val repository = repository(FakeDetailsDao(), remote)
 
-        val first = async { repository.refreshDetails(movieRef, MediaType.MOVIE, force = true) }
+        val first = async { repository.refreshDetails(movieId, MediaType.MOVIE, force = true) }
         entered.await()
-        val second = async { repository.refreshDetails(movieRef, MediaType.MOVIE, force = true) }
+        val second = async { repository.refreshDetails(movieId, MediaType.MOVIE, force = true) }
         runCurrent()
         assertEquals(1, remote.calls.size)
         gate.complete(Unit)
@@ -152,9 +152,8 @@ class DefaultMediaDetailsRepositoryTest {
         }
         val repository = repository(FakeDetailsDao(), remote)
 
-        val first = async { repository.refreshDetails(movieRef, MediaType.MOVIE, force = true) }
-        val secondRef = ExternalMediaRef(MediaSource.TMDB, "551")
-        val second = async { repository.refreshDetails(secondRef, MediaType.MOVIE, force = true) }
+        val first = async { repository.refreshDetails(movieId, MediaType.MOVIE, force = true) }
+        val second = async { repository.refreshDetails(551, MediaType.MOVIE, force = true) }
         bothEntered.await()
         assertEquals(2, remote.calls.size)
         gate.complete(Unit)
@@ -210,10 +209,8 @@ class DefaultMediaDetailsRepositoryTest {
     private class FakeRemote(private val result: suspend (ExternalMediaRef, MediaType) -> AppResult<MediaDetails>) :
         TmdbDetailsRemoteDataSource {
         val calls = mutableListOf<Pair<ExternalMediaRef, MediaType>>()
-        override suspend fun load(
-            reference: ExternalMediaRef,
-            mediaType: MediaType
-        ): AppResult<TmdbMediaDetailsPayload> {
+        override suspend fun load(tmdbId: Long, mediaType: MediaType): AppResult<TmdbMediaDetailsPayload> {
+            val reference = ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())
             calls += reference to mediaType
             return when (val loaded = result(reference, mediaType)) {
                 is AppResult.Success -> AppResult.Success(TmdbMediaDetailsPayload(loaded.value))

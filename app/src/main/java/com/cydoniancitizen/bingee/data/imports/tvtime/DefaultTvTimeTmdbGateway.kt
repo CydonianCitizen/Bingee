@@ -83,13 +83,15 @@ internal class DefaultTvTimeTmdbGateway @Inject constructor(
     override suspend fun loadDetails(
         candidate: TmdbImportCandidate
     ): AppResult<com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload> =
-        detailsSource.load(candidate.externalRef, candidate.mediaType)
+        candidate.externalRef.externalId.toLongOrNull()?.takeIf { it > 0 }
+            ?.let { detailsSource.load(it, candidate.mediaType) }
+            ?: AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.InvalidInput)
 
     override suspend fun loadSeason(
-        seriesRef: ExternalMediaRef,
+        seriesTmdbId: Long,
         seasonNumber: Int
     ): AppResult<com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload> =
-        seasonSource.load(seriesRef, seasonNumber)
+        seasonSource.load(seriesTmdbId, seasonNumber)
 
     private fun externalSource(namespace: String): String? = when (namespace) {
         "IMDB" -> "imdb_id"

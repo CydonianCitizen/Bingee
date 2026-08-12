@@ -1,8 +1,6 @@
 package com.cydoniancitizen.bingee.data.tmdb.series
 
 import com.cydoniancitizen.bingee.core.credential.TmdbCredential
-import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
@@ -78,12 +76,8 @@ class TmdbSeasonClientTest {
     }
 
     @Test
-    fun unsupportedInputAndMissingCredentialDoNotCallService() = runTest {
-        assertEquals(
-            AppResult.Failure(AppError.UnsupportedData),
-            client.load(ExternalMediaRef(MediaSource.IMDB, "1"), 1)
-        )
-        assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("bad"), 1))
+    fun invalidInputAndMissingCredentialDoNotCallService() = runTest {
+        assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(0, 1))
         assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("1"), -1))
         val noCredential = TmdbSeasonClient(FakeCredentialStore(null), service(), FakeAppearancePreferences())
         assertEquals(AppResult.Failure(AppError.Unauthorized), noCredential.load(tmdb("1"), 1))
@@ -102,7 +96,7 @@ class TmdbSeasonClientTest {
         .build()
         .create(TmdbSeasonService::class.java)
 
-    private fun tmdb(id: String) = ExternalMediaRef(MediaSource.TMDB, id)
+    private fun tmdb(id: String) = id.toLong()
 
     private class FakeCredentialStore(private val value: TmdbCredential? = TmdbCredential(TEST_CREDENTIAL)) :
         TmdbCredentialStore {

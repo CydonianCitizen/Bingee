@@ -34,17 +34,14 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
     private val clock: Clock
 ) : MediaDetailsRepository {
     private val inFlightLock = Mutex()
-    private val inFlight = mutableMapOf<ExternalMediaRef, InFlightRefresh>()
+    private val inFlight = mutableMapOf<Long, InFlightRefresh>()
 
-    override fun observeDetails(reference: ExternalMediaRef): Flow<AppResult<CachedMediaDetails?>> {
-        val normalized = reference.normalizedOrNull()
+    override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> {
+        val reference = tmdbReferenceOrNull(tmdbId)
             ?: return flowOf(AppResult.Failure(AppError.InvalidInput))
-        if (normalized.source != MediaSource.TMDB) {
-            return flowOf(AppResult.Failure(AppError.UnsupportedData))
-        }
-        return detailsDao.observeCachedDetails(normalized.source, normalized.externalId)
+        return detailsDao.observeCachedDetails(reference.source, reference.externalId)
             .map<CachedDetailsRelation?, AppResult<CachedMediaDetails?>> { row ->
-                AppResult.Success(row?.toDomain(normalized, freshnessPolicy))
+                AppResult.Success(row?.toDomain(reference, freshnessPolicy))
             }
             .catch { throwable ->
                 if (throwable is CancellationException) throw throwable
@@ -52,21 +49,14 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
             }
     }
 
-    override suspend fun refreshDetails(
-        reference: ExternalMediaRef,
-        mediaType: MediaType,
-        force: Boolean
-    ): AppResult<Unit> {
-        val normalized = reference.normalizedOrNull()
+    override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {
+        val normalized = tmdbReferenceOrNull(tmdbId)
             ?: return AppResult.Failure(AppError.InvalidInput)
-        if (normalized.source != MediaSource.TMDB) {
-            return AppResult.Failure(AppError.UnsupportedData)
-        }
 
         val mine = CompletableDeferred<AppResult<Unit>>()
         val existing = inFlightLock.withLock {
-            inFlight[normalized]?.also { return@withLock it }
-            inFlight[normalized] = InFlightRefresh(mediaType, mine)
+            inFlight[tmdbId]?.also { return@withLock it }
+            inFlight[tmdbId] = InFlightRefresh(mediaType, mine)
             null
         }
         if (existing != null) {
@@ -83,7 +73,7 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
             throw cancelled
         } finally {
             inFlightLock.withLock {
-                if (inFlight[normalized]?.result === mine) inFlight.remove(normalized)
+                if (inFlight[tmdbId]?.result === mine) inFlight.remove(tmdbId)
             }
         }
     }
@@ -106,7 +96,7 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         }
         if (!force && cached?.freshness == CacheFreshness.FRESH) return AppResult.Success(Unit)
 
-        val remote = client.load(reference, mediaType)
+        val remote = client.load(reference.externalId.toLong(), mediaType)
         if (remote is AppResult.Failure) return remote
         val payload = (remote as AppResult.Success).value
         val details = payload.details
@@ -127,11 +117,8 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
 
 private data class InFlightRefresh(val mediaType: MediaType, val result: CompletableDeferred<AppResult<Unit>>)
 
-private fun ExternalMediaRef.normalizedOrNull(): ExternalMediaRef? {
-    val id = externalId.trim().takeIf(String::isNotEmpty) ?: return null
-    if (source == MediaSource.TMDB && (id.toLongOrNull()?.takeIf { it > 0 } == null)) return null
-    return ExternalMediaRef(source, id)
-}
+private fun tmdbReferenceOrNull(tmdbId: Long): ExternalMediaRef? =
+    tmdbId.takeIf { it > 0 }?.let { ExternalMediaRef(MediaSource.TMDB, it.toString()) }
 
 private fun Throwable.toPersistenceError(): AppError = when (this) {
     is IllegalArgumentException,

@@ -48,14 +48,12 @@ class MediaDetailsViewModelTest {
     private val ref = ExternalMediaRef(MediaSource.TMDB, "550")
 
     @Test
-    fun malformedAndUnsupportedRoutesFailSafelyWithoutRefresh() = runTest(mainDispatcherRule.dispatcher) {
+    fun malformedRouteFailsSafelyWithoutRefresh() = runTest(mainDispatcherRule.dispatcher) {
         val remote = FakeDetailsRepository()
         val malformed = viewModel(SavedStateHandle(), remote)
-        val unsupported = viewModel(args(MediaSource.IMDB, MediaType.MOVIE), remote)
         runCurrent()
 
         assertTrue(malformed.uiState.value.content is DetailContentState.Error)
-        assertTrue(unsupported.uiState.value.content is DetailContentState.Error)
         assertTrue(remote.refreshes.isEmpty())
     }
 
@@ -182,12 +180,12 @@ class MediaDetailsViewModelTest {
 
         viewModel.toggleSeasonExpanded(season)
         runCurrent()
-        assertEquals(listOf(Triple(ref, 1, false)), series.refreshes)
+        assertEquals(listOf(Triple(550L, 1, false)), series.refreshes)
         assertTrue(season.season.externalRef in viewModel.uiState.value.series.expandedSeasons)
         viewModel.retrySeason(season)
         runCurrent()
         assertEquals(
-            listOf(Triple(ref, 1, false), Triple(ref, 1, true)),
+            listOf(Triple(550L, 1, false), Triple(550L, 1, true)),
             series.refreshes
         )
 
@@ -285,11 +283,10 @@ class MediaDetailsViewModelTest {
         rating
     )
 
-    private fun args(source: MediaSource = MediaSource.TMDB, mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(
+    private fun args(mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(
         mapOf(
-            DetailRoute.SOURCE_ARG to source.name,
             DetailRoute.MEDIA_TYPE_ARG to mediaType.name,
-            DetailRoute.EXTERNAL_ID_ARG to "550"
+            DetailRoute.TMDB_ID_ARG to "550"
         )
     )
 
@@ -330,14 +327,10 @@ class MediaDetailsViewModelTest {
         var refreshResult: AppResult<Unit> = AppResult.Success(Unit)
     ) : MediaDetailsRepository {
         val observed = MutableStateFlow<AppResult<CachedMediaDetails?>>(AppResult.Success(initial))
-        val refreshes = mutableListOf<Triple<ExternalMediaRef, MediaType, Boolean>>()
-        override fun observeDetails(reference: ExternalMediaRef): Flow<AppResult<CachedMediaDetails?>> = observed
-        override suspend fun refreshDetails(
-            reference: ExternalMediaRef,
-            mediaType: MediaType,
-            force: Boolean
-        ): AppResult<Unit> {
-            refreshes += Triple(reference, mediaType, force)
+        val refreshes = mutableListOf<Triple<Long, MediaType, Boolean>>()
+        override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> = observed
+        override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {
+            refreshes += Triple(tmdbId, mediaType, force)
             return refreshResult
         }
     }
@@ -396,15 +389,11 @@ class MediaDetailsViewModelTest {
 
     private class FakeSeriesRepository(initial: List<CachedSeason> = emptyList()) : SeriesRepository {
         private val seasons = MutableStateFlow<AppResult<List<CachedSeason>>>(AppResult.Success(initial))
-        val refreshes = mutableListOf<Triple<ExternalMediaRef, Int, Boolean>>()
-        override fun observeSeasons(seriesRef: ExternalMediaRef): Flow<AppResult<List<CachedSeason>>> = seasons
+        val refreshes = mutableListOf<Triple<Long, Int, Boolean>>()
+        override fun observeSeasons(tmdbId: Long): Flow<AppResult<List<CachedSeason>>> = seasons
 
-        override suspend fun refreshSeason(
-            seriesRef: ExternalMediaRef,
-            seasonNumber: Int,
-            force: Boolean
-        ): AppResult<Unit> {
-            refreshes += Triple(seriesRef, seasonNumber, force)
+        override suspend fun refreshSeason(tmdbId: Long, seasonNumber: Int, force: Boolean): AppResult<Unit> {
+            refreshes += Triple(tmdbId, seasonNumber, force)
             return AppResult.Success(Unit)
         }
     }

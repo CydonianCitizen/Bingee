@@ -335,7 +335,7 @@ class TvTimeMatcherTest {
         ): AppResult<com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload> = error("not used")
 
         override suspend fun loadSeason(
-            seriesRef: ExternalMediaRef,
+            seriesTmdbId: Long,
             seasonNumber: Int
         ): AppResult<com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload> {
             seasonCalls++

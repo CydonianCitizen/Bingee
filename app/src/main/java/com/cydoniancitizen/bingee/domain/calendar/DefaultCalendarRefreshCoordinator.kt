@@ -74,16 +74,17 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     }
 
     private suspend fun refreshEntry(entry: BackgroundRefreshTarget, tmdbAvailable: Boolean): RefreshCounts {
-        if (entry.mediaRef.source != MediaSource.TMDB) return RefreshCounts(skipped = 1)
+        val tmdbId = entry.mediaRef.takeIf { it.source == MediaSource.TMDB }
+            ?.externalId?.toLongOrNull()?.takeIf { it > 0 } ?: return RefreshCounts(skipped = 1)
         if (!tmdbAvailable) return RefreshCounts(skipped = 1, error = AppError.Unauthorized)
         if (entry.mediaType == MediaType.MOVIE) {
-            return detailsRepository.refreshDetails(entry.mediaRef, MediaType.MOVIE, force = true).toCounts()
+            return detailsRepository.refreshDetails(tmdbId, MediaType.MOVIE, force = true).toCounts()
         }
 
-        val before = readSeasons(entry)
-        val details = detailsRepository.refreshDetails(entry.mediaRef, MediaType.SERIES, force = true)
+        val before = readSeasons(tmdbId)
+        val details = detailsRepository.refreshDetails(tmdbId, MediaType.SERIES, force = true)
         var counts = details.toCounts()
-        val after = if (details is AppResult.Success) readSeasons(entry) else before
+        val after = if (details is AppResult.Success) readSeasons(tmdbId) else before
         val selected = selectRelevantSeasonNumbers(
             beforeRefresh = before,
             afterRefresh = after,
@@ -91,13 +92,13 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
             window = window
         )
         selected.forEach { seasonNumber ->
-            counts += seriesRepository.refreshSeason(entry.mediaRef, seasonNumber, force = true).toCounts()
+            counts += seriesRepository.refreshSeason(tmdbId, seasonNumber, force = true).toCounts()
         }
         return counts
     }
 
-    private suspend fun readSeasons(entry: BackgroundRefreshTarget): List<CachedSeason> =
-        when (val result = seriesRepository.observeSeasons(entry.mediaRef).first()) {
+    private suspend fun readSeasons(tmdbId: Long): List<CachedSeason> =
+        when (val result = seriesRepository.observeSeasons(tmdbId).first()) {
             is AppResult.Success -> result.value
             is AppResult.Failure -> emptyList()
         }

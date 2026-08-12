@@ -3,8 +3,6 @@ package com.cydoniancitizen.bingee.data.notification
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -19,10 +17,10 @@ class NotificationDetailIntentTest {
     @Test
     fun movieAndTvTargetsRoundTripWithoutEventPayload() {
         listOf(MediaType.MOVIE, MediaType.SERIES).forEach { mediaType ->
-            val target = NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "42"), mediaType)
+            val target = NotificationNavigationTarget(mediaType, 42)
             val intent = NotificationDetailIntent.intent(context, target)
             assertEquals(target, NotificationDetailIntent.parse(intent))
-            assertEquals(3, intent.extras?.size())
+            assertEquals(2, intent.extras?.size())
             assertFalseExtras(intent.extras?.keySet().orEmpty())
         }
     }
@@ -30,7 +28,7 @@ class NotificationDetailIntentTest {
     @Test
     fun malformedIntentIsIgnoredAndPendingIntentIsImmutable() {
         assertNull(NotificationDetailIntent.parse(android.content.Intent()))
-        val target = NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "42"), MediaType.MOVIE)
+        val target = NotificationNavigationTarget(MediaType.MOVIE, 42)
         assertTrue(NotificationDetailIntent.pendingIntent(context, target, 7).isImmutable)
     }
 

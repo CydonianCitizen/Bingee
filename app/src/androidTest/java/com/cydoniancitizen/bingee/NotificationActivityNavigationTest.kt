@@ -9,8 +9,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.data.notification.NotificationDetailIntent
 import com.cydoniancitizen.bingee.data.notification.NotificationNavigationTarget
@@ -43,7 +41,7 @@ class NotificationActivityNavigationTest {
         val scenario = ActivityScenario.launch<MainActivity>(
             NotificationDetailIntent.intent(
                 context,
-                NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "101"), MediaType.MOVIE)
+                NotificationNavigationTarget(MediaType.MOVIE, 101)
             )
         )
         try {
@@ -65,7 +63,7 @@ class NotificationActivityNavigationTest {
                     activity,
                     NotificationDetailIntent.intent(
                         context,
-                        NotificationNavigationTarget(ExternalMediaRef(MediaSource.TMDB, "202"), MediaType.SERIES)
+                        NotificationNavigationTarget(MediaType.SERIES, 202)
                     )
                 )
             }
@@ -87,11 +85,13 @@ class NotificationActivityNavigationTest {
     }
 
     @Test
-    fun unsupportedNotificationIntentDoesNotCrashOrOpenDetails() {
-        val unsupported = NotificationDetailIntent.intent(
-            context,
-            NotificationNavigationTarget(ExternalMediaRef(MediaSource.IMDB, "tt123"), MediaType.MOVIE)
-        )
+    fun malformedProviderNotificationIntentDoesNotCrashOrOpenDetails() {
+        val unsupported = Intent(context, MainActivity::class.java).apply {
+            action = NotificationDetailIntent.ACTION_OPEN_DETAILS
+            putExtra("notification_source", "IMDB")
+            putExtra("notification_media_type", "MOVIE")
+            putExtra("notification_external_id", "tt123")
+        }
         ActivityScenario.launch<MainActivity>(unsupported).use {
             composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
         }

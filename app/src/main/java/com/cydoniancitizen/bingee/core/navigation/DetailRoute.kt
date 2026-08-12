@@ -1,50 +1,22 @@
 package com.cydoniancitizen.bingee.core.navigation
 
-import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
-import java.net.URLDecoder
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
-data class DetailRouteArgs(val reference: ExternalMediaRef, val mediaType: MediaType)
+data class DetailRouteArgs(val mediaType: MediaType, val tmdbId: Long)
 
 object DetailRoute {
-    const val SOURCE_ARG = "source"
     const val MEDIA_TYPE_ARG = "mediaType"
-    const val EXTERNAL_ID_ARG = "externalId"
-    const val TEMPLATE = "details/{$SOURCE_ARG}/{$MEDIA_TYPE_ARG}/{$EXTERNAL_ID_ARG}"
+    const val TMDB_ID_ARG = "tmdbId"
+    const val TEMPLATE = "details/{$MEDIA_TYPE_ARG}/{$TMDB_ID_ARG}"
 
-    fun create(reference: ExternalMediaRef, mediaType: MediaType): String {
-        val externalId = reference.externalId.trim()
-        require(externalId.isNotEmpty()) { "External media ID must not be blank" }
-        require(isProviderMediaTypeValid(reference.source, mediaType)) {
-            "Provider and media type do not match"
-        }
-        require(externalId.toLongOrNull()?.let { it > 0 } == true) {
-            "Provider media ID must be positive"
-        }
-        return "details/${reference.source.name}/${mediaType.name}/${externalId.encoded()}"
+    fun create(mediaType: MediaType, tmdbId: Long): String {
+        require(tmdbId > 0) { "TMDB ID must be positive" }
+        return "details/${mediaType.name}/$tmdbId"
     }
 
-    fun parse(source: String?, mediaType: String?, externalId: String?): DetailRouteArgs? = runCatching {
-        val parsedSource = MediaSource.entries.firstOrNull { it.name == source } ?: return null
+    fun parse(mediaType: String?, tmdbId: String?): DetailRouteArgs? = runCatching {
         val parsedType = MediaType.entries.firstOrNull { it.name == mediaType } ?: return null
-        val parsedId = externalId?.decoded()?.trim()?.takeIf(String::isNotEmpty) ?: return null
-        if (!isProviderMediaTypeValid(parsedSource, parsedType) ||
-            parsedId.toLongOrNull()?.let { it > 0 } != true
-        ) {
-            return null
-        }
-        DetailRouteArgs(ExternalMediaRef(parsedSource, parsedId), parsedType)
+        val parsedId = tmdbId?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+        DetailRouteArgs(parsedType, parsedId)
     }.getOrNull()
-
-    private fun isProviderMediaTypeValid(source: MediaSource, mediaType: MediaType): Boolean = when (source) {
-        MediaSource.TMDB -> mediaType == MediaType.MOVIE || mediaType == MediaType.SERIES
-        MediaSource.IMDB -> false
-    }
 }
-
-private fun String.encoded(): String = URLEncoder.encode(this, StandardCharsets.UTF_8.name())
-
-private fun String.decoded(): String = URLDecoder.decode(this, StandardCharsets.UTF_8.name())

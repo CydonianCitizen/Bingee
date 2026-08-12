@@ -155,7 +155,7 @@ internal interface TvTimeTmdbGateway {
     ): com.cydoniancitizen.bingee.core.result.AppResult<com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload>
 
     suspend fun loadSeason(
-        seriesRef: ExternalMediaRef,
+        seriesTmdbId: Long,
         seasonNumber: Int
     ): com.cydoniancitizen.bingee.core.result.AppResult<TmdbSeasonPayload>
 }

@@ -16,23 +16,14 @@ class FakeMediaDetailsRepository(
     var refreshFailure: AppError? = null
 ) : MediaDetailsRepository {
     private val cache = MutableStateFlow(initial)
-    val refreshes = mutableListOf<Triple<ExternalMediaRef, MediaType, Boolean>>()
+    val refreshes = mutableListOf<Triple<Long, MediaType, Boolean>>()
 
-    override fun observeDetails(reference: ExternalMediaRef): Flow<AppResult<CachedMediaDetails?>> =
-        cache.map { current ->
-            if (reference.source == MediaSource.TMDB) {
-                AppResult.Success(current[reference])
-            } else {
-                AppResult.Failure(AppError.UnsupportedData)
-            }
-        }
+    override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> = cache.map { current ->
+        AppResult.Success(current[ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())])
+    }
 
-    override suspend fun refreshDetails(
-        reference: ExternalMediaRef,
-        mediaType: MediaType,
-        force: Boolean
-    ): AppResult<Unit> {
-        refreshes += Triple(reference, mediaType, force)
+    override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {
+        refreshes += Triple(tmdbId, mediaType, force)
         refreshFailure?.let { return AppResult.Failure(it) }
         return AppResult.Success(Unit)
     }

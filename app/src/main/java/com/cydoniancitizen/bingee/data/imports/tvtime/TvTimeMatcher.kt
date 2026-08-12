@@ -229,7 +229,7 @@ internal class TvTimeMatcher @Inject constructor(private val gateway: TvTimeTmdb
 
         val seasonKey = "${series.externalRef.externalId}:${source.seasonNumber}"
         val seasonResult = cachedSuccess(seasonCache, seasonKey) {
-            gateway.loadSeason(series.externalRef, source.seasonNumber)
+            gateway.loadSeason(series.externalRef.externalId.toLong(), source.seasonNumber)
         }
         if (seasonResult is AppResult.Failure) {
             if (seasonResult.error != AppError.MissingData) onProviderError(seasonResult.error)

@@ -123,10 +123,10 @@ internal class MediaDetailsViewModel @Inject constructor(
     val uiState: StateFlow<MediaDetailsUiState> = mutableUiState.asStateFlow()
 
     private val routeArgs: DetailRouteArgs? = DetailRoute.parse(
-        savedStateHandle[DetailRoute.SOURCE_ARG],
         savedStateHandle[DetailRoute.MEDIA_TYPE_ARG],
-        savedStateHandle[DetailRoute.EXTERNAL_ID_ARG]
+        savedStateHandle[DetailRoute.TMDB_ID_ARG]
     )
+    private val routeReference = routeArgs?.let { ExternalMediaRef(MediaSource.TMDB, it.tmdbId.toString()) }
     private var automaticRefreshStarted = false
     private var seasonSummaryBootstrapStarted = false
     private var refreshJob: Job? = null
@@ -138,21 +138,18 @@ internal class MediaDetailsViewModel @Inject constructor(
             args == null -> mutableUiState.update {
                 it.copy(content = DetailContentState.Error(AppError.InvalidInput))
             }
-            args.reference.source != MediaSource.TMDB -> mutableUiState.update {
-                it.copy(content = DetailContentState.Error(AppError.UnsupportedData))
-            }
             else -> {
                 observeDetails(args)
                 observeMembership(args)
-                observeRating(args.reference)
+                observeRating(requireNotNull(routeReference))
                 if (args.mediaType == MediaType.MOVIE) {
                     mutableUiState.update { it.copy(movieProgress = MovieProgressState.Loading) }
-                    observeMovieProgress(args.reference)
+                    observeMovieProgress(requireNotNull(routeReference))
                 } else {
                     mutableUiState.update {
                         it.copy(series = it.series.copy(content = SeriesContentState.Loading))
                     }
-                    observeSeries(args.reference)
+                    observeSeries(args.tmdbId)
                 }
             }
         }
@@ -172,9 +169,9 @@ internal class MediaDetailsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val result = if (state.isInLibrary) {
-                libraryRepository.remove(args.reference)
+                libraryRepository.remove(requireNotNull(routeReference))
             } else {
-                when (val added = libraryRepository.add(args.reference)) {
+                when (val added = libraryRepository.add(requireNotNull(routeReference))) {
                     is AppResult.Success -> AppResult.Success(Unit)
                     is AppResult.Failure -> added
                 }
@@ -203,9 +200,9 @@ internal class MediaDetailsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val result = if (current.state is MovieWatchState.Watched) {
-                progressRepository.markMovieUnwatched(args.reference)
+                progressRepository.markMovieUnwatched(requireNotNull(routeReference))
             } else {
-                progressRepository.markMovieWatched(args.reference)
+                progressRepository.markMovieWatched(requireNotNull(routeReference))
             }
             mutableUiState.update { state ->
                 val observed = state.movieProgress as? MovieProgressState.Ready
@@ -308,11 +305,11 @@ internal class MediaDetailsViewModel @Inject constructor(
         }
     }
 
-    fun setRating() = updateRating { args, current ->
-        ratingRepository.setRating(args.reference, PersonalRating(current.selectedValue))
+    fun setRating() = updateRating { _, current ->
+        ratingRepository.setRating(requireNotNull(routeReference), PersonalRating(current.selectedValue))
     }
 
-    fun removeRating() = updateRating { args, _ -> ratingRepository.removeRating(args.reference) }
+    fun removeRating() = updateRating { _, _ -> ratingRepository.removeRating(requireNotNull(routeReference)) }
 
     fun dismissRatingError() {
         mutableUiState.update { state ->
@@ -323,7 +320,7 @@ internal class MediaDetailsViewModel @Inject constructor(
 
     private fun observeDetails(args: DetailRouteArgs) {
         viewModelScope.launch {
-            detailsRepository.observeDetails(args.reference).collectLatest { result ->
+            detailsRepository.observeDetails(args.tmdbId).collectLatest { result ->
                 when (result) {
                     is AppResult.Failure -> mutableUiState.update { state ->
                         if (state.content is DetailContentState.Content) {
@@ -359,7 +356,7 @@ internal class MediaDetailsViewModel @Inject constructor(
 
     private fun observeMembership(args: DetailRouteArgs) {
         viewModelScope.launch {
-            libraryRepository.observeEntry(args.reference).collectLatest { result ->
+            libraryRepository.observeEntry(requireNotNull(routeReference)).collectLatest { result ->
                 mutableUiState.update {
                     when (result) {
                         is AppResult.Success -> it.copy(
@@ -380,7 +377,7 @@ internal class MediaDetailsViewModel @Inject constructor(
         if (state.favoriteUpdating) return
         mutableUiState.update { it.copy(favoriteUpdating = true) }
         viewModelScope.launch {
-            val result = libraryRepository.setFavorite(args.reference, !state.isFavorite)
+            val result = libraryRepository.setFavorite(requireNotNull(routeReference), !state.isFavorite)
             mutableUiState.update {
                 it.copy(
                     favoriteUpdating = false,
@@ -395,7 +392,7 @@ internal class MediaDetailsViewModel @Inject constructor(
         if (mutableUiState.value.watchedDateUpdating) return
         mutableUiState.update { it.copy(watchedDateUpdating = true) }
         viewModelScope.launch {
-            val result = libraryRepository.setWatchedDate(args.reference, date)
+            val result = libraryRepository.setWatchedDate(requireNotNull(routeReference), date)
             mutableUiState.update {
                 it.copy(
                     watchedDateUpdating = false,
@@ -464,9 +461,9 @@ internal class MediaDetailsViewModel @Inject constructor(
         }
     }
 
-    private fun observeSeries(reference: ExternalMediaRef) {
+    private fun observeSeries(tmdbId: Long) {
         viewModelScope.launch {
-            seriesRepository.observeSeasons(reference).collectLatest { result ->
+            seriesRepository.observeSeasons(tmdbId).collectLatest { result ->
                 mutableUiState.update {
                     when (result) {
                         is AppResult.Success -> it.copy(
@@ -503,7 +500,7 @@ internal class MediaDetailsViewModel @Inject constructor(
 
     private fun startRefresh(force: Boolean) {
         val args = routeArgs ?: return
-        if (args.reference.source != MediaSource.TMDB || refreshJob?.isActive == true) return
+        if (refreshJob?.isActive == true) return
         mutableUiState.update { state ->
             if (state.content is DetailContentState.Content) {
                 state.copy(refresh = DetailRefreshState.Refreshing)
@@ -512,7 +509,7 @@ internal class MediaDetailsViewModel @Inject constructor(
             }
         }
         refreshJob = viewModelScope.launch {
-            when (val result = detailsRepository.refreshDetails(args.reference, args.mediaType, force)) {
+            when (val result = detailsRepository.refreshDetails(args.tmdbId, args.mediaType, force)) {
                 is AppResult.Success -> mutableUiState.update { it.copy(refresh = DetailRefreshState.Idle) }
                 is AppResult.Failure -> mutableUiState.update { state ->
                     if (state.content is DetailContentState.Content) {
@@ -537,7 +534,7 @@ internal class MediaDetailsViewModel @Inject constructor(
             it.copy(series = it.series.copy(seasonLoads = it.series.seasonLoads + (ref to loading)))
         }
         seasonRefreshJobs[ref] = viewModelScope.launch {
-            val result = seriesRepository.refreshSeason(args.reference, season.season.seasonNumber, force)
+            val result = seriesRepository.refreshSeason(args.tmdbId, season.season.seasonNumber, force)
             mutableUiState.update {
                 it.copy(
                     series = it.series.copy(

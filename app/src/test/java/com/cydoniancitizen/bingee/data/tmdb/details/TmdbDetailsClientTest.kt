@@ -1,8 +1,6 @@
 package com.cydoniancitizen.bingee.data.tmdb.details
 
 import com.cydoniancitizen.bingee.core.credential.TmdbCredential
-import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -91,12 +89,8 @@ class TmdbDetailsClientTest {
     }
 
     @Test
-    fun unsupportedSourceAndInvalidIdMakeNoRequest() = runTest {
-        assertEquals(
-            AppResult.Failure(AppError.UnsupportedData),
-            client.load(ExternalMediaRef(MediaSource.IMDB, "550"), MediaType.MOVIE)
-        )
-        assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(tmdb("bad"), MediaType.MOVIE))
+    fun invalidIdMakesNoRequest() = runTest {
+        assertEquals(AppResult.Failure(AppError.InvalidInput), client.load(0, MediaType.MOVIE))
         assertEquals(0, server.requestCount)
     }
 
@@ -122,7 +116,7 @@ class TmdbDetailsClientTest {
         )
     }
 
-    private fun tmdb(id: String) = ExternalMediaRef(MediaSource.TMDB, id)
+    private fun tmdb(id: String) = id.toLong()
 
     private class FakeCredentialStore(private val credential: TmdbCredential? = TmdbCredential(TEST_CREDENTIAL)) :
         TmdbCredentialStore {

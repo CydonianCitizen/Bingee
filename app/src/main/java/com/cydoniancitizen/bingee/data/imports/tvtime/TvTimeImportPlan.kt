@@ -119,7 +119,7 @@ internal class TvTimeImportPlanBuilder @Inject constructor(private val gateway: 
                 )
             val key = "${parent.externalRef.externalId}:${candidate.seasonNumber}"
             val payload = seasonPayloads[key] ?: when (
-                val loaded = gateway.loadSeason(parent.externalRef, candidate.seasonNumber)
+                val loaded = gateway.loadSeason(parent.externalRef.externalId.toLong(), candidate.seasonNumber)
             ) {
                 is AppResult.Failure -> return TvTimeImportPlanResult.Failure(
                     TvTimePlanFailure(TvTimePlanFailureReason.PROVIDER_FAILURE, loaded.error)

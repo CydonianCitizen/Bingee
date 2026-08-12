@@ -35,6 +35,7 @@ class DefaultSeriesRepositoryTest {
     private val now = Instant.parse("2026-08-03T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val seriesRef = ref("100")
+    private val seriesId = 100L
 
     @Test
     fun freshCacheAvoidsNetworkWhileForcedRefreshUpdatesOnlyAfterSuccess() = runTest {
@@ -42,9 +43,9 @@ class DefaultSeriesRepositoryTest {
         val remote = FakeRemote { number -> AppResult.Success(payload(number)) }
         val repository = repository(dao, remote)
 
-        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesRef, 1))
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1))
         assertTrue(remote.calls.isEmpty())
-        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesRef, 1, force = true))
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1, force = true))
         assertEquals(listOf(1), remote.calls)
         assertEquals(now, dao.storedAt)
     }
@@ -58,7 +59,7 @@ class DefaultSeriesRepositoryTest {
 
         assertEquals(
             AppResult.Failure(AppError.NetworkUnavailable),
-            repository.refreshSeason(seriesRef, 1)
+            repository.refreshSeason(seriesId, 1)
         )
         assertEquals(old, dao.cachedAt)
         assertEquals(null, dao.storedAt)
@@ -66,7 +67,7 @@ class DefaultSeriesRepositoryTest {
         dao.cachedAt = null
         assertEquals(
             AppResult.Failure(AppError.NetworkUnavailable),
-            repository.refreshSeason(seriesRef, 1)
+            repository.refreshSeason(seriesId, 1)
         )
         assertEquals(listOf(1, 1), remote.calls)
     }
@@ -84,10 +85,10 @@ class DefaultSeriesRepositoryTest {
         }
         val repository = repository(FakeSeriesDao(), remote)
 
-        val first = async { repository.refreshSeason(seriesRef, 1, force = true) }
+        val first = async { repository.refreshSeason(seriesId, 1, force = true) }
         runCurrent()
-        val duplicate = async { repository.refreshSeason(seriesRef, 1, force = true) }
-        val other = async { repository.refreshSeason(seriesRef, 2, force = true) }
+        val duplicate = async { repository.refreshSeason(seriesId, 1, force = true) }
+        val other = async { repository.refreshSeason(seriesId, 2, force = true) }
         bothEntered.await()
         assertEquals(listOf(1, 2), remote.calls)
         gate.complete(Unit)
@@ -98,17 +99,17 @@ class DefaultSeriesRepositoryTest {
     }
 
     @Test
-    fun unsupportedProviderAndMalformedPayloadFailSafely() = runTest {
+    fun invalidTmdbIdAndMalformedPayloadFailSafely() = runTest {
         val remote = FakeRemote { AppResult.Success(payload(2)) }
         val repository = repository(FakeSeriesDao(), remote)
 
         assertEquals(
-            AppResult.Failure(AppError.UnsupportedData),
-            repository.refreshSeason(ExternalMediaRef(MediaSource.IMDB, "100"), 1)
+            AppResult.Failure(AppError.InvalidInput),
+            repository.refreshSeason(0, 1)
         )
         assertEquals(
             AppResult.Failure(AppError.InvalidRemoteResponse),
-            repository.refreshSeason(seriesRef, 1, force = true)
+            repository.refreshSeason(seriesId, 1, force = true)
         )
     }
 
@@ -123,7 +124,7 @@ class DefaultSeriesRepositoryTest {
 
         assertEquals(
             AppResult.Failure(AppError.Unknown),
-            repository.refreshSeason(seriesRef, 1, force = true)
+            repository.refreshSeason(seriesId, 1, force = true)
         )
         assertEquals(old, dao.cachedAt)
         assertEquals(null, dao.storedAt)
@@ -150,7 +151,7 @@ class DefaultSeriesRepositoryTest {
     private class FakeRemote(private val result: suspend (Int) -> AppResult<TmdbSeasonPayload>) :
         TmdbSeasonRemoteDataSource {
         val calls = mutableListOf<Int>()
-        override suspend fun load(seriesRef: ExternalMediaRef, seasonNumber: Int): AppResult<TmdbSeasonPayload> {
+        override suspend fun load(tmdbId: Long, seasonNumber: Int): AppResult<TmdbSeasonPayload> {
             calls += seasonNumber
             return result(seasonNumber)
         }

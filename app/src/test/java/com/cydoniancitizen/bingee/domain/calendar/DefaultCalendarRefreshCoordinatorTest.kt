@@ -315,14 +315,11 @@ class DefaultCalendarRefreshCoordinatorTest {
         var activeCalls = 0
         var maxActive = 0
 
-        override fun observeDetails(reference: ExternalMediaRef): Flow<AppResult<CachedMediaDetails?>> =
+        override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> =
             flowOf(AppResult.Success(null))
 
-        override suspend fun refreshDetails(
-            reference: ExternalMediaRef,
-            mediaType: MediaType,
-            force: Boolean
-        ): AppResult<Unit> {
+        override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {
+            val reference = ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())
             calls += reference to mediaType
             activeCalls++
             maxActive = maxOf(maxActive, activeCalls)
@@ -339,14 +336,10 @@ class DefaultCalendarRefreshCoordinatorTest {
         private val results: Map<Int, AppResult<Unit>> = emptyMap()
     ) : SeriesRepository {
         val calls = mutableListOf<Int>()
-        override fun observeSeasons(seriesRef: ExternalMediaRef): Flow<AppResult<List<CachedSeason>>> =
-            flowOf(AppResult.Success(seasons[seriesRef].orEmpty()))
+        override fun observeSeasons(tmdbId: Long): Flow<AppResult<List<CachedSeason>>> =
+            flowOf(AppResult.Success(seasons[ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())].orEmpty()))
 
-        override suspend fun refreshSeason(
-            seriesRef: ExternalMediaRef,
-            seasonNumber: Int,
-            force: Boolean
-        ): AppResult<Unit> {
+        override suspend fun refreshSeason(tmdbId: Long, seasonNumber: Int, force: Boolean): AppResult<Unit> {
             calls += seasonNumber
             return results[seasonNumber] ?: AppResult.Success(Unit)
         }

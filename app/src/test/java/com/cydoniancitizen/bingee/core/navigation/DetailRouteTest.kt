@@ -1,7 +1,5 @@
 package com.cydoniancitizen.bingee.core.navigation
 
-import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,51 +12,33 @@ import org.junit.Test
 class DetailRouteTest {
     @Test
     fun tmdbMovieRoute() {
-        val ref = ExternalMediaRef(MediaSource.TMDB, "550")
-        val route = DetailRoute.create(ref, MediaType.MOVIE)
-        assertEquals("details/TMDB/MOVIE/550", route)
-        val parsed = DetailRoute.parse("TMDB", "MOVIE", "550")
-        assertEquals(DetailRouteArgs(ref, MediaType.MOVIE), parsed)
+        val route = DetailRoute.create(MediaType.MOVIE, 550)
+        assertEquals("details/MOVIE/550", route)
+        assertEquals(DetailRouteArgs(MediaType.MOVIE, 550), DetailRoute.parse("MOVIE", "550"))
     }
 
     @Test
     fun tmdbSeriesRoute() {
-        val ref = ExternalMediaRef(MediaSource.TMDB, "1399")
-        val route = DetailRoute.create(ref, MediaType.SERIES)
-        assertEquals("details/TMDB/SERIES/1399", route)
-        val parsed = DetailRoute.parse("TMDB", "SERIES", "1399")
-        assertEquals(DetailRouteArgs(ref, MediaType.SERIES), parsed)
-    }
-
-    @Test
-    fun imdbRoutesAreRejectedForDetails() {
-        val ref = ExternalMediaRef(MediaSource.IMDB, "5114")
-        assertThrows(IllegalArgumentException::class.java) {
-            DetailRoute.create(ref, MediaType.MOVIE)
-        }
-        assertThrows(IllegalArgumentException::class.java) {
-            DetailRoute.create(ref, MediaType.SERIES)
-        }
-        assertNull(DetailRoute.parse("IMDB", "MOVIE", "5114"))
-        assertNull(DetailRoute.parse("IMDB", "SERIES", "5114"))
+        val route = DetailRoute.create(MediaType.SERIES, 1399)
+        assertEquals("details/SERIES/1399", route)
+        assertEquals(DetailRouteArgs(MediaType.SERIES, 1399), DetailRoute.parse("SERIES", "1399"))
     }
 
     @Test
     fun malformedArgumentsAreRejected() {
-        assertNull(DetailRoute.parse("bad", "MOVIE", "1"))
-        assertNull(DetailRoute.parse("TMDB", "bad", "1"))
-        assertNull(DetailRoute.parse("TMDB", "MOVIE", " "))
-        assertNull(DetailRoute.parse("TMDB", "MOVIE", "bad"))
-        assertNull(DetailRoute.parse("TMDB", "MOVIE", "%"))
+        assertNull(DetailRoute.parse("bad", "1"))
+        assertNull(DetailRoute.parse("MOVIE", " "))
+        assertNull(DetailRoute.parse("MOVIE", "bad"))
+        assertNull(DetailRoute.parse("MOVIE", "0"))
         assertThrows(IllegalArgumentException::class.java) {
-            DetailRoute.create(ExternalMediaRef(MediaSource.TMDB, "x").copy(externalId = " "), MediaType.MOVIE)
+            DetailRoute.create(MediaType.MOVIE, 0)
         }
     }
 
     @Test
     fun routeContainsNoInternalIdTokenOrPayload() {
-        val route = DetailRoute.create(ExternalMediaRef(MediaSource.TMDB, "550"), MediaType.MOVIE)
-        assertTrue(route.startsWith("details/TMDB/MOVIE/"))
+        val route = DetailRoute.create(MediaType.MOVIE, 550)
+        assertTrue(route.startsWith("details/MOVIE/"))
         assertFalse(route.contains("local", ignoreCase = true))
         assertFalse(route.contains("token", ignoreCase = true))
         assertFalse(TopLevelDestination.entries.any { it.route == "details" })

@@ -35,26 +35,20 @@ internal class DefaultSeriesRepository @Inject constructor(
     private val inFlightLock = Mutex()
     private val inFlight = mutableMapOf<SeasonRefreshKey, CompletableDeferred<AppResult<Unit>>>()
 
-    override fun observeSeasons(seriesRef: ExternalMediaRef): Flow<AppResult<List<CachedSeason>>> {
-        val normalized = seriesRef.normalizedTmdbOrNull()
-            ?: return flowOf(AppResult.Failure(invalidReferenceError(seriesRef)))
-        return seriesDao.observeSeriesSeasons(normalized.source, normalized.externalId)
+    override fun observeSeasons(tmdbId: Long): Flow<AppResult<List<CachedSeason>>> {
+        val seriesRef = tmdbReferenceOrNull(tmdbId) ?: return flowOf(AppResult.Failure(AppError.InvalidInput))
+        return seriesDao.observeSeriesSeasons(seriesRef.source, seriesRef.externalId)
             .map { rows ->
                 val today = LocalDate.now(clock)
-                AppResult.Success(rows.map { it.toDomain(normalized, today, freshnessPolicy) })
+                AppResult.Success(rows.map { it.toDomain(seriesRef, today, freshnessPolicy) })
             }
             .catchPersistence()
     }
 
-    override suspend fun refreshSeason(
-        seriesRef: ExternalMediaRef,
-        seasonNumber: Int,
-        force: Boolean
-    ): AppResult<Unit> {
-        val normalized = seriesRef.normalizedTmdbOrNull()
-            ?: return AppResult.Failure(invalidReferenceError(seriesRef))
+    override suspend fun refreshSeason(tmdbId: Long, seasonNumber: Int, force: Boolean): AppResult<Unit> {
+        val seriesRef = tmdbReferenceOrNull(tmdbId) ?: return AppResult.Failure(AppError.InvalidInput)
         if (seasonNumber < 0) return AppResult.Failure(AppError.InvalidInput)
-        val key = SeasonRefreshKey(normalized, seasonNumber)
+        val key = SeasonRefreshKey(tmdbId, seasonNumber)
         val mine = CompletableDeferred<AppResult<Unit>>()
         val existing = inFlightLock.withLock {
             inFlight[key]?.also { return@withLock it }
@@ -63,7 +57,7 @@ internal class DefaultSeriesRepository @Inject constructor(
         }
         if (existing != null) return existing.await()
         return try {
-            val result = refreshOwned(normalized, seasonNumber, force)
+            val result = refreshOwned(seriesRef, tmdbId, seasonNumber, force)
             mine.complete(result)
             result
         } catch (cancelled: CancellationException) {
@@ -76,7 +70,12 @@ internal class DefaultSeriesRepository @Inject constructor(
         }
     }
 
-    private suspend fun refreshOwned(seriesRef: ExternalMediaRef, seasonNumber: Int, force: Boolean): AppResult<Unit> {
+    private suspend fun refreshOwned(
+        seriesRef: ExternalMediaRef,
+        tmdbId: Long,
+        seasonNumber: Int,
+        force: Boolean
+    ): AppResult<Unit> {
         val cached = try {
             seriesDao.getSeasonForSeries(seriesRef.source, seriesRef.externalId, seasonNumber)
         } catch (cancelled: CancellationException) {
@@ -87,7 +86,7 @@ internal class DefaultSeriesRepository @Inject constructor(
         if (!force && cached?.episodesFetchedAt?.let(freshnessPolicy::classify) == CacheFreshness.FRESH) {
             return AppResult.Success(Unit)
         }
-        val remoteResult = remote.load(seriesRef, seasonNumber)
+        val remoteResult = remote.load(tmdbId, seasonNumber)
         if (remoteResult is AppResult.Failure) return remoteResult
         val payload = (remoteResult as AppResult.Success).value
         if (payload.season.seriesRef != seriesRef || payload.season.seasonNumber != seasonNumber) {
@@ -104,17 +103,11 @@ internal class DefaultSeriesRepository @Inject constructor(
         }
     }
 
-    private data class SeasonRefreshKey(val seriesRef: ExternalMediaRef, val seasonNumber: Int)
+    private data class SeasonRefreshKey(val tmdbId: Long, val seasonNumber: Int)
 }
 
-private fun ExternalMediaRef.normalizedTmdbOrNull(): ExternalMediaRef? {
-    if (source != MediaSource.TMDB) return null
-    val id = externalId.trim().takeIf { it.toLongOrNull()?.let { value -> value > 0 } == true } ?: return null
-    return ExternalMediaRef(source, id)
-}
-
-private fun invalidReferenceError(reference: ExternalMediaRef): AppError =
-    if (reference.source == MediaSource.TMDB) AppError.InvalidInput else AppError.UnsupportedData
+private fun tmdbReferenceOrNull(tmdbId: Long): ExternalMediaRef? =
+    tmdbId.takeIf { it > 0 }?.let { ExternalMediaRef(MediaSource.TMDB, it.toString()) }
 
 private fun <T> Flow<AppResult<T>>.catchPersistence(): Flow<AppResult<T>> = catch { throwable ->
     if (throwable is CancellationException) throw throwable
