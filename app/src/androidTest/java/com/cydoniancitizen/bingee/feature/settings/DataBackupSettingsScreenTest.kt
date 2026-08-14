@@ -1,6 +1,8 @@
 package com.cydoniancitizen.bingee.feature.settings
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -39,9 +41,11 @@ class DataBackupSettingsScreenTest {
         composeRule.onNodeWithText("Save backup").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Share backup").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Restore backup").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Import TV Time history").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasText("Import TV Time history") and hasClickAction())
+            .performScrollTo()
+            .assertIsDisplayed()
 
-        composeRule.onNodeWithText("Import TV Time history").performClick()
+        composeRule.onNode(hasText("Import TV Time history") and hasClickAction()).performClick()
         assertTrue(tvTimeOpened.get())
     }
 }

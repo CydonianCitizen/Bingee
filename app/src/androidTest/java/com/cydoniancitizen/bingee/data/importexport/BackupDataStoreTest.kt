@@ -13,6 +13,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -115,7 +116,7 @@ class BackupDataStoreTest {
         val secondBytes = BackupExporter(store, clock).export().bytes
         val second = exportedDocument(secondBytes)
         assertEquals(first.data, second.data)
-        assertEquals(BackupJsonCodec.encode(first), secondBytes)
+        assertArrayEquals(BackupJsonCodec.encode(first), secondBytes)
     }
 
     private fun exportedDocument(bytes: ByteArray): BackupDocument =
