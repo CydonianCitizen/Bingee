@@ -104,8 +104,6 @@
     <string name="action_add_to_watchlist">Add to Watchlist</string>
     <string name="action_in_watchlist">In Watchlist</string>
     <string name="notifications_title">Notifications</string>
-    <string name="notifications_recent_title">Recent Notifications</string>
-    <string name="notifications_none">No recent notifications</string>
     <string name="notifications_group_upcoming">Upcoming</string>
     <string name="notifications_group_today">Today</string>
     <string name="notifications_group_this_week">This week</string>
@@ -235,14 +233,19 @@
     <string name="notification_channel_name">Release updates</string>
     <string name="notification_channel_description">Upcoming movie, season, and episode releases</string>
     <string name="notification_relative_today">today</string>
+    <string name="notification_relative_yesterday">yesterday</string>
     <string name="notification_relative_tomorrow">tomorrow</string>
     <plurals name="notification_relative_days">
         <item quantity="one">in %1$d day</item>
         <item quantity="other">in %1$d days</item>
+        <item quantity="many">in %1$d days</item>
     </plurals>
     <string name="notification_movie_body">Movie release %1$s</string>
     <string name="notification_season_body">Season %1$d premieres %2$s</string>
     <string name="notification_episode_body">S%1$d E%2$d airs %3$s · %4$s</string>
+    <string name="notification_detail_episode">S%1$d E%2$d · %3$s</string>
+    <string name="notification_detail_episode_number">S%1$d E%2$d</string>
+    <string name="notification_detail_season">Season %1$d · %2$s</string>
     <string name="error_notification_delivery">A local notification could not be delivered. Android will try again later.</string>
     <string name="settings_notifications_enable">Enable release notifications</string>
     <string name="settings_notifications_approximate">Android schedules background checks approximately. Battery optimization, Doze, and device restrictions may delay delivery.</string>
@@ -315,7 +318,6 @@
     <string name="tvtime_import_preview_conflicts">Existing progress preserved for %1$d timestamp conflicts. Ratings and local data are unchanged.</string>
     <string name="tvtime_import_confirm">Confirm import</string>
     <string name="tvtime_import_success">TV Time history imported additively. No local data was removed.</string>
-    <string name="tvtime_import_failure">TV Time import could not be completed. Existing local data was kept.</string>
     <string name="tvtime_import_invalid">The archive is unreadable, unsafe, malformed, or not the supported TV Time JSON ZIP profile.</string>
     <string name="tvtime_import_transaction_failure">Import transaction failed. All import changes were rolled back.</string>
     <string name="tvtime_import_missing_credential">Configure a valid TMDB credential before matching. No local data changed.</string>
@@ -391,6 +393,8 @@
     <string name="watched_date_release_date">Release date</string>
     <string name="watched_date_custom">Custom date</string>
     <string name="watched_date_edit">Edit watched date</string>
+    <string name="watched_date_future_error">Date cannot be in the future (today is %1$s)</string>
+    <string name="watched_date_before_release_error">Date cannot be before release date (%1$s)</string>
     <string name="completion_date_label">Completion Date</string>
     <string name="completion_date_edit">Edit completion date</string>
     <string name="settings_appearance_title">Appearance &amp; Language</string>
@@ -435,6 +439,8 @@
     <string name="statistics_tv_completed">TV Series Completed</string>
     <string name="statistics_episodes_watched">Episodes Watched</string>
     <string name="statistics_watch_time">Estimated Watch Time</string>
+    <string name="statistics_watch_time_hours">%1$d h</string>
+    <string name="statistics_watch_time_minutes">%1$d min</string>
     <string name="statistics_watch_time_incomplete">Rough estimate (partial duration data)</string>
     <string name="statistics_avg_rating">Average Personal Rating</string>
     <string name="statistics_rated_percentage">Rated Titles</string>

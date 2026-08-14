@@ -14,8 +14,10 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.cydoniancitizen.bingee.R
 
 private val LightColorScheme =
     lightColorScheme(
@@ -73,7 +75,7 @@ private fun BingeeThemePreview() {
     BingeeTheme {
         Surface {
             Text(
-                text = "Bingee",
+                text = stringResource(R.string.app_name),
                 modifier = Modifier.padding(BingeeDimensions.screenPadding)
             )
         }

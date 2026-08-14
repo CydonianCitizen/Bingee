@@ -1,10 +1,13 @@
 package com.cydoniancitizen.bingee.feature.notifications
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
@@ -25,6 +28,7 @@ class NotificationsScreenTest {
     val composeRule = createComposeRule()
 
     private val today = LocalDate.of(2026, 8, 8)
+    private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
     fun noFollowedSeriesEmptyStateIsDisplayed() {
@@ -40,7 +44,9 @@ class NotificationsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Add TV series to your tracking to see release updates here").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.notifications_empty_no_followed_series)
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -57,7 +63,7 @@ class NotificationsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("No new updates from your followed series").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.notifications_empty_no_events)).assertIsDisplayed()
     }
 
     @Test
@@ -83,9 +89,9 @@ class NotificationsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Upcoming").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.notifications_group_upcoming)).assertIsDisplayed()
         composeRule.onNodeWithText("Severance").assertIsDisplayed()
-        composeRule.onNodeWithText("Today").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.notifications_group_today)).assertIsDisplayed()
         composeRule.onNodeWithText("Breaking Bad").assertIsDisplayed()
 
         composeRule.onNodeWithText("Breaking Bad").performClick()
@@ -117,7 +123,7 @@ private fun NotificationsListOrEmptyState(
     when (val contentState = state.contentState) {
         NotificationsContentState.NoFollowedSeries -> {
             com.cydoniancitizen.bingee.core.designsystem.component.EmptyState(
-                title = "Notifications",
+                title = androidx.compose.ui.res.stringResource(R.string.notifications_title),
                 body = androidx.compose.ui.res.stringResource(
                     com.cydoniancitizen.bingee.R.string.notifications_empty_no_followed_series
                 )
@@ -126,7 +132,7 @@ private fun NotificationsListOrEmptyState(
 
         NotificationsContentState.NoEvents -> {
             com.cydoniancitizen.bingee.core.designsystem.component.EmptyState(
-                title = "Notifications",
+                title = androidx.compose.ui.res.stringResource(R.string.notifications_title),
                 body = androidx.compose.ui.res.stringResource(
                     com.cydoniancitizen.bingee.R.string.notifications_empty_no_events
                 )
@@ -138,10 +144,14 @@ private fun NotificationsListOrEmptyState(
                 contentState.groups.forEach { group ->
                     androidx.compose.material3.Text(
                         text = when (group.category) {
-                            NotificationGroupCategory.UPCOMING -> "Upcoming"
-                            NotificationGroupCategory.TODAY -> "Today"
-                            NotificationGroupCategory.THIS_WEEK -> "This week"
-                            NotificationGroupCategory.EARLIER -> "Earlier"
+                            NotificationGroupCategory.UPCOMING ->
+                                androidx.compose.ui.res.stringResource(R.string.notifications_group_upcoming)
+                            NotificationGroupCategory.TODAY ->
+                                androidx.compose.ui.res.stringResource(R.string.notifications_group_today)
+                            NotificationGroupCategory.THIS_WEEK ->
+                                androidx.compose.ui.res.stringResource(R.string.notifications_group_this_week)
+                            NotificationGroupCategory.EARLIER ->
+                                androidx.compose.ui.res.stringResource(R.string.notifications_group_earlier)
                         }
                     )
                     group.items.forEach { event ->

@@ -4,12 +4,12 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The project status is Bingee `1.0.1-stable`. The app contains a local-first Compose shell, provider-independent domain foundations, secure TMDB credential management, remote movie and TV-series search, Room-backed title details, incrementally cached TV seasons and episodes, local watch progress, title-level personal ratings, Profile collection management, a Room-first Home calendar, approximate local notifications, versioned JSON backup/restore (v1), and an additive importer for documented TV Time JSON ZIP profiles. Movies and TV Series naturally include animated and anime content available from TMDB. The release details are tracked in [release notes](docs/release-notes-1.0.0-stable.md) and [roadmap](docs/roadmap.md).
+The current development release is Bingee `1.1.0`. It contains a local-first Compose app with Home, Search, Profile, Continue Watching, Notification Center, settings subpages, secure TMDB credential management, Room-backed details and progress, a Room-first release calendar, approximate local notifications, versioned JSON backup/restore (v1), an additive importer for documented TV Time JSON ZIP profiles, English/Italian localization, and a manual GitHub update checker. TMDB is the only runtime media provider; animated and anime content is handled as ordinary TMDB Movies or TV Series. Historical release details remain in [release notes](docs/release-notes-1.0.0-stable.md); current work is tracked in the [roadmap](docs/roadmap.md).
 
 
-Remote metadata will use a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
+Remote metadata uses a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
 
-## Planned stack
+## Current stack
 
 - Kotlin with Jetpack Compose and Material 3
 - Single-activity Navigation Compose
@@ -62,7 +62,7 @@ Open the repository in Android Studio, choose an emulator or connected device, a
 ./gradlew installDebug
 ```
 
-On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation then exposes Home, Search, and Profile. Settings is opened from Profile. Search offers explicit Movies and TV Series categories, debounces input, loads additional TMDB pages, and adds or removes results from the local collection. Search and Profile rows open title details using provider-qualified identity. Cached textual details, loaded seasons, episodes, watch progress, and personal ratings render from Room and remain usable offline or after credential removal. Episode/movie progress and 1–10 title ratings are editable without network or collection membership. Profile reads only Room and supports local title search, media/watch-state filters, and recently-added, title, progress, or rating sort. Home reads cached movie releases, season premieres, and episode air dates only from Room, includes the prior seven calendar days plus all known future events, and refreshes TMDB metadata only after an explicit user action.
+On first run without a configured credential, Bingee offers TMDB setup or offline continuation. Bottom navigation exposes Home, Search, and Profile; Profile opens the Appearance & Language, Notifications, Data & backup, Privacy, and About settings subpages. Search offers explicit Movies and TV Series categories, debounces input, loads additional TMDB pages, and adds or removes results from the local collection. Search and Profile rows open title details using provider-qualified identity. Cached textual details, loaded seasons, episodes, watch progress, and personal ratings render from Room and remain usable offline or after credential removal. Episode/movie progress and 1–10 title ratings are editable without network or collection membership. Profile reads only Room and supports local title search, media/watch-state filters, and recently-added, title, progress, or rating sort. Home reads cached movie releases, season premieres, and episode air dates only from Room, includes Continue Watching, and refreshes TMDB metadata only after an explicit user action. Notification Center reads the cached release events; the About page offers a manual GitHub update check.
 
 WorkManager maintains a bounded batch of up to 20 followed titles approximately once per day when network is available. A separate network-free worker evaluates cached Room events for optional local notifications. Notifications are disabled by default; Settings requests Android notification permission only after the user enables them and supports same-day, one-day, three-day, or seven-day lead times plus movie, season, and episode categories. Android may delay work because of Doze, battery optimization, constraints, or device policy; Bingee promises no exact notification time.
 
@@ -105,7 +105,7 @@ See [architecture conventions](docs/architecture.md) and [architecture decisions
 
 ## Versioning
 
-The project follows Semantic Versioning. While unreleased, development versions remain in the `0.y.z` range and may use a prerelease suffix. Milestone 0 uses `0.1.0-dev` with Android `versionCode` 1.
+The project follows Semantic Versioning. The current Android release is `1.1.0` with `versionCode` 3. Historical milestone documents may use older version numbers.
 
 ## Contributing
 

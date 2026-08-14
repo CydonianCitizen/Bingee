@@ -159,7 +159,11 @@ internal fun StatisticsContent(
                         modifier = Modifier.weight(1f)
                     )
                     val hours = statistics.estimatedWatchTimeMinutes / 60
-                    val watchTimeText = if (hours > 0) "${hours}h" else "${statistics.estimatedWatchTimeMinutes}m"
+                    val watchTimeText = if (hours > 0) {
+                        stringResource(R.string.statistics_watch_time_hours, hours)
+                    } else {
+                        stringResource(R.string.statistics_watch_time_minutes, statistics.estimatedWatchTimeMinutes)
+                    }
                     StatCard(
                         title = stringResource(R.string.statistics_watch_time),
                         value = watchTimeText,

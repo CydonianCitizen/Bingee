@@ -358,15 +358,19 @@ private fun NotificationEventCopy(event: ReleaseEvent, today: LocalDate, modifie
     )
 }
 
+@Composable
 private fun buildSeasonEpisodeDetail(event: ReleaseEvent): String {
     val season = event.seasonNumber
     val episode = event.episodeNumber
     val title = event.subjectTitle
 
     return when {
-        season != null && episode != null && !title.isNullOrBlank() -> "S$season E$episode • $title"
-        season != null && episode != null -> "S$season E$episode"
-        season != null && !title.isNullOrBlank() -> "Season $season • $title"
+        season != null && episode != null && !title.isNullOrBlank() ->
+            stringResource(R.string.notification_detail_episode, season, episode, title)
+        season != null && episode != null ->
+            stringResource(R.string.notification_detail_episode_number, season, episode)
+        season != null && !title.isNullOrBlank() ->
+            stringResource(R.string.notification_detail_season, season, title)
         !title.isNullOrBlank() -> title
         else -> ""
     }
@@ -375,8 +379,8 @@ private fun buildSeasonEpisodeDetail(event: ReleaseEvent): String {
 @Composable
 private fun formatEventDateBadge(eventDate: LocalDate, today: LocalDate): String = when {
     eventDate == today -> stringResource(R.string.notifications_group_today)
-    eventDate == today.minusDays(1) -> "Yesterday"
-    eventDate == today.plusDays(1) -> "Tomorrow"
+    eventDate == today.minusDays(1) -> stringResource(R.string.notification_relative_yesterday)
+    eventDate == today.plusDays(1) -> stringResource(R.string.notification_relative_tomorrow)
     else -> formatLocalizedDate(eventDate)
 }
 

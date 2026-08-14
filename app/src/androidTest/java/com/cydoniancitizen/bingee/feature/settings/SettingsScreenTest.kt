@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.feature.settings
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +11,8 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.data.settings.AppLanguage
 import com.cydoniancitizen.bingee.data.settings.AppTheme
@@ -20,6 +23,7 @@ import org.junit.Test
 class SettingsScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
+    private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
     fun languageDropdownShowsOnlyEnglishAndItalianoAndNoSystemDefault() {
@@ -36,15 +40,20 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Appearance & Language").assertIsDisplayed()
-        composeRule.onNodeWithText("Language").assertIsDisplayed()
-        composeRule.onNodeWithText("English").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_appearance_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_language_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.settings_language_en)
+        ).performScrollTo().assertIsDisplayed()
 
-        composeRule.onNodeWithText("English").performClick()
-        composeRule.onNodeWithText("Italiano").assertIsDisplayed()
-        composeRule.onNode(hasText("System default") and hasAnyAncestor(hasText("Language"))).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.settings_language_en)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_language_it)).assertIsDisplayed()
+        composeRule.onNode(
+            hasText(context.getString(R.string.settings_theme_system)) and
+                hasAnyAncestor(hasText(context.getString(R.string.settings_language_title)))
+        ).assertDoesNotExist()
 
-        composeRule.onNodeWithText("Italiano").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_language_it)).performClick()
         assertEquals(AppLanguage.ITALIAN, selectedLanguage)
     }
 
@@ -63,14 +72,16 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Appearance & Language").assertIsDisplayed()
-        composeRule.onNodeWithText("Theme").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_appearance_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.settings_theme_title)
+        ).performScrollTo().assertIsDisplayed()
 
-        composeRule.onNodeWithText("System default").performClick()
-        composeRule.onNodeWithText("Light").assertIsDisplayed()
-        composeRule.onNodeWithText("Dark").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_theme_system)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_theme_light)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_theme_dark)).assertIsDisplayed()
 
-        composeRule.onNodeWithText("Dark").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_theme_dark)).performClick()
         assertEquals(AppTheme.DARK, selectedTheme)
     }
 }

@@ -1,6 +1,15 @@
 # Architecture conventions
 
-Bingee is a package-structured modular monolith in one Android application module. Packages provide lightweight boundaries; a future Gradle-module split requires measured value and a superseding ADR.
+Bingee v1.1.0 is a package-structured modular monolith in one Android application module. Packages provide lightweight boundaries; a future Gradle-module split requires measured value and a superseding ADR.
+
+## Current v1.1.0 surface
+
+- TMDB is the only runtime media provider. No Jikan or cross-provider deduplication runs in the app.
+- Top-level navigation is Home, Search, and Profile. Profile opens the Appearance & Language, Notifications, Data & backup, Privacy, and About subpages.
+- Home is Room-first and includes Continue Watching; Notification Center reads cached release events and supports local refresh feedback.
+- Room v1 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, and portable preferences.
+- Backup v1 is the versioned JSON export/restore contract and uses transactional replace restore.
+- The UI ships in English and Italian. About exposes a manual GitHub update checker; it does not perform background update checks.
 
 ## Dependency direction
 

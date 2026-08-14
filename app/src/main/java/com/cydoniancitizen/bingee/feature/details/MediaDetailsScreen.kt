@@ -495,6 +495,10 @@ internal fun WatchedDateDialog(
     }
 
     val titleRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
+    val futureDateError = stringResource(R.string.watched_date_future_error, today)
+    val beforeReleaseDateError = releaseDate?.let {
+        stringResource(R.string.watched_date_before_release_error, it)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -551,9 +555,9 @@ internal fun WatchedDateDialog(
                 } else {
                     validationError = when (result) {
                         is WatchedDateValidationResult.FutureDateRejected ->
-                            "Date cannot be in the future (today is $today)"
+                            futureDateError
                         is WatchedDateValidationResult.DatePrecedesReleaseRejected ->
-                            "Date cannot be before release date ($releaseDate)"
+                            beforeReleaseDateError
                         else -> null
                     }
                 }

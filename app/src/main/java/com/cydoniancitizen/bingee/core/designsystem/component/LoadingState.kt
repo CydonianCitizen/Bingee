@@ -8,11 +8,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 
@@ -38,6 +40,6 @@ fun LoadingState(message: String, modifier: Modifier = Modifier) {
 @Composable
 private fun LoadingStatePreview() {
     BingeeTheme {
-        LoadingState(message = "Loading library")
+        LoadingState(message = stringResource(R.string.library_loading))
     }
 }

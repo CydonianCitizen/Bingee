@@ -1,6 +1,8 @@
-# Privacy notes
+# Privacy notes (v1.1.0)
 
 Bingee is local-first and currently has no Bingee account, proprietary backend, analytics, or crash-reporting service.
+
+TMDB is the only runtime media provider. The About screen can query GitHub only when the user manually checks for an update; this request does not include the TMDB credential or personal tracking data.
 
 ## TMDB credential
 

@@ -1,8 +1,16 @@
 # Bingee Roadmap
 
-This document outlines planned future enhancements for Bingee following the `v1.0.1-stable` release.
+This document describes current delivery and explicitly deferred work for Bingee `v1.1.0`.
 
-## Future Revisions (`v1.1.0`)
+## Delivered in `v1.1.0`
 
-- **UI/UX Refinement**: Continued visual polish, transition updates, and design system refinements.
-- **Better Settings Organization**: Better organization and grouping of app settings and preferences.
+- English and Italian localization with active `MissingTranslation` lint coverage.
+- Home, Search, Profile, Continue Watching, Notification Center, and settings subpages.
+- Room v1 release calendar, local notifications, Backup v1, TV Time additive import, and manual GitHub update checks.
+
+## Deferred
+
+- Watching, Abandoned, and the planned Profile redesign remain future UX work.
+- R8/minification remains a separate release-optimization batch.
+- FTS, cache eviction infrastructure, generalized job-management abstractions, and other P3-7 optimizations remain measurement-driven work.
+- Accounts, cloud sync, social features, streaming availability, recommendations, Jikan, and cross-provider deduplication remain out of scope.
