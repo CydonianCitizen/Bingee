@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStreamWriter
 import java.io.StringReader
+import java.math.BigDecimal
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -111,6 +112,9 @@ internal object BackupJsonCodec {
         writer.name("seriesProgress").beginArray()
         data.seriesProgress.forEach { writeSeriesProgress(writer, it) }
         writer.endArray()
+        writer.name("abandonedSeries").beginArray()
+        data.abandonedSeries.forEach { writeAbandonedSeries(writer, it) }
+        writer.endArray()
         writer.name("episodeProgress").beginArray()
         data.episodeProgress.forEach { writeEpisodeProgress(writer, it) }
         writer.endArray()
@@ -207,6 +211,13 @@ internal object BackupJsonCodec {
         writer.endObject()
     }
 
+    private fun writeAbandonedSeries(writer: JsonWriter, abandoned: BackupAbandonedSeries) {
+        writer.beginObject()
+        writer.name("mediaRef")
+        writeRef(writer, abandoned.mediaRef)
+        writer.endObject()
+    }
+
     private fun writeEpisodeProgress(writer: JsonWriter, progress: BackupEpisodeProgress) {
         writer.beginObject().name("episodeRef")
         writeRef(writer, progress.episodeRef)
@@ -258,6 +269,12 @@ internal object BackupJsonCodec {
         val preferences = readPreferences(required(dataObj, "preferences").asObjectOrProblem())
 
         val seriesProgress = readOptionalArray(dataObj, "seriesProgress", BackupLimits.MAX_MEDIA, ::readSeriesProgress)
+        val abandonedSeries = readOptionalArray(
+            dataObj,
+            "abandonedSeries",
+            BackupLimits.MAX_MEDIA,
+            ::readAbandonedSeries
+        )
 
         return BackupData(
             media = media,
@@ -268,7 +285,8 @@ internal object BackupJsonCodec {
             episodeProgress = episodeProgress,
             ratings = ratings,
             preferences = preferences,
-            seriesProgress = seriesProgress
+            seriesProgress = seriesProgress,
+            abandonedSeries = abandonedSeries
         )
     }
 
@@ -351,6 +369,11 @@ internal object BackupJsonCodec {
         )
     }
 
+    private fun readAbandonedSeries(value: JsonElement): BackupAbandonedSeries {
+        val objectValue = value.asObjectOrProblem()
+        return BackupAbandonedSeries(readRef(required(objectValue, "mediaRef")))
+    }
+
     private fun readEpisodeProgress(value: JsonElement): BackupEpisodeProgress {
         val objectValue = value.asObjectOrProblem()
         return BackupEpisodeProgress(
@@ -423,15 +446,7 @@ internal object BackupJsonCodec {
         return value
     }
 
-    private fun requiredInt(obj: JsonObject, key: String): Int {
-        val elem = required(obj, key)
-        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
-        return try {
-            elem.asInt
-        } catch (_: Exception) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-    }
+    private fun requiredInt(obj: JsonObject, key: String): Int = required(obj, key).exactIntOrProblem()
 
     private fun requiredBoolean(obj: JsonObject, key: String): Boolean {
         val elem = required(obj, key)
@@ -464,12 +479,7 @@ internal object BackupJsonCodec {
     private fun nullableInt(obj: JsonObject, key: String): Int? {
         val elem = obj.get(key)
         if (elem == null || elem.isJsonNull) return null
-        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
-        return try {
-            elem.asInt
-        } catch (_: Exception) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
+        return elem.exactIntOrProblem()
     }
 
     private fun nullableDouble(obj: JsonObject, key: String): Double? {
@@ -502,6 +512,17 @@ internal object BackupJsonCodec {
     private fun JsonElement.asObjectOrProblem(): JsonObject {
         if (!isJsonObject) problem(BackupFailureKind.INVALID_STRUCTURE)
         return asJsonObject
+    }
+
+    private fun JsonElement.exactIntOrProblem(): Int {
+        if (!isJsonPrimitive || !asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
+        return try {
+            BigDecimal(asString).intValueExact()
+        } catch (_: ArithmeticException) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        } catch (_: NumberFormatException) {
+            problem(BackupFailureKind.INVALID_STRUCTURE)
+        }
     }
 
     private fun problem(kind: BackupFailureKind): Nothing = throw BackupParseFailure(kind)

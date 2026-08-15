@@ -65,9 +65,18 @@ internal class DefaultLibraryRepository @Inject constructor(
     override fun observeEntryCount(): Flow<AppResult<Int>> =
         libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
 
-    override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> = libraryDao
-        .observeLibraryItem(ref.source, ref.normalizedExternalId())
-        .asPersistenceResult { row -> row?.toDomain(preferredRef = ref.normalized()) }
+    override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> {
+        val normalized = ref.normalized()
+        return combine(
+            libraryDao.observeLibraryItem(normalized.source, normalized.externalId),
+            libraryDao.observeLibraryProgress(LocalDate.now(clock))
+        ) { row, progress ->
+            row?.toDomain(
+                preferredRef = normalized,
+                progressRow = progress.firstOrNull { it.localMediaId == row.media.localMediaId }
+            )
+        }.asPersistenceResult { it }
+    }
 
     override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
         libraryDao.observeMembershipRefs().asPersistenceResult { rows ->
@@ -171,6 +180,20 @@ internal class DefaultLibraryRepository @Inject constructor(
                 }
             }
         }
+
+    override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+        withNormalizedExternalId(ref) { externalId ->
+            persistenceRead {
+                when (libraryDao.setSeriesAbandoned(ref.source, externalId, isAbandoned)) {
+                    ProgressWriteOutcome.SUCCESS -> Unit
+                    ProgressWriteOutcome.NOT_FOUND -> throw IllegalStateException("Media entity not found")
+                    ProgressWriteOutcome.NOT_IN_LIBRARY -> throw IllegalArgumentException("Series is not in library")
+                    ProgressWriteOutcome.MEDIA_TYPE_MISMATCH -> throw IllegalArgumentException("Series required")
+                    ProgressWriteOutcome.NOT_TRACKABLE,
+                    ProgressWriteOutcome.INCOMPLETE -> throw IllegalStateException("Invalid series state")
+                }
+            }
+        }
 }
 
 private fun LibraryDao.ContinueWatchingRow.toDomain() = ContinueWatchingItem(
@@ -183,14 +206,15 @@ private fun LibraryDao.ContinueWatchingRow.toDomain() = ContinueWatchingItem(
         trackableEpisodes = trackableEpisodes,
         completedSeasons = completedSeasons,
         trackableSeasons = trackableSeasons,
-        isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes
+        isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes && hasSufficientCoverage
     ),
     nextEpisode = if (nextSeasonNumber != null && nextEpisodeNumber != null) {
         EpisodePosition(nextSeasonNumber, nextEpisodeNumber)
     } else {
         null
     },
-    updatedAt = lastProgressAt
+    updatedAt = lastProgressAt,
+    isAbandoned = isAbandoned
 )
 
 internal fun String.toSqlLikePattern(): String {

@@ -61,7 +61,7 @@ class ProfileViewModelTest {
 
         assertTrue(watchedMovie.isWatched())
         assertFalse(unwatchedMovie.isWatched())
-        assertTrue(inProgressSeries.isWatched())
+        assertFalse(inProgressSeries.isWatched())
         assertFalse(notStartedSeries.isWatched())
 
         assertTrue(watchedMovie.belongsToCategory(ProfileCategory.MOVIES))

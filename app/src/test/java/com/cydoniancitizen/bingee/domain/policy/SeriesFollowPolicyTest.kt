@@ -97,6 +97,12 @@ class SeriesFollowPolicyTest {
         assertTrue(SeriesFollowPolicy.isFollowed(entry))
     }
 
+    @Test
+    fun abandonedSeriesIsNotFollowed() {
+        assertFalse(SeriesFollowPolicy.isFollowed(createEntry(MediaType.SERIES, true).copy(isAbandoned = true)))
+        assertFalse(SeriesFollowPolicy.isFollowedSeries(MediaType.SERIES, true, isAbandoned = true))
+    }
+
     private fun createEntry(
         mediaType: MediaType,
         inLibrary: Boolean,

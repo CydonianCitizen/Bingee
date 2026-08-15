@@ -67,6 +67,27 @@ class BackupJsonCodecTest {
     }
 
     @Test
+    fun abandonedSeriesIsOptionalAndRoundTripsInBackupV1() {
+        val ref = BackupRef(MediaSource.TMDB, "1399")
+        val document = fullDocument().copy(
+            data = fullDocument().data.copy(
+                media = listOf(
+                    BackupMedia(ref, listOf(ref), MediaType.SERIES, "Series", null, null, null, null)
+                ),
+                library = listOf(BackupLibraryEntry(ref, Instant.EPOCH)),
+                movieProgress = emptyList(),
+                ratings = emptyList(),
+                abandonedSeries = listOf(BackupAbandonedSeries(ref))
+            )
+        )
+
+        val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
+
+        assertEquals(listOf(BackupAbandonedSeries(ref)), parsed.document.data.abandonedSeries)
+        assertTrue(BackupValidator.validate(parsed.document) is BackupValidationResult.Success)
+    }
+
+    @Test
     fun committedV1FixtureRemainsAccepted() {
         val fixture = listOf(
             Path.of("docs", "backup", "fixtures", "valid-full.json"),
@@ -119,6 +140,35 @@ class BackupJsonCodecTest {
             (BackupJsonCodec.parse(ByteArray(MAX_BACKUP_BYTES + 1)) as BackupParseResult.Failure).failure.kind
         )
     }
+
+    @Test
+    fun integerFieldsRequireExactIntValues() {
+        assertEquals(1, parseSchemaVersion("1"))
+        assertEquals(1, parseSchemaVersion("1e0"))
+        assertEquals(0, parseNotificationLeadDays("0"))
+        assertEquals(-1, parseNotificationLeadDays("-1"))
+        listOf("1.5", "2147483648", "1e-1").forEach { value ->
+            assertEquals(BackupFailureKind.INVALID_STRUCTURE, parseSchemaVersionFailure(value))
+        }
+    }
+
+    private fun parseSchemaVersion(value: String): Int = (
+        BackupJsonCodec.parse(
+            replaceInteger("schemaVersion", value)
+        ) as BackupParseResult.Success
+        ).document.schemaVersion
+
+    private fun parseNotificationLeadDays(value: String): Int = (
+        BackupJsonCodec.parse(replaceInteger("notificationLeadDays", value)) as BackupParseResult.Success
+        ).document.data.preferences.notificationLeadDays
+
+    private fun parseSchemaVersionFailure(value: String): BackupFailureKind =
+        (BackupJsonCodec.parse(replaceInteger("schemaVersion", value)) as BackupParseResult.Failure).failure.kind
+
+    private fun replaceInteger(key: String, value: String): ByteArray = BackupJsonCodec.encode(fullDocument())
+        .toString(Charsets.UTF_8)
+        .replace("\"$key\": 1", "\"$key\": $value")
+        .toByteArray(Charsets.UTF_8)
 
     private fun fullDocument() = BackupDocument(
         formatId = BACKUP_FORMAT_ID,

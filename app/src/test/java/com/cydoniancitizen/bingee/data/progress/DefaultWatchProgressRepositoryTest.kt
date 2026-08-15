@@ -13,6 +13,7 @@ import com.cydoniancitizen.bingee.data.library.local.MovieProgressRow
 import com.cydoniancitizen.bingee.data.library.local.MovieWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.data.library.local.SeriesCompletionRow
 import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
 import java.time.Clock
@@ -150,6 +151,9 @@ class DefaultWatchProgressRepositoryTest {
         override suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long> = emptyList()
         override suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity? = null
         override suspend fun getSeriesProgressByMediaId(localMediaId: Long): SeriesWatchProgressEntity? = null
+        override suspend fun getSeriesCompletion(localMediaId: Long, today: LocalDate): SeriesCompletionRow =
+            SeriesCompletionRow(0, 0, true)
+        override suspend fun getSeasonByLocalId(localSeasonId: Long): SeasonEntity? = null
         override suspend fun insertSeriesProgress(progress: SeriesWatchProgressEntity): Long = 1
         override suspend fun deleteSeriesProgress(localMediaId: Long) = Unit
         override suspend fun insertEpisodeProgress(progress: EpisodeWatchProgressEntity): Long = 1

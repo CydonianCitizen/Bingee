@@ -73,6 +73,8 @@
     <string name="library_action_add">Aggiungi alla libreria</string>
     <string name="library_action_remove">Rimuovi dalla libreria</string>
     <string name="library_action_updating">Aggiornamento libreria…</string>
+    <string name="series_tracking_abandon">Segna serie come abbandonata</string>
+    <string name="series_tracking_restore">Riprendi tracciamento serie</string>
     <string name="search_action_add_watch_later">Aggiungi a Da vedere</string>
     <string name="search_action_in_watch_later">In Da vedere</string>
     <string name="profile_title">Profilo</string>

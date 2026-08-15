@@ -45,6 +45,9 @@ interface LibraryRepository {
     suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit>
 
     suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit>
+
+    suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+        AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.UnsupportedData)
 }
 
 private fun LibraryEntry.toContinueWatchingItem(): ContinueWatchingItem? = (progress as? LibraryProgress.Series)?.let {
@@ -56,6 +59,7 @@ private fun LibraryEntry.toContinueWatchingItem(): ContinueWatchingItem? = (prog
         progress = it.progress,
         nextEpisode = null,
         updatedAt = null,
+        isAbandoned = isAbandoned,
         inLibrary = inLibrary
     )
 }

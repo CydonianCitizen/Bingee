@@ -166,3 +166,22 @@ internal data class SeriesWatchProgressEntity(
     @ColumnInfo(name = "completed_at")
     val completedAt: Instant
 )
+
+@Entity(
+    tableName = "series_state_overrides",
+    foreignKeys = [
+        ForeignKey(
+            entity = MediaEntity::class,
+            parentColumns = ["local_media_id"],
+            childColumns = ["local_media_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ]
+)
+internal data class SeriesStateOverrideEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "local_media_id")
+    val localMediaId: Long,
+    @ColumnInfo(name = "is_abandoned")
+    val isAbandoned: Boolean = true
+)

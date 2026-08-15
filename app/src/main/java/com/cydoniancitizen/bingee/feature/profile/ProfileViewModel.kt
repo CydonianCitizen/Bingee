@@ -8,6 +8,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
 import com.cydoniancitizen.bingee.core.model.isWatched
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -205,7 +206,10 @@ internal class ProfileViewModel @Inject constructor(
         val filtered = allRaw.filter { entry ->
             val matchesCollection = when (state.collection) {
                 ProfileCollection.WATCHED -> entry.isWatched()
-                ProfileCollection.WATCH_LATER -> !entry.isWatched() && entry.inLibrary
+                ProfileCollection.WATCH_LATER -> when (entry.mediaType) {
+                    MediaType.SERIES -> entry.serialState == SeriesTrackingState.WATCH_LATER
+                    MediaType.MOVIE -> !entry.isWatched() && entry.inLibrary
+                }
                 ProfileCollection.FAVORITES -> entry.isFavorite
             }
             val matchesCategory = entry.belongsToCategory(state.category)

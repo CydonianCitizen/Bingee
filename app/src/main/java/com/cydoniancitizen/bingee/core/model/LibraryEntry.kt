@@ -16,6 +16,7 @@ data class LibraryEntry(
     val personalRating: PersonalRating? = null,
     val isFavorite: Boolean = false,
     val watchedDate: LocalDate? = null,
+    val isAbandoned: Boolean = false,
     val inLibrary: Boolean = true
 ) {
     init {
@@ -23,26 +24,20 @@ data class LibraryEntry(
     }
 
     val libraryState: LibraryState get() = progress.deriveLibraryState()
-}
 
-/** Any watched TV episode counts as watched until granular serial states are introduced. */
-internal enum class PersonalLibraryStatus { UNWATCHED, WATCHED }
-
-internal fun LibraryEntry.personalLibraryStatus(): PersonalLibraryStatus = when (val p = progress) {
-    is LibraryProgress.Movie ->
-        if (p.state is MovieWatchState.Watched) PersonalLibraryStatus.WATCHED else PersonalLibraryStatus.UNWATCHED
-    is LibraryProgress.Series ->
-        if (p.progress.watchedEpisodes > 0 || p.progress.isComplete) {
-            PersonalLibraryStatus.WATCHED
+    val serialState: SeriesTrackingState?
+        get() = if (mediaType == MediaType.SERIES) {
+            resolveSeriesTrackingState(
+                inLibrary = inLibrary,
+                progress = (progress as? LibraryProgress.Series)?.progress,
+                isAbandoned = isAbandoned
+            )
         } else {
-            PersonalLibraryStatus.UNWATCHED
-        }
-    LibraryProgress.Unavailable ->
-        if (libraryState == LibraryState.COMPLETED || libraryState == LibraryState.IN_PROGRESS) {
-            PersonalLibraryStatus.WATCHED
-        } else {
-            PersonalLibraryStatus.UNWATCHED
+            null
         }
 }
 
-fun LibraryEntry.isWatched(): Boolean = personalLibraryStatus() == PersonalLibraryStatus.WATCHED
+fun LibraryEntry.isWatched(): Boolean = when (mediaType) {
+    MediaType.MOVIE -> (progress as? LibraryProgress.Movie)?.state is MovieWatchState.Watched
+    MediaType.SERIES -> serialState == SeriesTrackingState.WATCHED
+}

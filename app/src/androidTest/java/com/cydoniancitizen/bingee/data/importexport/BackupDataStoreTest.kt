@@ -199,7 +199,8 @@ class BackupDataStoreTest {
                 BackupRating(movie, 10, ratedAt, ratedAt),
                 BackupRating(removedMovie, 4, ratedAt, ratedAt)
             ),
-            preferences = BackupPreferences(7, false, true, false)
+            preferences = BackupPreferences(7, false, true, false),
+            abandonedSeries = listOf(BackupAbandonedSeries(series))
         )
         val document = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, data)
         return (BackupValidator.validate(document) as BackupValidationResult.Success).plan

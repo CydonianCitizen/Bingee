@@ -16,6 +16,7 @@ internal data class PortableSnapshotRows(
     val episodeProgress: List<EpisodeWatchProgressEntity>,
     val movieProgress: List<MovieWatchProgressEntity>,
     val seriesProgress: List<SeriesWatchProgressEntity>,
+    val seriesStateOverrides: List<SeriesStateOverrideEntity>,
     val ratings: List<MediaRatingEntity>,
     val preferences: PortablePreferencesEntity?
 )
@@ -45,6 +46,9 @@ internal abstract class PortableSnapshotDao {
 
     @Query("SELECT * FROM series_watch_progress ORDER BY local_media_id")
     protected abstract suspend fun getSeriesProgress(): List<SeriesWatchProgressEntity>
+
+    @Query("SELECT * FROM series_state_overrides ORDER BY local_media_id")
+    protected abstract suspend fun getSeriesStateOverrides(): List<SeriesStateOverrideEntity>
 
     @Query("SELECT * FROM media_ratings ORDER BY local_media_id")
     protected abstract suspend fun getRatings(): List<MediaRatingEntity>
@@ -83,6 +87,9 @@ internal abstract class PortableSnapshotDao {
     abstract suspend fun insertSeriesProgress(progress: SeriesWatchProgressEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertSeriesStateOverride(override: SeriesStateOverrideEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertRating(rating: MediaRatingEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -102,6 +109,9 @@ internal abstract class PortableSnapshotDao {
 
     @Query("DELETE FROM series_watch_progress")
     abstract suspend fun deleteSeriesProgress()
+
+    @Query("DELETE FROM series_state_overrides")
+    abstract suspend fun deleteSeriesStateOverrides()
 
     @Query("DELETE FROM media_ratings")
     abstract suspend fun deleteRatings()
@@ -139,6 +149,7 @@ internal abstract class PortableSnapshotDao {
         seasons = getSeasons(),
         episodes = getEpisodes(), episodeProgress = getEpisodeProgress(),
         movieProgress = getMovieProgress(), seriesProgress = getSeriesProgress(),
+        seriesStateOverrides = getSeriesStateOverrides(),
         ratings = getRatings(),
         preferences = getPreferences()
     )

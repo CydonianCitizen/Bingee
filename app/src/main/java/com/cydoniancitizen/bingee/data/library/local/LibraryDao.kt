@@ -25,6 +25,8 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
         @ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
         @ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int,
+        @ColumnInfo(name = "has_sufficient_coverage") val hasSufficientCoverage: Boolean,
+        @ColumnInfo(name = "is_abandoned") val isAbandoned: Boolean,
         @ColumnInfo(name = "last_progress_at") val lastProgressAt: Instant?,
         @ColumnInfo(name = "next_season_number") val nextSeasonNumber: Int?,
         @ColumnInfo(name = "next_episode_number") val nextEpisodeNumber: Int?
@@ -39,7 +41,9 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "watched_episodes") val watchedEpisodes: Int,
         @ColumnInfo(name = "trackable_episodes") val trackableEpisodes: Int,
         @ColumnInfo(name = "completed_seasons") val completedSeasons: Int,
-        @ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int
+        @ColumnInfo(name = "trackable_seasons") val trackableSeasons: Int,
+        @ColumnInfo(name = "has_sufficient_coverage") val hasSufficientCoverage: Boolean,
+        @ColumnInfo(name = "is_abandoned") val isAbandoned: Boolean
     )
 
     @Transaction
@@ -135,6 +139,12 @@ internal abstract class LibraryDao {
                            AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
                            AND episode_watch_progress.local_episode_id IS NULL
                      )
+                     AND seasons.episodes_fetched_at IS NOT NULL
+                     AND seasons.episode_count = (
+                         SELECT COUNT(*)
+                         FROM episodes
+                         WHERE episodes.local_season_id = seasons.local_season_id
+                     )
                ) AS completed_seasons,
                (
                    SELECT COUNT(*)
@@ -147,6 +157,25 @@ internal abstract class LibraryDao {
                            AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
                      )
                ) AS trackable_seasons,
+               CASE WHEN NOT EXISTS (
+                   SELECT 1
+                   FROM seasons
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (
+                         seasons.episodes_fetched_at IS NULL
+                         OR seasons.episode_count != (
+                             SELECT COUNT(*)
+                             FROM episodes
+                             WHERE episodes.local_season_id = seasons.local_season_id
+                         )
+                     )
+                   ) THEN 1 ELSE 0 END AS has_sufficient_coverage,
+               CASE WHEN EXISTS (
+                   SELECT 1 FROM series_state_overrides
+                   WHERE series_state_overrides.local_media_id = media_entries.local_media_id
+                     AND series_state_overrides.is_abandoned = 1
+               ) THEN 1 ELSE 0 END AS is_abandoned,
                (
                    SELECT MAX(episode_watch_progress.watched_at)
                    FROM episodes
@@ -215,6 +244,8 @@ internal abstract class LibraryDao {
             UNION
             SELECT local_media_id FROM series_watch_progress
             UNION
+            SELECT local_media_id FROM series_state_overrides
+            UNION
             SELECT local_media_id FROM media_entries WHERE is_favorite = 1
             UNION
             SELECT seasons.local_media_id
@@ -225,6 +256,13 @@ internal abstract class LibraryDao {
         season_progress AS (
             SELECT seasons.local_media_id,
                    seasons.local_season_id,
+                   seasons.episode_count,
+                   seasons.episodes_fetched_at,
+                   (
+                       SELECT COUNT(*)
+                       FROM episodes AS cached_episodes
+                       WHERE cached_episodes.local_season_id = seasons.local_season_id
+                   ) AS cached_episode_count,
                    COUNT(*) AS trackable_episodes,
                    SUM(
                        CASE WHEN episode_watch_progress.local_episode_id IS NOT NULL
@@ -244,6 +282,8 @@ internal abstract class LibraryDao {
                    SUM(season_progress.trackable_episodes) AS trackable_episodes,
                    SUM(
                        CASE WHEN season_progress.watched_episodes = season_progress.trackable_episodes
+                                     AND season_progress.episodes_fetched_at IS NOT NULL
+                                     AND season_progress.episode_count = season_progress.cached_episode_count
                             THEN 1 ELSE 0 END
                    ) AS completed_seasons,
                    COUNT(*) AS trackable_seasons
@@ -258,11 +298,27 @@ internal abstract class LibraryDao {
                COALESCE(series_progress.watched_episodes, 0) AS watched_episodes,
                COALESCE(series_progress.trackable_episodes, 0) AS trackable_episodes,
                COALESCE(series_progress.completed_seasons, 0) AS completed_seasons,
-               COALESCE(series_progress.trackable_seasons, 0) AS trackable_seasons
+               COALESCE(series_progress.trackable_seasons, 0) AS trackable_seasons,
+               CASE WHEN NOT EXISTS (
+                   SELECT 1
+                   FROM seasons
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (
+                         seasons.episodes_fetched_at IS NULL
+                         OR seasons.episode_count != (
+                             SELECT COUNT(*)
+                             FROM episodes
+                             WHERE episodes.local_season_id = seasons.local_season_id
+                         )
+                     )
+               ) THEN 1 ELSE 0 END AS has_sufficient_coverage,
+               CASE WHEN series_state_overrides.is_abandoned = 1 THEN 1 ELSE 0 END AS is_abandoned
         FROM media_entries
         INNER JOIN personal_state USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
         LEFT JOIN series_watch_progress USING(local_media_id)
+        LEFT JOIN series_state_overrides USING(local_media_id)
         LEFT JOIN series_progress USING(local_media_id)
         """
     )
@@ -278,6 +334,26 @@ internal abstract class LibraryDao {
         """
     )
     abstract suspend fun getMediaByExternalRef(source: MediaSource, externalId: String): MediaEntity?
+
+    @Transaction
+    open suspend fun setSeriesAbandoned(
+        source: MediaSource,
+        externalId: String,
+        isAbandoned: Boolean
+    ): ProgressWriteOutcome {
+        val media = getMediaByExternalRef(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
+        if (isAbandoned && !isInLibraryByMediaId(media.localMediaId)) return ProgressWriteOutcome.NOT_IN_LIBRARY
+        if (isAbandoned) {
+            insertSeriesStateOverride(SeriesStateOverrideEntity(media.localMediaId))
+        } else {
+            deleteSeriesStateOverride(media.localMediaId)
+        }
+        return ProgressWriteOutcome.SUCCESS
+    }
+
+    @Query("SELECT EXISTS(SELECT 1 FROM library_entries WHERE local_media_id = :localMediaId)")
+    protected abstract suspend fun isInLibraryByMediaId(localMediaId: Long): Boolean
 
     @Query(
         """
@@ -314,6 +390,12 @@ internal abstract class LibraryDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun insertMembership(membership: LibraryMembershipEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun insertSeriesStateOverride(override: SeriesStateOverrideEntity)
+
+    @Query("DELETE FROM series_state_overrides WHERE local_media_id = :localMediaId")
+    protected abstract suspend fun deleteSeriesStateOverride(localMediaId: Long)
 
     @Transaction
     @Query(
@@ -411,5 +493,14 @@ internal abstract class LibraryDao {
         )
         """
     )
-    abstract suspend fun removeMembership(source: MediaSource, externalId: String): Int
+    protected abstract suspend fun deleteMembership(source: MediaSource, externalId: String): Int
+
+    @Transaction
+    open suspend fun removeMembership(source: MediaSource, externalId: String): Int {
+        val removed = deleteMembership(source, externalId)
+        if (removed > 0) {
+            getMediaByExternalRef(source, externalId)?.let { deleteSeriesStateOverride(it.localMediaId) }
+        }
+        return removed
+    }
 }

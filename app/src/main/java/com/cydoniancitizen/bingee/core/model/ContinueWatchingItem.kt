@@ -10,6 +10,7 @@ data class ContinueWatchingItem(
     val progress: SeriesProgress,
     val nextEpisode: EpisodePosition?,
     val updatedAt: Instant?,
+    val isAbandoned: Boolean = false,
     val inLibrary: Boolean = true
 ) {
     init {

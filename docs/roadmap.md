@@ -10,7 +10,7 @@ This document describes current delivery and explicitly deferred work for Bingee
 
 ## Deferred
 
-- Watching, Abandoned, and the planned Profile redesign remain future UX work.
+- The planned Profile redesign remains future UX work. Canonical serial state and a low-risk Details Abandoned control ship in v1.1.0.
 - R8/minification remains a separate release-optimization batch.
 - FTS, cache eviction infrastructure, generalized job-management abstractions, and other P3-7 optimizations remain measurement-driven work.
 - Accounts, cloud sync, social features, streaming availability, recommendations, Jikan, and cross-provider deduplication remain out of scope.

@@ -149,4 +149,23 @@ class WatchedStatisticsTest {
         // Temporal history must ONLY include entries with an explicit watchedDate (2 titles)
         assertEquals(2, stats.watchedByMonthYear.size)
     }
+
+    @Test
+    fun incompleteSeriesDoesNotCountAsCompletionHistory() {
+        val series = LibraryEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "partial"),
+            mediaType = MediaType.SERIES,
+            title = "Partial",
+            addedAt = Instant.EPOCH,
+            watchedDate = LocalDate.of(2026, 8, 1),
+            progress = LibraryProgress.Series(SeriesProgress(1, 2, 0, 1, isComplete = false))
+        )
+
+        val stats = calculateWatchedStatistics(listOf(series))
+
+        assertEquals(0, stats.tvSeriesCompletedCount)
+        assertEquals(1, stats.episodesWatchedCount)
+        assertTrue(stats.watchedByMonthYear.isEmpty())
+        assertTrue(stats.recentlyCompletedTitles.isEmpty())
+    }
 }

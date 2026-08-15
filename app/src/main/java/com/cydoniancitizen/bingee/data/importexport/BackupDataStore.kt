@@ -14,6 +14,7 @@ import com.cydoniancitizen.bingee.data.library.local.PortablePreferencesEntity
 import com.cydoniancitizen.bingee.data.library.local.PortableSnapshotDao
 import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.data.library.local.SeriesStateOverrideEntity
 import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
 import java.time.Instant
@@ -31,6 +32,7 @@ internal enum class RestoreStage {
     LIBRARY_MEMBERSHIP,
     MOVIE_PROGRESS,
     SERIES_PROGRESS,
+    SERIES_STATE,
     EPISODE_PROGRESS,
     RATINGS,
     PORTABLE_PREFERENCES,
@@ -64,6 +66,7 @@ internal class BackupDataStore @Inject constructor(
                 addAll(rows.ratings.map { it.localMediaId })
                 addAll(rows.movieProgress.map { it.localMediaId })
                 addAll(rows.seriesProgress.map { it.localMediaId })
+                addAll(rows.seriesStateOverrides.map { it.localMediaId })
                 addAll(episodeMediaIds)
                 addAll(rows.media.filter { it.isFavorite }.map { it.localMediaId })
             }
@@ -160,6 +163,10 @@ internal class BackupDataStore @Inject constructor(
                         BackupSeriesProgress(mediaRefById.getValue(it.localMediaId), it.completedAt, it.watchedDate)
                     }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
+                abandonedSeries = rows.seriesStateOverrides
+                    .filter { it.isAbandoned && it.localMediaId in portableMediaIds }
+                    .map { BackupAbandonedSeries(mediaRefById.getValue(it.localMediaId)) }
+                    .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 episodeProgress = rows.episodeProgress.filter { it.localEpisodeId in episodeRefById }
                     .map { BackupEpisodeProgress(episodeRefById.getValue(it.localEpisodeId), it.watchedAt) }
                     .sortedWith(compareBy({ it.episodeRef.source.name }, { it.episodeRef.externalId })),
@@ -187,6 +194,7 @@ internal class BackupDataStore @Inject constructor(
             snapshotDao.deleteEpisodeProgress()
             snapshotDao.deleteMovieProgress()
             snapshotDao.deleteSeriesProgress()
+            snapshotDao.deleteSeriesStateOverrides()
             snapshotDao.deleteRatings()
             snapshotDao.deleteMemberships()
             snapshotDao.deleteEpisodes()
@@ -278,6 +286,13 @@ internal class BackupDataStore @Inject constructor(
                 )
             }
             failureInjector.check(RestoreStage.LIBRARY_MEMBERSHIP)
+
+            data.abandonedSeries.forEach { abandoned ->
+                snapshotDao.insertSeriesStateOverride(
+                    SeriesStateOverrideEntity(checkNotNull(mediaIds[abandoned.mediaRef.key()]))
+                )
+            }
+            failureInjector.check(RestoreStage.SERIES_STATE)
 
             data.movieProgress.forEach { progress ->
                 snapshotDao.insertMovieProgress(

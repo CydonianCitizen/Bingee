@@ -79,6 +79,7 @@ internal fun MediaDetailsScreen(
         onRetry = viewModel::retry,
         onToggleLibrary = viewModel::toggleLibrary,
         onToggleFavorite = viewModel::toggleFavorite,
+        onToggleSeriesAbandoned = viewModel::toggleSeriesAbandoned,
         onSetWatchedDate = viewModel::setWatchedDate,
         onToggleMovieWatched = viewModel::toggleMovieWatched,
         onToggleSeasonExpanded = viewModel::toggleSeasonExpanded,
@@ -107,6 +108,7 @@ internal fun MediaDetailsContent(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onToggleFavorite: () -> Unit = {},
+    onToggleSeriesAbandoned: () -> Unit = {},
     onSetWatchedDate: (LocalDate?) -> Unit = {},
     onToggleMovieWatched: () -> Unit = {},
     onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
@@ -166,12 +168,14 @@ internal fun MediaDetailsContent(
                 isStale = content.cached.freshness == CacheFreshness.STALE,
                 refreshError = (state.refresh as? DetailRefreshState.Error)?.error,
                 isInLibrary = state.isInLibrary,
+                isAbandoned = state.isAbandoned,
                 isLibraryUpdating = state.libraryAction == DetailLibraryActionState.UPDATING,
                 libraryError = state.libraryError,
                 watchedDate = state.watchedDate,
                 watchedDateUpdating = state.watchedDateUpdating,
                 onSetWatchedDate = onSetWatchedDate,
                 onToggleLibrary = onToggleLibrary,
+                onToggleSeriesAbandoned = onToggleSeriesAbandoned,
                 movieProgress = state.movieProgress,
                 series = state.series,
                 progressError = state.progressError,
@@ -219,6 +223,7 @@ private fun DetailBody(
     isStale: Boolean,
     refreshError: AppError?,
     isInLibrary: Boolean?,
+    isAbandoned: Boolean,
     isLibraryUpdating: Boolean,
     libraryError: AppError?,
     watchedDate: LocalDate?,
@@ -229,6 +234,7 @@ private fun DetailBody(
     progressError: AppError?,
     rating: DetailRatingState,
     onToggleLibrary: () -> Unit,
+    onToggleSeriesAbandoned: () -> Unit,
     onToggleMovieWatched: () -> Unit,
     onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
     onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit,
@@ -342,6 +348,19 @@ private fun DetailBody(
                     onToggleSeason = onToggleSeasonWatched,
                     onOpenSettings = onOpenSettings
                 )
+                if (isInLibrary == true) {
+                    TextButton(onClick = onToggleSeriesAbandoned, enabled = !isLibraryUpdating) {
+                        Text(
+                            stringResource(
+                                if (isAbandoned) {
+                                    R.string.series_tracking_restore
+                                } else {
+                                    R.string.series_tracking_abandon
+                                }
+                            )
+                        )
+                    }
+                }
             }
             WatchedDateSection(
                 watchedDate = watchedDate,

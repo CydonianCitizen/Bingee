@@ -73,6 +73,8 @@
     <string name="library_action_add">Add to library</string>
     <string name="library_action_remove">Remove from library</string>
     <string name="library_action_updating">Updating library…</string>
+    <string name="series_tracking_abandon">Mark series abandoned</string>
+    <string name="series_tracking_restore">Resume series tracking</string>
     <string name="search_action_add_watch_later">Add to Watch Later</string>
     <string name="search_action_in_watch_later">In Watch Later</string>
     <string name="profile_title">Profile</string>

@@ -73,8 +73,14 @@ internal class DefaultWatchProgressRepository @Inject constructor(
     override suspend fun markMovieUnwatched(reference: ExternalMediaRef): AppResult<Unit> =
         reference.write { dao.markMovieUnwatched(it.source, it.externalId) }
 
-    override suspend fun markSeriesWatched(reference: ExternalMediaRef): AppResult<Unit> =
-        reference.write { dao.markSeriesWatched(it.source, it.externalId, clock.instant()) }
+    override suspend fun markSeriesWatched(reference: ExternalMediaRef): AppResult<Unit> = reference.write {
+        dao.markSeriesWatched(
+            source = it.source,
+            externalId = it.externalId,
+            completedAt = clock.instant(),
+            today = LocalDate.now(clock)
+        )
+    }
 
     override suspend fun markSeriesUnwatched(reference: ExternalMediaRef): AppResult<Unit> =
         reference.write { dao.markSeriesUnwatched(it.source, it.externalId) }
@@ -96,7 +102,9 @@ internal class DefaultWatchProgressRepository @Inject constructor(
 private fun ProgressWriteOutcome.toResult(): AppResult<Unit> = when (this) {
     ProgressWriteOutcome.SUCCESS -> AppResult.Success(Unit)
     ProgressWriteOutcome.NOT_FOUND -> AppResult.Failure(AppError.MissingData)
+    ProgressWriteOutcome.NOT_IN_LIBRARY -> AppResult.Failure(AppError.InvalidInput)
     ProgressWriteOutcome.NOT_TRACKABLE -> AppResult.Failure(AppError.NotTrackable)
+    ProgressWriteOutcome.INCOMPLETE -> AppResult.Failure(AppError.InvalidInput)
     ProgressWriteOutcome.MEDIA_TYPE_MISMATCH -> AppResult.Failure(AppError.MediaTypeMismatch)
 }
 

@@ -1,6 +1,9 @@
 package com.cydoniancitizen.bingee.domain.policy
 
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
+import com.cydoniancitizen.bingee.core.model.resolveSeriesTrackingState
 import java.time.Instant
 import java.util.Locale
 
@@ -14,8 +17,7 @@ object ContinueWatchingPolicy {
                 .thenBy { it.mediaRef.externalId }
         )
 
-    fun isContinueWatching(item: ContinueWatchingItem): Boolean =
-        SeriesFollowPolicy.isFollowedSeries(item.mediaType, item.inLibrary) &&
-            item.progress.watchedEpisodes > 0 &&
-            !item.progress.isComplete
+    fun isContinueWatching(item: ContinueWatchingItem): Boolean = item.mediaType == MediaType.SERIES &&
+        resolveSeriesTrackingState(item.inLibrary, item.progress, item.isAbandoned) ==
+        SeriesTrackingState.WATCHING
 }

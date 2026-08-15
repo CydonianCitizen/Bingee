@@ -3,6 +3,7 @@ package com.cydoniancitizen.bingee.di
 import android.content.Context
 import androidx.room.Room
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
+import com.cydoniancitizen.bingee.data.library.local.ALL_MIGRATIONS
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
 import com.cydoniancitizen.bingee.data.library.local.ImportProgressDao
@@ -30,6 +31,7 @@ internal object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): BingeeDatabase =
         Room.databaseBuilder(context, BingeeDatabase::class.java, BingeeDatabase.DATABASE_NAME)
+            .addMigrations(*ALL_MIGRATIONS)
             .build()
 
     @Provides

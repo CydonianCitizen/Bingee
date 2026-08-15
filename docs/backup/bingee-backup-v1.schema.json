@@ -96,6 +96,14 @@
       },
       "additionalProperties": true
     },
+    "abandonedSeries": {
+      "type": "object",
+      "required": ["mediaRef"],
+      "properties": {
+        "mediaRef": {"$ref": "#/$defs/ref"}
+      },
+      "additionalProperties": true
+    },
     "episodeProgress": {
       "type": "object",
       "required": ["episodeRef", "watchedAt"],
@@ -137,6 +145,7 @@
         "library": {"type": "array", "maxItems": 50000, "items": {"$ref": "#/$defs/library"}},
         "movieProgress": {"type": "array", "maxItems": 50000, "items": {"$ref": "#/$defs/movieProgress"}},
         "seriesProgress": {"type": "array", "maxItems": 50000, "items": {"$ref": "#/$defs/seriesProgress"}},
+        "abandonedSeries": {"type": "array", "maxItems": 50000, "items": {"$ref": "#/$defs/abandonedSeries"}},
         "episodeProgress": {"type": "array", "maxItems": 500000, "items": {"$ref": "#/$defs/episodeProgress"}},
         "ratings": {"type": "array", "maxItems": 50000, "items": {"$ref": "#/$defs/rating"}},
         "preferences": {"$ref": "#/$defs/preferences"}

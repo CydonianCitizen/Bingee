@@ -6,8 +6,12 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.library.DefaultLibraryRepository
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -184,6 +188,28 @@ class SeriesAndProgressDaoTest {
     }
 
     @Test
+    fun partiallyCachedSeriesRemainsInContinueWatching() = runBlocking {
+        storeRegularEpisodes()
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, now)
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "102", today, now)
+        seriesDao.upsertSeasonSummaries(MediaSource.TMDB, "100", listOf(season("12", 2)))
+
+        val rows = libraryDao.observeContinueWatchingRows(MediaSource.TMDB, today).first()
+        assertFalse(rows.single { it.externalId == "100" }.hasSufficientCoverage)
+
+        val repository = DefaultLibraryRepository(
+            libraryDao,
+            progressDao,
+            database.ratingDao(),
+            Clock.fixed(now, ZoneOffset.UTC)
+        )
+        val result = repository.observeContinueWatching().first()
+
+        assertTrue(result is AppResult.Success)
+        assertEquals("100", (result as AppResult.Success).value.single().mediaRef.externalId)
+    }
+
+    @Test
     fun episodeAndBulkActionsEnforceTrackabilityTimestampAndSeasonIsolation() = runBlocking {
         storeRegularEpisodes()
         seriesDao.storeSeasonEpisodes(
@@ -261,6 +287,84 @@ class SeriesAndProgressDaoTest {
             ProgressWriteOutcome.SUCCESS,
             progressDao.markMovieUnwatched(MediaSource.TMDB, "200")
         )
+    }
+
+    @Test
+    fun serialStateOverridePersistsWithoutTouchingFavoriteOrEpisodeProgress() = runBlocking {
+        storeRegularEpisodes()
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, now)
+        libraryDao.updateFavoriteState(MediaSource.TMDB, "100", true)
+
+        assertEquals(
+            ProgressWriteOutcome.SUCCESS,
+            libraryDao.setSeriesAbandoned(MediaSource.TMDB, "100", true)
+        )
+        val abandoned = libraryDao.observeLibraryProgress(today).first().single { it.localMediaId == 1L }
+        assertTrue(abandoned.isAbandoned)
+        assertEquals(1, abandoned.watchedEpisodes)
+        assertTrue(database.portableSnapshotDao().readSnapshot().media.single { it.localMediaId == 1L }.isFavorite)
+
+        assertEquals(
+            ProgressWriteOutcome.SUCCESS,
+            libraryDao.setSeriesAbandoned(MediaSource.TMDB, "100", false)
+        )
+        assertFalse(libraryDao.observeLibraryProgress(today).first().single { it.localMediaId == 1L }.isAbandoned)
+    }
+
+    @Test
+    fun genuineCompletionCreatesMetadataAndUnwatchClearsIt() = runBlocking {
+        seriesDao.storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            season("11", 1),
+            listOf(
+                episode("101", 1, airDate = today),
+                episode("102", 2, airDate = today),
+                episode("103", 3, airDate = today.plusDays(1))
+            ),
+            now
+        )
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, now)
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "102", today, now.plusSeconds(1))
+
+        assertEquals(1, database.portableSnapshotDao().readSnapshot().seriesProgress.size)
+        assertTrue(
+            libraryDao.observeLibraryProgress(today).first().single {
+                it.localMediaId == 1L
+            }.hasSufficientCoverage
+        )
+
+        progressDao.markEpisodeUnwatched(MediaSource.TMDB, "101")
+
+        assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
+        val row = libraryDao.observeLibraryProgress(today).first().single { it.localMediaId == 1L }
+        assertEquals(1, row.watchedEpisodes)
+    }
+
+    @Test
+    fun seriesCommandsCannotCreateOrEditCompletionWhileIncomplete() = runBlocking {
+        storeRegularEpisodes()
+
+        assertEquals(
+            ProgressWriteOutcome.INCOMPLETE,
+            progressDao.markSeriesWatched(MediaSource.TMDB, "100", now)
+        )
+        assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
+
+        assertEquals(
+            ProgressWriteOutcome.SUCCESS,
+            progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, now)
+        )
+        assertEquals(
+            ProgressWriteOutcome.SUCCESS,
+            progressDao.setMediaWatchedDate(
+                MediaSource.TMDB,
+                "100",
+                LocalDate.of(2026, 8, 1),
+                now
+            )
+        )
+        assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
     }
 
     private suspend fun storeRegularEpisodes() {

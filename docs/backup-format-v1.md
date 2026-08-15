@@ -1,6 +1,6 @@
 # Bingee backup format v1
 
-This is the current portable data contract for Room v1. The Android app exposes it under Profile → Settings → Data & backup; save, share, and restore work without a Bingee account or backend.
+This is the current portable data contract for Room v2. The Android app exposes it under Profile → Settings → Data & backup; save, share, and restore work without a Bingee account or backend.
 
 ## Contract
 
@@ -21,7 +21,7 @@ The machine-readable contract is [bingee-backup-v1.schema.json](backup/bingee-ba
 
 `seasons` and `episodes` contain all cached records for included series, including season zero and unwatched episodes. Cache freshness, response bodies, and internal Room IDs are excluded.
 
-`library` preserves membership and `addedAt`. `movieProgress`, `seriesProgress`, and `episodeProgress` preserve watched timestamps and optional `watchedDate`. `ratings` preserves value, `ratedAt`, and `updatedAt`.
+`library` preserves membership and `addedAt`. `movieProgress`, `seriesProgress`, and `episodeProgress` preserve watched timestamps and optional `watchedDate`. Optional `abandonedSeries` preserves explicit Abandoned serial intent; missing field means not abandoned. `ratings` preserves value, `ratedAt`, and `updatedAt`.
 
 `preferences` contains only notification lead days and movie/season/episode category selections. Notification enablement, Android permission and channel state remain device-local.
 

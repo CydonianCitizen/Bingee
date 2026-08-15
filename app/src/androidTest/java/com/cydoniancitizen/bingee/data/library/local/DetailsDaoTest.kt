@@ -64,6 +64,32 @@ class DetailsDaoTest {
     }
 
     @Test
+    fun refreshPreservesFavoriteAndOtherPersonalState() = runBlocking {
+        val addedAt = now.minusSeconds(3600)
+        libraryDao.addToLibrary(media("Search title", addedAt), MediaSource.TMDB, "550", addedAt)
+        libraryDao.updateFavoriteState(MediaSource.TMDB, "550", true)
+        val mediaId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "550")!!.localMediaId
+        database.openHelper.writableDatabase.execSQL(
+            "INSERT INTO media_ratings(local_media_id, rating_value, rated_at, updated_at) " +
+                "VALUES($mediaId, 8, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')"
+        )
+
+        store(title = "Refreshed", fetchedAt = now.plusSeconds(60))
+
+        assertEquals(true, detailsDao.getCachedDetails(MediaSource.TMDB, "550")?.media?.isFavorite)
+        assertEquals(addedAt, libraryDao.observeLibraryItem(MediaSource.TMDB, "550").first()?.addedAt)
+        assertEquals(1, count("media_ratings"))
+    }
+
+    @Test
+    fun refreshKeepsFalseFavoriteFalse() = runBlocking {
+        store(title = "First")
+        store(title = "Refreshed", fetchedAt = now.plusSeconds(60))
+
+        assertFalse(detailsDao.getCachedDetails(MediaSource.TMDB, "550")!!.media.isFavorite)
+    }
+
+    @Test
     fun repeatedWriteIsIdempotentAndReplacesGenresAtomically() = runBlocking {
         store(title = "First", genres = listOf("Old"))
         store(title = "Second", genres = listOf("New", "Other"), fetchedAt = now.plusSeconds(60))

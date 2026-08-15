@@ -69,6 +69,8 @@ internal data class BackupSeriesProgress(
     val watchedDate: LocalDate? = null
 )
 
+internal data class BackupAbandonedSeries(val mediaRef: BackupRef)
+
 internal data class BackupEpisodeProgress(val episodeRef: BackupRef, val watchedAt: Instant)
 
 internal data class BackupRating(val mediaRef: BackupRef, val rating: Int, val ratedAt: Instant, val updatedAt: Instant)
@@ -89,7 +91,8 @@ internal data class BackupData(
     val episodeProgress: List<BackupEpisodeProgress>,
     val ratings: List<BackupRating>,
     val preferences: BackupPreferences,
-    val seriesProgress: List<BackupSeriesProgress> = emptyList()
+    val seriesProgress: List<BackupSeriesProgress> = emptyList(),
+    val abandonedSeries: List<BackupAbandonedSeries> = emptyList()
 )
 
 internal data class BackupDocument(

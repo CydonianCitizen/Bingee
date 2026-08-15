@@ -107,6 +107,9 @@ class MetadataCalendarStoreTest {
             "INSERT INTO episode_watch_progress(local_episode_id, watched_at) " +
                 "VALUES($episodeId, '2026-08-03T12:00:00Z')"
         )
+        sql("UPDATE media_entries SET is_favorite = 1 WHERE local_media_id = $mediaId")
+
+        store.storeDetails(seriesRef, series("Refreshed"), listOf(season), now.plusSeconds(1))
 
         store.storeSeason(
             seriesRef,
@@ -119,6 +122,7 @@ class MetadataCalendarStoreTest {
         assertEquals(1, count("media_ratings"))
         assertEquals(1, count("episode_watch_progress"))
         assertEquals(1, count("library_entries"))
+        assertEquals("1", text("SELECT is_favorite FROM media_entries WHERE local_media_id = $mediaId"))
     }
 
     @Test

@@ -84,7 +84,8 @@ internal abstract class DetailsDao {
             updateMedia(
                 candidate.copy(
                     localMediaId = existing.localMediaId,
-                    createdAt = existing.createdAt
+                    createdAt = existing.createdAt,
+                    isFavorite = existing.isFavorite
                 )
             )
             existing.localMediaId

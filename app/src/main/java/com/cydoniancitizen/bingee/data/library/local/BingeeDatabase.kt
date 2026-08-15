@@ -21,9 +21,10 @@ import androidx.room.TypeConverters
         CalendarRefreshStateEntity::class,
         NotificationDeliveryEntity::class,
         PortablePreferencesEntity::class,
-        ImportProvenanceRefEntity::class
+        ImportProvenanceRefEntity::class,
+        SeriesStateOverrideEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)

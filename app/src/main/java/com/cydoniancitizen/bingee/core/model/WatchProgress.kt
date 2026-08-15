@@ -41,8 +41,8 @@ data class SeriesProgress(
     init {
         require(watchedEpisodes in 0..trackableEpisodes) { "Invalid series episode counts" }
         require(completedSeasons in 0..trackableSeasons) { "Invalid series season counts" }
-        require(isComplete == (trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes)) {
-            "Series completion must be derived from regular episode counts"
+        require(!isComplete || (trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes)) {
+            "Completed series must have all trackable regular episodes watched"
         }
     }
 
@@ -80,15 +80,19 @@ fun deriveSeasonProgress(episodes: List<TrackedEpisode>): SeasonProgress {
 }
 
 fun deriveSeriesProgress(seasons: List<CachedSeason>): SeriesProgress {
-    val regular = seasons.filter { it.season.seasonNumber > 0 && it.progress.trackableEpisodes > 0 }
-    val watched = regular.sumOf { it.progress.watchedEpisodes }
-    val total = regular.sumOf { it.progress.trackableEpisodes }
-    val complete = regular.count { it.progress.isComplete }
+    val regular = seasons.filter { it.season.seasonNumber > 0 }
+    val trackable = regular.filter { it.progress.trackableEpisodes > 0 }
+    val watched = trackable.sumOf { it.progress.watchedEpisodes }
+    val total = trackable.sumOf { it.progress.trackableEpisodes }
+    val complete = trackable.count { it.hasSufficientEpisodeCoverage() && it.progress.isComplete }
     return SeriesProgress(
         watchedEpisodes = watched,
         trackableEpisodes = total,
         completedSeasons = complete,
-        trackableSeasons = regular.size,
-        isComplete = total > 0 && watched == total
+        trackableSeasons = trackable.size,
+        isComplete = total > 0 && watched == total && regular.all(CachedSeason::hasSufficientEpisodeCoverage)
     )
 }
+
+private fun CachedSeason.hasSufficientEpisodeCoverage(): Boolean =
+    episodesFetchedAt != null && episodes.size == season.episodeCount

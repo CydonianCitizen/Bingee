@@ -148,6 +148,14 @@ internal object BackupValidator {
             require(libraryRefs.add(entry.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
+        val abandonedSeriesRefs = hashSetOf<String>()
+        data.abandonedSeries.forEach { abandoned ->
+            val media = mediaByRef[abandoned.mediaRef.key()] ?: missing()
+            require(media.mediaType == MediaType.SERIES, BackupFailureKind.CONFLICTING_REFERENCE)
+            require(libraryRefs.contains(abandoned.mediaRef.key()), BackupFailureKind.MISSING_REFERENCE)
+            require(abandonedSeriesRefs.add(abandoned.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+        }
+
         val movieProgressRefs = hashSetOf<String>()
         data.movieProgress.forEach { progress ->
             val media = mediaByRef[progress.mediaRef.key()] ?: missing()

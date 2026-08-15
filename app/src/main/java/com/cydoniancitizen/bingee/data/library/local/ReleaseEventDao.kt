@@ -86,6 +86,12 @@ internal abstract class ReleaseEventDao {
         LEFT JOIN seasons ON seasons.local_season_id = release_events.local_season_id
         LEFT JOIN episodes ON episodes.local_episode_id = release_events.local_episode_id
         WHERE release_events.event_date BETWEEN :fromDate AND :throughDate
+          AND NOT EXISTS (
+              SELECT 1
+              FROM series_state_overrides
+              WHERE series_state_overrides.local_media_id = release_events.local_media_id
+                AND series_state_overrides.is_abandoned = 1
+          )
         ORDER BY release_events.event_date ASC,
                  CASE release_events.event_type
                      WHEN 'EPISODE_AIRING' THEN 0

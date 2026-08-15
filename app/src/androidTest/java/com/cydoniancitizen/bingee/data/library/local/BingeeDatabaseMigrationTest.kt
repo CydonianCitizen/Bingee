@@ -97,6 +97,38 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationOneToTwoAddsOnlyExplicitSeriesOverrideAndPreservesLegacyRows() {
+        val name = "bingee-v1-to-v2"
+        val legacy = helper.createDatabase(name, 1)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, original_title, overview, poster_url, release_date, " +
+                "created_at, metadata_updated_at, is_favorite) VALUES " +
+                "(1, 'SERIES', 'Legacy', NULL, NULL, NULL, NULL, " +
+                "'2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 0)"
+        )
+        legacy.execSQL(
+            "INSERT INTO external_refs (local_media_id, source, external_id) VALUES (1, 'TMDB', '9001')"
+        )
+        legacy.execSQL(
+            "INSERT INTO series_watch_progress (local_media_id, watched_date, completed_at) " +
+                "VALUES (1, '2026-08-01', '2026-08-01T00:00:00Z')"
+        )
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 2, true, *ALL_MIGRATIONS)
+        migrated.query("SELECT COUNT(*) FROM series_state_overrides").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(0, cursor.getInt(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM series_watch_progress WHERE local_media_id = 1").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(1, cursor.getInt(0))
+        }
+        migrated.close()
+    }
+
+    @Test
     fun versionOneBaselinePersistsFavoritesAndWatchedDates() = runBlocking {
         val movieMediaId = database.portableSnapshotDao().insertMedia(
             MediaEntity(

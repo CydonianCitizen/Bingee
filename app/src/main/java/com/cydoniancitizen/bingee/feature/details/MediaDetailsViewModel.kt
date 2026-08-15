@@ -99,6 +99,7 @@ internal data class MediaDetailsUiState(
     val refresh: DetailRefreshState = DetailRefreshState.Idle,
     val isInLibrary: Boolean? = null,
     val isFavorite: Boolean = false,
+    val isAbandoned: Boolean = false,
     val watchedDate: java.time.LocalDate? = null,
     val favoriteUpdating: Boolean = false,
     val watchedDateUpdating: Boolean = false,
@@ -362,6 +363,7 @@ internal class MediaDetailsViewModel @Inject constructor(
                         is AppResult.Success -> it.copy(
                             isInLibrary = result.value != null,
                             isFavorite = result.value?.isFavorite ?: false,
+                            isAbandoned = result.value?.isAbandoned == true,
                             watchedDate = result.value?.watchedDate
                         )
                         is AppResult.Failure -> it.copy(libraryError = result.error)
@@ -398,6 +400,29 @@ internal class MediaDetailsViewModel @Inject constructor(
                     watchedDateUpdating = false,
                     progressError = (result as? AppResult.Failure)?.error
                 )
+            }
+        }
+    }
+
+    fun toggleSeriesAbandoned() {
+        val args = routeArgs ?: return
+        if (args.mediaType != MediaType.SERIES) return
+        val state = mutableUiState.value
+        if (state.isInLibrary != true || state.libraryAction == DetailLibraryActionState.UPDATING) return
+        mutableUiState.update { it.copy(libraryAction = DetailLibraryActionState.UPDATING, libraryError = null) }
+        viewModelScope.launch {
+            val result = libraryRepository.setSeriesAbandoned(requireNotNull(routeReference), !state.isAbandoned)
+            mutableUiState.update {
+                when (result) {
+                    is AppResult.Success -> it.copy(
+                        isAbandoned = !state.isAbandoned,
+                        libraryAction = DetailLibraryActionState.IDLE
+                    )
+                    is AppResult.Failure -> it.copy(
+                        libraryAction = DetailLibraryActionState.IDLE,
+                        libraryError = result.error
+                    )
+                }
             }
         }
     }

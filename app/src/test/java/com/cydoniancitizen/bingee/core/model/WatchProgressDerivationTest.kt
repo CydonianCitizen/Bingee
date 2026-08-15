@@ -41,17 +41,31 @@ class WatchProgressDerivationTest {
     }
 
     @Test
-    fun specialsAreExcludedAndNewRegularEpisodeMakesSeriesIncomplete() {
-        val specials = cachedSeason(0, SeasonProgress(0, 1, false))
+    fun seriesCompletionRequiresCompleteEpisodeCacheForEveryRegularSeason() {
         val first = cachedSeason(1, SeasonProgress(2, 2, true))
+        val second = cachedSeason(2, SeasonProgress(3, 3, true))
 
-        val complete = deriveSeriesProgress(listOf(specials, first))
-        assertEquals(SeriesProgress(2, 2, 1, 1, true), complete)
-
-        val expanded = deriveSeriesProgress(
-            listOf(specials, first.copy(progress = SeasonProgress(2, 3, false)))
+        assertTrue(deriveSeriesProgress(listOf(first)).isComplete)
+        assertTrue(deriveSeriesProgress(listOf(first, second)).isComplete)
+        assertFalse(
+            deriveSeriesProgress(listOf(first, cachedSeason(2, SeasonProgress.EMPTY, fetchedAt = null))).isComplete
         )
-        assertEquals(SeriesProgress(2, 3, 0, 1, false), expanded)
+        assertFalse(
+            deriveSeriesProgress(
+                listOf(cachedSeason(1, SeasonProgress(2, 2, true), episodeCount = 3, cachedEpisodes = 2))
+            ).isComplete
+        )
+    }
+
+    @Test
+    fun specialsAndFutureEpisodesKeepExistingCompletionSemantics() {
+        val specials = cachedSeason(0, SeasonProgress.EMPTY, fetchedAt = null)
+        val regular = cachedSeason(1, SeasonProgress(1, 1, true), episodeCount = 2)
+
+        val progress = deriveSeriesProgress(listOf(specials, regular))
+
+        assertEquals(SeriesProgress(1, 1, 1, 1, true), progress)
+        assertTrue(progress.isComplete)
         assertFalse(deriveSeriesProgress(listOf(specials)).isComplete)
         assertEquals(0f, deriveSeriesProgress(listOf(specials)).fraction)
     }
@@ -70,11 +84,17 @@ class WatchProgressDerivationTest {
         airDate = date
     )
 
-    private fun cachedSeason(number: Int, progress: SeasonProgress) = CachedSeason(
-        season = Season(ref("100"), ref((200 + number).toString()), number, episodeCount = progress.trackableEpisodes),
+    private fun cachedSeason(
+        number: Int,
+        progress: SeasonProgress,
+        episodeCount: Int = progress.trackableEpisodes,
+        cachedEpisodes: Int = episodeCount,
+        fetchedAt: Instant? = watchedAt
+    ) = CachedSeason(
+        season = Season(ref("100"), ref((200 + number).toString()), number, episodeCount = episodeCount),
         metadataUpdatedAt = watchedAt,
-        episodesFetchedAt = watchedAt,
-        episodes = emptyList(),
+        episodesFetchedAt = fetchedAt,
+        episodes = List(cachedEpisodes) { tracked(it + 1, EpisodeWatchState.Unwatched) },
         progress = progress,
         episodeCacheFreshness = CacheFreshness.FRESH
     )

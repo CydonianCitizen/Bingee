@@ -7,7 +7,7 @@ Bingee v1.1.0 is a package-structured modular monolith in one Android applicatio
 - TMDB is the only runtime media provider. No Jikan or cross-provider deduplication runs in the app.
 - Top-level navigation is Home, Search, and Profile. Profile opens the Appearance & Language, Notifications, Data & backup, Privacy, and About subpages.
 - Home is Room-first and includes Continue Watching; Notification Center reads cached release events and supports local refresh feedback.
-- Room v1 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, and portable preferences.
+- Room v2 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, portable preferences, and the explicit serial-state override.
 - Backup v1 is the versioned JSON export/restore contract and uses transactional replace restore.
 - The UI ships in English and Italian. About exposes a manual GitHub update checker; it does not perform background update checks.
 
@@ -56,7 +56,7 @@ SearchScreen/ProfileScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v1)
+                           LibraryDao -> Room bingee.db (v2)
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -138,13 +138,13 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 1 initial stable schema. Future schema changes begin with `Migration(1, 2)`.
+- Room database `bingee.db` is version 2. Migration 1 -> 2 adds only the explicit serial-state override table.
 
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
 - Source/type enums use names, dates use ISO `LocalDate`, and timestamps use UTC `Instant`; malformed values fail safely rather than changing meaning.
-- Version 1 is the canonical database version. It incorporates all media entries, external references, membership, media details, genres, seasons, episodes, episode/movie/series watch progress, ratings, release events, notification deliveries, portable preferences, and import provenance. No Anime-specific Room structures exist.
+- Version 2 is the canonical database version. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. V1 `series_watch_progress` rows remain intact as non-authoritative metadata and cannot prove completion. Regular-episode unwatches clear completion metadata; re-completion writes a fresh marker. No Anime-specific Room structures exist.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
@@ -163,7 +163,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 `TvTimeMatcher` reuses the existing authenticated TMDB search, Find-by-external-ID, details, and season data sources. It accepts only unique compatible exact identities, a documented movie title/year proposal, and ordinary episode numbering under an accepted parent series. Series title-only results and specials remain reviewable. Requests are sequential/bounded and deduplicated for one import session; TMDB errors never mutate Room.
 
-`TvTimeImportPlanBuilder` resolves all accepted candidates and canonical metadata before confirmation. `TvTimeImportStore` executes one additive `RoomDatabase.withTransaction` and uses `import_provenance_refs` (Room v1) for distinct TVDB, IMDb, and TV Time UUID namespaces. Existing membership, progress, ratings, credentials, portable preferences, notification delivery state, and calendar refresh state are preserved. Bingee backup restore remains the separate replace-only path.
+`TvTimeImportPlanBuilder` resolves all accepted candidates and canonical metadata before confirmation. `TvTimeImportStore` executes one additive `RoomDatabase.withTransaction` and uses `import_provenance_refs` (Room v2) for distinct TVDB, IMDb, and TV Time UUID namespaces. Existing membership, progress, ratings, credentials, portable preferences, notification delivery state, and calendar refresh state are preserved. Bingee backup restore remains the separate replace-only path.
 
 ## Local release calendar
 

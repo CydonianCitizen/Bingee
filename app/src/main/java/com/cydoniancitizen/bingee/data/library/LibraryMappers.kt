@@ -37,7 +37,16 @@ internal fun LibraryItemWithRefs.toDomain(
         ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
     val domainProgress = progressRow.toDomainProgress(media.mediaType)
     val domainWatchedDate = progressRow?.let {
-        if (media.mediaType == MediaType.MOVIE) it.movieWatchedDate else it.seriesWatchedDate
+        if (media.mediaType == MediaType.MOVIE) {
+            it.movieWatchedDate
+        } else if (it.trackableEpisodes > 0 &&
+            it.watchedEpisodes == it.trackableEpisodes &&
+            it.hasSufficientCoverage
+        ) {
+            it.seriesWatchedDate
+        } else {
+            null
+        }
     }
     return LibraryEntry(
         mediaRef = selectedRef,
@@ -52,6 +61,7 @@ internal fun LibraryItemWithRefs.toDomain(
         personalRating = rating?.let { PersonalRating(it.ratingValue) },
         isFavorite = media.isFavorite,
         watchedDate = domainWatchedDate,
+        isAbandoned = progressRow?.isAbandoned == true,
         inLibrary = inLibrary
     )
 }
@@ -68,7 +78,7 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
             trackableEpisodes = trackableEpisodes,
             completedSeasons = completedSeasons,
             trackableSeasons = trackableSeasons,
-            isComplete = watchedEpisodes == trackableEpisodes,
+            isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes && hasSufficientCoverage,
             watchedDate = seriesWatchedDate
         )
     )

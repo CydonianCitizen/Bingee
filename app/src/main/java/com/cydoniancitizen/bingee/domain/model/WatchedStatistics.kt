@@ -3,7 +3,8 @@ package com.cydoniancitizen.bingee.domain.model
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.isWatched
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
 import java.time.ZoneId
 
 data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
@@ -35,7 +36,11 @@ data class WatchedStatistics(
 
 fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
     val watchedEntries = entries.filter { entry ->
-        entry.isWatched()
+        when (val progress = entry.progress) {
+            is LibraryProgress.Movie -> progress.state is MovieWatchState.Watched
+            is LibraryProgress.Series -> progress.progress.watchedEpisodes > 0
+            LibraryProgress.Unavailable -> false
+        }
     }
 
     if (watchedEntries.isEmpty()) {
@@ -48,7 +53,7 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
     val moviesWatchedCount = movies.size
     val tvSeriesCompletedCount = tvSeries.count { entry ->
         when (val p = entry.progress) {
-            is LibraryProgress.Series -> p.progress.isComplete
+            is LibraryProgress.Series -> entry.serialState == SeriesTrackingState.WATCHED
             else -> false
         }
     }
@@ -87,13 +92,16 @@ fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
     val ratedPercentage = (ratedEntries.size.toDouble() / watchedEntries.size) * 100.0
 
     // Only titles with explicit watchedDate contribute to temporal history (not fabricated from addedAt)
-    val monthYearCounts = watchedEntries.mapNotNull { entry ->
+    val completedEntries = watchedEntries.filter { entry ->
+        entry.mediaType == MediaType.MOVIE || entry.serialState == SeriesTrackingState.WATCHED
+    }
+    val monthYearCounts = completedEntries.mapNotNull { entry ->
         entry.watchedDate?.let { it.year to it.monthValue }
     }.groupingBy { it }.eachCount()
         .map { (ym, count) -> MonthYearCount(ym.first, ym.second, count) }
         .sortedWith(compareByDescending<MonthYearCount> { it.year }.thenByDescending { it.month })
 
-    val recentlyCompleted = watchedEntries.sortedWith(
+    val recentlyCompleted = completedEntries.sortedWith(
         compareByDescending<LibraryEntry> {
             it.watchedDate ?: it.addedAt.atZone(ZoneId.systemDefault()).toLocalDate()
         }.thenByDescending { it.addedAt }

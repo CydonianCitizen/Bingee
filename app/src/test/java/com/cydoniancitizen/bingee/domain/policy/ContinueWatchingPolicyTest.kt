@@ -32,6 +32,13 @@ class ContinueWatchingPolicyTest {
     }
 
     @Test
+    fun abandonedSeriesIsExcluded() {
+        assertTrue(
+            ContinueWatchingPolicy.select(listOf(item(watched = 3).copy(isAbandoned = true))).isEmpty()
+        )
+    }
+
+    @Test
     fun movieIsExcluded() {
         assertTrue(
             ContinueWatchingPolicy.select(listOf(item(mediaType = MediaType.MOVIE, watched = 3))).isEmpty()

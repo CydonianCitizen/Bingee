@@ -151,6 +151,19 @@ class ReleaseEventDaoTest {
         assertEquals(3, dao.getActiveEventsBetween(from, through).size)
     }
 
+    @Test
+    fun notificationCandidateWindowExcludesAbandonedSeriesOnly() = runBlocking {
+        dao.backfill(now)
+        val from = LocalDate.of(2026, 8, 3)
+        val through = LocalDate.of(2026, 8, 10)
+
+        database.libraryDao().setSeriesAbandoned(MediaSource.TMDB, "100", true)
+
+        val candidates = dao.getActiveEventsBetween(from, through)
+        assertEquals(1, candidates.size)
+        assertEquals(ReleaseEventType.MOVIE_RELEASE, candidates.single().eventType)
+    }
+
     private fun insertFixture() {
         sql(
             "INSERT INTO media_entries(local_media_id, media_type, title, original_title, overview, poster_url, " +
