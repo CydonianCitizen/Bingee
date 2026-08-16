@@ -24,6 +24,8 @@ class TmdbMovieDetailsMapperTest {
         assertEquals("https://image.tmdb.org/t/p/w780/backdrop.jpg", details.backdropUrl)
         assertEquals(LocalDate.of(1999, 10, 15), details.releaseDate)
         assertEquals(listOf("Drama", "Thriller"), details.genres.map { it.name })
+        assertEquals(listOf(MediaSource.TMDB, MediaSource.TMDB), details.genres.map { it.source })
+        assertEquals(listOf(18L, 53L), details.genres.map { it.genreId })
         assertEquals(ProductionStatus.RELEASED, details.productionStatus)
         assertEquals(Duration.ofMinutes(139), details.runtime)
         assertEquals("en", details.originalLanguage)
@@ -57,6 +59,13 @@ class TmdbMovieDetailsMapperTest {
         assertNull(requireNotNull(TmdbMovieDetailsMapper.map(movie(runtime = 0))).runtime)
         assertNull(requireNotNull(TmdbMovieDetailsMapper.map(movie(runtime = -1))).runtime)
         assertNull(requireNotNull(TmdbMovieDetailsMapper.map(movie(runtime = null))).runtime)
+    }
+
+    @Test
+    fun genresAreNotDeduplicatedByLocalizedName() {
+        val dto = movie().copy(genres = listOf(TmdbGenreDto(18, "Drama"), TmdbGenreDto(99, "Drama")))
+
+        assertEquals(listOf(18L, 99L), requireNotNull(TmdbMovieDetailsMapper.map(dto)).genres.map { it.genreId })
     }
 
     @Test
@@ -100,7 +109,11 @@ class TmdbMovieDetailsMapperTest {
         posterPath = posterPath,
         backdropPath = backdropPath,
         releaseDate = releaseDate,
-        genres = listOf(TmdbGenreDto("Drama"), TmdbGenreDto("Thriller"), TmdbGenreDto(" ")),
+        genres = listOf(
+            TmdbGenreDto(18, "Drama"),
+            TmdbGenreDto(53, "Thriller"),
+            TmdbGenreDto(99, " ")
+        ),
         status = status,
         runtime = runtime,
         originalLanguage = "en"

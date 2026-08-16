@@ -40,9 +40,9 @@ class DetailsCacheMappersTest {
                     runtime = 121
                 ),
                 genres = listOf(
-                    MediaGenreEntity(1, 2, "Third"),
-                    MediaGenreEntity(1, 0, "First"),
-                    MediaGenreEntity(1, 1, "Second")
+                    MediaGenreEntity(1, 2, "Third", MediaSource.TMDB, 3),
+                    MediaGenreEntity(1, 0, "First", MediaSource.TMDB, 1),
+                    MediaGenreEntity(1, 1, "Second", MediaSource.TMDB, 2)
                 )
             ).toDomain(ref, policy)
         )
@@ -50,8 +50,23 @@ class DetailsCacheMappersTest {
         assertEquals(MediaType.MOVIE, cached.details.mediaType)
         assertEquals(Duration.ofMinutes(121), cached.details.runtime)
         assertEquals(listOf("First", "Second", "Third"), cached.details.genres.map { it.name })
+        assertEquals(listOf(1L, 2L, 3L), cached.details.genres.map { it.genreId })
         assertEquals(ProductionStatus.RELEASED, cached.details.productionStatus)
         assertEquals(CacheFreshness.FRESH, cached.freshness)
+    }
+
+    @Test
+    fun legacyCachedGenreWithoutIdentityRemainsReadable() {
+        val cached = requireNotNull(
+            relation(
+                details = detailEntity(status = ProductionStatus.RELEASED.name),
+                genres = listOf(MediaGenreEntity(1, 0, "Dramma"))
+            ).toDomain(ref, policy)
+        )
+
+        assertEquals("Dramma", cached.details.genres.single().name)
+        assertNull(cached.details.genres.single().source)
+        assertNull(cached.details.genres.single().genreId)
     }
 
     @Test
@@ -82,7 +97,10 @@ class DetailsCacheMappersTest {
             title = " Movie ",
             runtime = Duration.ofMinutes(90),
             productionStatus = ProductionStatus.RELEASED,
-            genres = listOf(Genre("Drama"), Genre("Comedy"))
+            genres = listOf(
+                Genre("Drama", MediaSource.TMDB, 18),
+                Genre("Comedy", MediaSource.TMDB, 35)
+            )
         )
 
         val write = details.toCacheWrite(now)
@@ -92,6 +110,8 @@ class DetailsCacheMappersTest {
         assertEquals(now, write.details.detailsFetchedAt)
         assertEquals(listOf(0, 1), write.genres.map { it.genreOrder })
         assertEquals(listOf("Drama", "Comedy"), write.genres.map { it.name })
+        assertEquals(listOf(MediaSource.TMDB, MediaSource.TMDB), write.genres.map { it.source })
+        assertEquals(listOf(18L, 35L), write.genres.map { it.genreId })
     }
 
     private fun relation(

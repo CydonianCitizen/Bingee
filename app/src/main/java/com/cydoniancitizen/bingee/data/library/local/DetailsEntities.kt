@@ -3,6 +3,8 @@ package com.cydoniancitizen.bingee.data.library.local
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
+import com.cydoniancitizen.bingee.core.model.MediaSource
 import java.time.Instant
 
 @Entity(
@@ -39,15 +41,20 @@ internal data class MediaDetailsEntity(
             childColumns = ["local_media_id"],
             onDelete = ForeignKey.CASCADE
         )
-    ]
+    ],
+    indices = [Index(value = ["source", "genre_id"])]
 )
 internal data class MediaGenreEntity(
     @ColumnInfo(name = "local_media_id") val localMediaId: Long,
     @ColumnInfo(name = "genre_order") val genreOrder: Int,
-    val name: String
+    val name: String,
+    val source: MediaSource? = null,
+    @ColumnInfo(name = "genre_id") val genreId: Long? = null
 ) {
     init {
         require(genreOrder >= 0) { "Genre order must not be negative" }
         require(name.isNotBlank()) { "Persisted genre must not be blank" }
+        require((source == null) == (genreId == null)) { "Genre source and ID must both be present or absent" }
+        require(genreId == null || genreId > 0) { "Genre ID must be positive" }
     }
 }

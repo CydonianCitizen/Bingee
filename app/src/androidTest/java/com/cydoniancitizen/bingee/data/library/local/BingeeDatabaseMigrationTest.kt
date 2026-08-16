@@ -129,6 +129,69 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationTwoToThreePreservesLegacyGenreWithNullIdentity() {
+        val name = "bingee-v2-to-v3"
+        val legacy = helper.createDatabase(name, 2)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, original_title, overview, poster_url, release_date, " +
+                "created_at, metadata_updated_at, is_favorite) VALUES " +
+                "(1, 'MOVIE', 'Legacy', NULL, NULL, NULL, NULL, " +
+                "'2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 0)"
+        )
+        legacy.execSQL("INSERT INTO media_genres (local_media_id, genre_order, name) VALUES (1, 2, 'Dramma')")
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 3, true, *ALL_MIGRATIONS)
+        migrated.query(
+            "SELECT genre_order, name, source, genre_id FROM media_genres WHERE local_media_id = 1"
+        ).use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(2, cursor.getInt(0))
+            assertEquals("Dramma", cursor.getString(1))
+            assertEquals(true, cursor.isNull(2))
+            assertEquals(true, cursor.isNull(3))
+        }
+        migrated.close()
+    }
+
+    @Test
+    fun fullMigrationChainPreservesCanonicalPersonalData() {
+        val name = "bingee-v1-to-v3"
+        val legacy = helper.createDatabase(name, 1)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, original_title, overview, poster_url, release_date, " +
+                "created_at, metadata_updated_at, is_favorite) VALUES " +
+                "(1, 'SERIES', 'Legacy', NULL, NULL, NULL, NULL, " +
+                "'2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 1)"
+        )
+        legacy.execSQL("INSERT INTO library_entries (local_media_id, added_at) VALUES (1, '2026-08-01T00:00:00Z')")
+        legacy.execSQL(
+            "INSERT INTO series_watch_progress (local_media_id, watched_date, completed_at) " +
+                "VALUES (1, '2026-08-01', '2026-08-01T00:00:00Z')"
+        )
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 3, true, *ALL_MIGRATIONS)
+        migrated.query(
+            "SELECT is_favorite FROM media_entries WHERE local_media_id = 1"
+        ).use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(1, cursor.getInt(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM library_entries WHERE local_media_id = 1").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(1, cursor.getInt(0))
+        }
+        migrated.query("SELECT watched_date FROM series_watch_progress WHERE local_media_id = 1").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("2026-08-01", cursor.getString(0))
+        }
+        migrated.close()
+    }
+
+    @Test
     fun versionOneBaselinePersistsFavoritesAndWatchedDates() = runBlocking {
         val movieMediaId = database.portableSnapshotDao().insertMedia(
             MediaEntity(

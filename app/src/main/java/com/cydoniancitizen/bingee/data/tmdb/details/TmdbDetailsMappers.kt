@@ -63,9 +63,12 @@ private fun distinctOriginal(title: String, original: String?): String? =
     original.normalizedOptional()?.takeUnless { it.equals(title, ignoreCase = true) }
 
 private fun mapGenres(genres: List<TmdbGenreDto>?): List<Genre> = genres.orEmpty()
-    .mapNotNull { it.name.normalizedOptional() }
-    .distinctBy { it.lowercase(Locale.ROOT) }
-    .map(::Genre)
+    .mapNotNull { genre ->
+        val id = genre.id?.takeIf { it > 0 } ?: return@mapNotNull null
+        val name = genre.name.normalizedOptional() ?: return@mapNotNull null
+        Genre(name = name, source = MediaSource.TMDB, genreId = id)
+    }
+    .distinctBy { it.source to it.genreId }
 
 private fun mapStatus(value: String?): ProductionStatus = when (value?.trim()?.lowercase(Locale.ROOT)) {
     "rumored" -> ProductionStatus.RUMORED

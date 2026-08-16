@@ -104,6 +104,22 @@ class DetailsDaoTest {
     }
 
     @Test
+    fun localizedRefreshUpdatesNameButKeepsTmdbGenreIdentity() = runBlocking {
+        store(title = "First", genreRows = listOf(MediaGenreEntity(0, 0, "Drama", MediaSource.TMDB, 18)))
+        store(
+            title = "Second",
+            fetchedAt = now.plusSeconds(60),
+            genreRows = listOf(MediaGenreEntity(0, 0, "Dramma", MediaSource.TMDB, 18))
+        )
+
+        val genre = detailsDao.getCachedDetails(MediaSource.TMDB, "550")!!.genres.single()
+        assertEquals("Dramma", genre.name)
+        assertEquals(MediaSource.TMDB, genre.source)
+        assertEquals(18L, genre.genreId)
+        assertEquals(0, genre.genreOrder)
+    }
+
+    @Test
     fun failedGenreReplacementRollsBackAllMetadata() = runBlocking {
         store(title = "Old", genres = listOf("Stable"))
         try {
@@ -142,14 +158,15 @@ class DetailsDaoTest {
         title: String,
         genres: List<String> = emptyList(),
         fetchedAt: Instant = now,
-        source: MediaSource = MediaSource.TMDB
+        source: MediaSource = MediaSource.TMDB,
+        genreRows: List<MediaGenreEntity>? = null
     ) {
         detailsDao.storeDetails(
             candidate = media(title, fetchedAt),
             source = source,
             externalId = "550",
             details = details(fetchedAt),
-            genres = genres.mapIndexed { index, name -> MediaGenreEntity(0, index, name) }
+            genres = genreRows ?: genres.mapIndexed { index, name -> MediaGenreEntity(0, index, name) }
         )
     }
 

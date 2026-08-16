@@ -19,4 +19,15 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `media_genres` ADD COLUMN `source` TEXT")
+        db.execSQL("ALTER TABLE `media_genres` ADD COLUMN `genre_id` INTEGER")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_media_genres_source_genre_id` " +
+                "ON `media_genres` (`source`, `genre_id`)"
+        )
+    }
+}
+
+val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

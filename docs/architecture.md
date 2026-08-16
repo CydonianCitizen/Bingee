@@ -7,7 +7,7 @@ Bingee v1.1.0 is a package-structured modular monolith in one Android applicatio
 - TMDB is the only runtime media provider. No Jikan or cross-provider deduplication runs in the app.
 - Top-level navigation is Home, Search, and Profile. Profile opens the Appearance & Language, Notifications, Data & backup, Privacy, and About subpages.
 - Home is Room-first and includes Continue Watching; Notification Center reads cached release events and supports local refresh feedback.
-- Room v2 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, portable preferences, and the explicit serial-state override.
+- Room v3 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, portable preferences, and the explicit serial-state override.
 - Backup v1 is the versioned JSON export/restore contract and uses transactional replace restore.
 - The UI ships in English and Italian. About exposes a manual GitHub update checker; it does not perform background update checks.
 
@@ -138,13 +138,13 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 2. Migration 1 -> 2 adds only the explicit serial-state override table.
+- Room database `bingee.db` is version 3. Migration 1 -> 2 adds only the explicit serial-state override table; migration 2 -> 3 adds nullable provider-qualified genre identity and its composite index.
 
 - `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
 - Source/type enums use names, dates use ISO `LocalDate`, and timestamps use UTC `Instant`; malformed values fail safely rather than changing meaning.
-- Version 2 is the canonical database version. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. V1 `series_watch_progress` rows remain intact as non-authoritative metadata and cannot prove completion. Regular-episode unwatches clear completion metadata; re-completion writes a fresh marker. No Anime-specific Room structures exist.
+- Version 3 is the canonical database version. `media_genres` identifies refreshed TMDB genres by (`source`, `genre_id`); localized `name` remains display metadata, while migrated legacy rows retain their names with null identity until a successful refresh. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. V1 `series_watch_progress` rows remain intact as non-authoritative metadata and cannot prove completion. Regular-episode unwatches clear completion metadata; re-completion writes a fresh marker. No Anime-specific Room structures exist.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
@@ -210,7 +210,7 @@ Season expansion remains state within the existing detail route. There is no sea
 - Cache miss loads remotely. Fresh cache avoids automatic network work. Stale cache renders immediately and refreshes in the background. Manual refresh always requests remote data.
 - Only successful remote mapping plus atomic Room persistence advances `details_fetched_at`. Any network, mapping, or persistence failure leaves old rows and timestamp intact.
 - Per-reference in-flight refreshes are coalesced; unrelated titles may refresh concurrently.
-- Opening a title caches details without adding membership. Removing membership retains canonical metadata, external references, details, and genres. Cache pruning is intentionally absent.
+- Opening a title caches details without adding membership. Successful TMDB refresh atomically replaces ordered genre rows with stable TMDB IDs and current localized names. Removing membership retains canonical metadata, external references, details, and genres. Cache pruning is intentionally absent.
 - Unsupported providers return `AppError.UnsupportedData` before any TMDB request.
 - Images use TMDB CDN sizes `w342` for lists, `w500` for detail posters, and `w780` for backdrops. Text remains in Room; image bytes remain Coil-owned.
 

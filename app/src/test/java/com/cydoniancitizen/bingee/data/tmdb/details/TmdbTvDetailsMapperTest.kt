@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.data.tmdb.details
 
+import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
 import java.time.Duration
@@ -23,6 +24,8 @@ class TmdbTvDetailsMapperTest {
         assertEquals(73, details.numberOfEpisodes)
         assertEquals(ProductionStatus.ENDED, details.productionStatus)
         assertEquals(listOf("Drama"), details.genres.map { it.name })
+        assertEquals(MediaSource.TMDB, details.genres.single().source)
+        assertEquals(18L, details.genres.single().genreId)
         assertEquals("en", details.originalLanguage)
     }
 
@@ -99,7 +102,7 @@ class TmdbTvDetailsMapperTest {
         posterPath = posterPath,
         backdropPath = backdropPath,
         firstAirDate = firstAirDate,
-        genres = listOf(TmdbGenreDto("Drama")),
+        genres = listOf(TmdbGenreDto(18, "Drama")),
         status = status,
         episodeRunTime = episodeRunTime,
         numberOfSeasons = numberOfSeasons,

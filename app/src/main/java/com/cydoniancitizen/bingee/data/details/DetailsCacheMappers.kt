@@ -41,7 +41,13 @@ internal fun MediaDetails.toCacheWrite(fetchedAt: Instant): DetailsCacheWrite = 
         detailsFetchedAt = fetchedAt
     ),
     genres = genres.mapIndexed { index, genre ->
-        MediaGenreEntity(localMediaId = 0, genreOrder = index, name = genre.name.trim())
+        MediaGenreEntity(
+            localMediaId = 0,
+            genreOrder = index,
+            name = genre.name.trim(),
+            source = genre.source,
+            genreId = genre.genreId
+        )
     }
 )
 
@@ -81,7 +87,11 @@ internal fun CachedDetailsRelation.toDomain(
 
 private fun CachedDetailsRelation.cachedGenres(): List<Genre> = genres
     .sortedBy(MediaGenreEntity::genreOrder)
-    .mapNotNull { row -> row.name.normalizedOptional()?.let(::Genre) }
+    .mapNotNull { row ->
+        row.name.normalizedOptional()?.let { name ->
+            Genre(name = name, source = row.source, genreId = row.genreId)
+        }
+    }
 
 private fun String?.normalizedOptional(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 

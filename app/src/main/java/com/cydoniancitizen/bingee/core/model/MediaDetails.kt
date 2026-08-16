@@ -3,9 +3,11 @@ package com.cydoniancitizen.bingee.core.model
 import java.time.Duration
 import java.time.LocalDate
 
-data class Genre(val name: String) {
+data class Genre(val name: String, val source: MediaSource? = null, val genreId: Long? = null) {
     init {
         require(name.isNotBlank()) { "Genre name must not be blank" }
+        require((source == null) == (genreId == null)) { "Genre source and ID must both be present or absent" }
+        require(genreId == null || genreId > 0) { "Genre ID must be positive" }
     }
 }
 

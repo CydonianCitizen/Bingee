@@ -17,4 +17,4 @@ internal data class TmdbMovieDetailsDto(
     @SerializedName("imdb_id") val imdbId: String? = null
 )
 
-internal data class TmdbGenreDto(val name: String?)
+internal data class TmdbGenreDto(val id: Long?, val name: String?)

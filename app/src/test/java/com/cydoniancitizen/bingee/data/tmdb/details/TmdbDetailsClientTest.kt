@@ -61,6 +61,9 @@ class TmdbDetailsClientTest {
         assertTrue(authorization?.startsWith("Bearer ") == true)
         assertEquals(TEST_CREDENTIAL.length + "Bearer ".length, authorization?.length)
         assertTrue(result is AppResult.Success)
+        val genre = (result as AppResult.Success).value.details.genres.single()
+        assertEquals(18L, genre.genreId)
+        assertEquals("Drama", genre.name)
         assertFalse(result.toString().contains(TEST_CREDENTIAL))
     }
 
