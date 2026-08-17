@@ -45,7 +45,7 @@ internal class AndroidReleaseNotifier @Inject constructor(
                 context,
                 AndroidReleaseNotificationCapability.CHANNEL_ID
             )
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(content.title)
                 .setContentText(content.body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(content.body))

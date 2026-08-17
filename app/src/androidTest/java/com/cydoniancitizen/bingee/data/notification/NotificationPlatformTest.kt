@@ -40,7 +40,7 @@ class NotificationPlatformTest {
         val notification = NotificationCompat.Builder(
             context,
             AndroidReleaseNotificationCapability.CHANNEL_ID
-        ).setSmallIcon(com.cydoniancitizen.bingee.R.drawable.ic_launcher_foreground)
+        ).setSmallIcon(com.cydoniancitizen.bingee.R.drawable.ic_notification)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
         assertEquals(NotificationCompat.VISIBILITY_PRIVATE, notification.visibility)

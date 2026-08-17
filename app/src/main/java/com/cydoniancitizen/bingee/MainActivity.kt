@@ -7,7 +7,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.cydoniancitizen.bingee.app.BingeeApp
@@ -31,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private val notificationTarget = MutableStateFlow<NotificationNavigationTarget?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         notificationTarget.value = NotificationDetailIntent.parse(intent)
         enableEdgeToEdge()
@@ -46,6 +50,13 @@ class MainActivity : AppCompatActivity() {
                 AppTheme.SYSTEM_DEFAULT -> isSystemInDarkTheme()
                 AppTheme.LIGHT -> false
                 AppTheme.DARK -> true
+            }
+
+            SideEffect {
+                WindowInsetsControllerCompat(window, window.decorView).run {
+                    isAppearanceLightStatusBars = !darkTheme
+                    isAppearanceLightNavigationBars = !darkTheme
+                }
             }
 
             BingeeTheme(darkTheme = darkTheme) {

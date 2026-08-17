@@ -1,10 +1,7 @@
 package com.cydoniancitizen.bingee.domain.model
 
-import com.cydoniancitizen.bingee.core.model.LibraryEntry
-import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.MovieWatchState
-import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import java.time.ZoneId
 
 data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
@@ -25,7 +22,7 @@ data class WatchedStatistics(
     val ratedTitlesPercentage: Double = 0.0,
     val mediaTypeDistribution: MediaTypeDistribution = MediaTypeDistribution(0, 0),
     val watchedByMonthYear: List<MonthYearCount> = emptyList(),
-    val recentlyCompletedTitles: List<LibraryEntry> = emptyList()
+    val recentlyCompletedTitles: List<PersonalViewingEntry> = emptyList()
 ) {
     val isEmpty: Boolean
         get() =
@@ -34,89 +31,56 @@ data class WatchedStatistics(
                 episodesWatchedCount == 0
 }
 
-fun calculateWatchedStatistics(entries: List<LibraryEntry>): WatchedStatistics {
-    val watchedEntries = entries.filter { entry ->
-        when (val progress = entry.progress) {
-            is LibraryProgress.Movie -> progress.state is MovieWatchState.Watched
-            is LibraryProgress.Series -> progress.progress.watchedEpisodes > 0
-            LibraryProgress.Unavailable -> false
-        }
-    }
+fun calculateWatchedStatistics(
+    entries: List<PersonalViewingEntry>,
+    zoneId: ZoneId = ZoneId.systemDefault()
+): WatchedStatistics {
+    val completedTitles = entries.filter(PersonalViewingEntry::isCompletedTitle)
+    val viewedTitles = entries.filter(PersonalViewingEntry::isViewingTasteEligible)
+    if (completedTitles.isEmpty() && viewedTitles.isEmpty()) return WatchedStatistics()
 
-    if (watchedEntries.isEmpty()) {
-        return WatchedStatistics()
-    }
-
-    val movies = watchedEntries.filter { it.mediaType == MediaType.MOVIE }
-    val tvSeries = watchedEntries.filter { it.mediaType == MediaType.SERIES }
-
-    val moviesWatchedCount = movies.size
-    val tvSeriesCompletedCount = tvSeries.count { entry ->
-        when (val p = entry.progress) {
-            is LibraryProgress.Series -> entry.serialState == SeriesTrackingState.WATCHED
-            else -> false
-        }
-    }
-
-    var totalEpisodesWatched = 0
-    var totalWatchTimeMinutes = 0L
-    var isIncompleteWatchTime = false
+    val moviesWatchedCount = completedTitles.count { it.mediaType == MediaType.MOVIE }
+    val tvSeriesCompletedCount = completedTitles.count { it.mediaType == MediaType.SERIES }
+    val episodesWatchedCount = entries.sumOf(PersonalViewingEntry::watchedRegularEpisodes)
 
     // ponytail: fixed movie/episode durations; use persisted runtime data when available.
-    watchedEntries.forEach { entry ->
-        when (val p = entry.progress) {
-            is LibraryProgress.Movie -> {
-                totalWatchTimeMinutes += 110L
-                isIncompleteWatchTime = true
-            }
-            is LibraryProgress.Series -> {
-                totalEpisodesWatched += p.progress.watchedEpisodes
-                totalWatchTimeMinutes += p.progress.watchedEpisodes * 45L
-                isIncompleteWatchTime = true
-            }
-            LibraryProgress.Unavailable -> {
-                if (entry.mediaType == MediaType.MOVIE) {
-                    totalWatchTimeMinutes += 110L
-                }
-                isIncompleteWatchTime = true
-            }
-        }
-    }
-
-    val ratedEntries = watchedEntries.filter { it.personalRating != null }
-    val averageRating = if (ratedEntries.isNotEmpty()) {
-        ratedEntries.map { it.personalRating!!.value }.average()
+    val estimatedWatchTimeMinutes =
+        moviesWatchedCount * 110L + episodesWatchedCount * 45L
+    val ratedTitles = viewedTitles.filter { it.personalRating != null }
+    val averagePersonalRating = ratedTitles.map { it.personalRating!!.value }.average().takeUnless(Double::isNaN)
+    val ratedTitlesPercentage = if (viewedTitles.isEmpty()) {
+        0.0
     } else {
-        null
+        ratedTitles.size.toDouble() / viewedTitles.size * 100.0
     }
-    val ratedPercentage = (ratedEntries.size.toDouble() / watchedEntries.size) * 100.0
 
-    // Only titles with explicit watchedDate contribute to temporal history (not fabricated from addedAt)
-    val completedEntries = watchedEntries.filter { entry ->
-        entry.mediaType == MediaType.MOVIE || entry.serialState == SeriesTrackingState.WATCHED
-    }
-    val monthYearCounts = completedEntries.mapNotNull { entry ->
-        entry.watchedDate?.let { it.year to it.monthValue }
-    }.groupingBy { it }.eachCount()
-        .map { (ym, count) -> MonthYearCount(ym.first, ym.second, count) }
+    val watchedByMonthYear = completedTitles
+        .mapNotNull { it.displayWatchedDate(zoneId)?.let { date -> date.year to date.monthValue } }
+        .groupingBy { it }
+        .eachCount()
+        .map { (yearMonth, count) -> MonthYearCount(yearMonth.first, yearMonth.second, count) }
         .sortedWith(compareByDescending<MonthYearCount> { it.year }.thenByDescending { it.month })
 
-    val recentlyCompleted = completedEntries.sortedWith(
-        compareByDescending<LibraryEntry> {
-            it.watchedDate ?: it.addedAt.atZone(ZoneId.systemDefault()).toLocalDate()
-        }.thenByDescending { it.addedAt }
+    val recentlyCompletedTitles = completedTitles.sortedWith(
+        compareByDescending<PersonalViewingEntry> { it.displayWatchedDate(zoneId) }
+            .thenByDescending { it.completionTimestamp }
+            .thenBy { it.mediaRef.source.name }
+            .thenBy { it.mediaRef.externalId }
     ).take(10)
 
     return WatchedStatistics(
         moviesWatchedCount = moviesWatchedCount,
         tvSeriesCompletedCount = tvSeriesCompletedCount,
-        episodesWatchedCount = totalEpisodesWatched,
-        estimatedWatchTimeMinutes = totalWatchTimeMinutes,
-        isWatchTimeIncomplete = isIncompleteWatchTime,
-        averagePersonalRating = averageRating,
-        ratedTitlesPercentage = ratedPercentage,
-        mediaTypeDistribution = MediaTypeDistribution(moviesWatchedCount, tvSeries.size),
-        watchedByMonthYear = monthYearCounts,
-        recentlyCompletedTitles = recentlyCompleted
+        episodesWatchedCount = episodesWatchedCount,
+        estimatedWatchTimeMinutes = estimatedWatchTimeMinutes,
+        isWatchTimeIncomplete = moviesWatchedCount > 0 || episodesWatchedCount > 0,
+        averagePersonalRating = averagePersonalRating,
+        ratedTitlesPercentage = ratedTitlesPercentage,
+        mediaTypeDistribution = MediaTypeDistribution(
+            movieCount = viewedTitles.count { it.mediaType == MediaType.MOVIE },
+            tvSeriesCount = viewedTitles.count { it.mediaType == MediaType.SERIES }
+        ),
+        watchedByMonthYear = watchedByMonthYear,
+        recentlyCompletedTitles = recentlyCompletedTitles
     )
 }

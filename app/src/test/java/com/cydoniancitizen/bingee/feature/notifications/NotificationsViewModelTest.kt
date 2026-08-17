@@ -353,6 +353,10 @@ class NotificationsViewModelTest {
             MutableStateFlow(AppResult.Success(null))
         override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
             MutableStateFlow(AppResult.Success(emptySet()))
+        override fun observePersonalViewing() =
+            MutableStateFlow<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
+                AppResult.Success(emptyList())
+            )
         override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> = error("Unused")
         override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> = error("Unused")
         override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = AppResult.Success(Unit)

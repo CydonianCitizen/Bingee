@@ -356,6 +356,10 @@ class MediaDetailsViewModelTest {
             entry.map { AppResult.Success(it) }
         override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
             entry.map { AppResult.Success(listOfNotNull(it?.mediaRef).toSet()) }
+        override fun observePersonalViewing() =
+            flowOf<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
+                AppResult.Success(emptyList())
+            )
         override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> = error("unused")
         override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> {
             actions += "add"

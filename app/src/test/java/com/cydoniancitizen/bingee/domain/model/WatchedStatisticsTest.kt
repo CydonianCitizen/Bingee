@@ -1,15 +1,13 @@
 package com.cydoniancitizen.bingee.domain.model
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.LibraryEntry
-import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalRating
-import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -17,155 +15,193 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WatchedStatisticsTest {
+    private val zone = ZoneId.of("Europe/Rome")
 
     @Test
-    fun calculateWatchedStatisticsHandlesEmptyList() {
-        val stats = calculateWatchedStatistics(emptyList())
+    fun emptyHistoryProducesEmptyStatistics() {
+        val stats = calculateWatchedStatistics(emptyList(), zone)
+
         assertEquals(0, stats.moviesWatchedCount)
         assertEquals(0, stats.tvSeriesCompletedCount)
         assertEquals(0, stats.episodesWatchedCount)
-        assertEquals(0L, stats.estimatedWatchTimeMinutes)
         assertNull(stats.averagePersonalRating)
-        assertEquals(0.0, stats.ratedTitlesPercentage, 0.01)
-        assertTrue(stats.watchedByMonthYear.isEmpty())
         assertTrue(stats.isEmpty)
     }
 
     @Test
-    fun oneWatchedMovieMakesStatisticsNonEmpty() {
-        val movie = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "watched-movie"),
-            mediaType = MediaType.MOVIE,
-            title = "Watched Movie",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH))
+    fun completedCohortUsesOnlyGenuineCompletionEvidence() {
+        val watchedMovie = movie("movie", watchedAt = instant("2026-05-10T10:00:00Z"))
+        val completedSeries = series(
+            "complete",
+            watchedEpisodes = 10,
+            completedAt = instant("2026-06-15T10:00:00Z")
+        )
+        val watching = series("watching", watchedEpisodes = 2)
+        val abandoned = series("abandoned", watchedEpisodes = 3, isAbandoned = true)
+        val specialsOnly = series("specials", watchedEpisodes = 0)
+
+        val stats = calculateWatchedStatistics(
+            listOf(watchedMovie, completedSeries, watching, abandoned, specialsOnly),
+            zone
         )
 
-        assertFalse(calculateWatchedStatistics(listOf(movie)).isEmpty)
+        assertEquals(1, stats.moviesWatchedCount)
+        assertEquals(1, stats.tvSeriesCompletedCount)
+        assertEquals(listOf("complete", "movie"), stats.recentlyCompletedTitles.map { it.mediaRef.externalId })
     }
 
     @Test
-    fun oneCompletedTvSeriesMakesStatisticsNonEmpty() {
-        val series = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "completed-series"),
-            mediaType = MediaType.SERIES,
-            title = "Completed Series",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Series(SeriesProgress(1, 1, 1, 1, isComplete = true))
+    fun viewedTasteCohortExcludesRatingsAndSpecialsWithoutRegularProgress() {
+        val entries = listOf(
+            movie("watched-movie", watchedAt = Instant.EPOCH),
+            movie("unwatched-movie", rating = 10),
+            series("watch-later"),
+            series("watching", watchedEpisodes = 1),
+            series("watched", watchedEpisodes = 6, completedAt = Instant.EPOCH),
+            series("abandoned", watchedEpisodes = 1, isAbandoned = true),
+            series("specials-only")
         )
 
-        assertFalse(calculateWatchedStatistics(listOf(series)).isEmpty)
+        assertEquals(
+            setOf("watched-movie", "watching", "watched", "abandoned"),
+            entries.filter(PersonalViewingEntry::isViewingTasteEligible).map { it.mediaRef.externalId }.toSet()
+        )
     }
 
     @Test
-    fun watchedEpisodesWithoutCompletedSeriesMakeStatisticsNonEmpty() {
-        val series = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "started-series"),
-            mediaType = MediaType.SERIES,
-            title = "Started Series",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Series(SeriesProgress(1, 2, 0, 1, isComplete = false))
+    fun ratingAndMediaDistributionUseSameViewedTitleCohort() {
+        val entries = listOf(
+            movie("watched-rated", watchedAt = Instant.EPOCH, rating = 8),
+            movie("unwatched-rated", rating = 10),
+            series("started-rated", watchedEpisodes = 1, rating = 6),
+            series("watch-later-rated", rating = 1)
         )
 
-        val stats = calculateWatchedStatistics(listOf(series))
+        val stats = calculateWatchedStatistics(entries, zone)
 
-        assertEquals(0, stats.tvSeriesCompletedCount)
-        assertEquals(1, stats.episodesWatchedCount)
+        assertEquals(7.0, stats.averagePersonalRating!!, 0.01)
+        assertEquals(100.0, stats.ratedTitlesPercentage, 0.01)
+        assertEquals(MediaTypeDistribution(movieCount = 1, tvSeriesCount = 1), stats.mediaTypeDistribution)
+    }
+
+    @Test
+    fun episodeActivityIncludesAbandonedAndRemovedSeriesProgress() {
+        val entries = listOf(
+            series("watching", watchedEpisodes = 2),
+            series("abandoned", watchedEpisodes = 3, isAbandoned = true),
+            series("removed", watchedEpisodes = 4, inLibrary = false)
+        )
+
+        val stats = calculateWatchedStatistics(entries, zone)
+
+        assertEquals(9, stats.episodesWatchedCount)
+        assertEquals(3, stats.mediaTypeDistribution.tvSeriesCount)
+    }
+
+    @Test
+    fun completionOrderingNeverUsesAddedAt() {
+        val earlierCompletionAddedLater = movie(
+            "earlier",
+            watchedAt = instant("2026-01-01T12:00:00Z"),
+            addedAt = instant("2026-12-01T12:00:00Z")
+        )
+        val laterCompletionAddedEarlier = movie(
+            "later",
+            watchedAt = instant("2026-02-01T12:00:00Z"),
+            addedAt = instant("2025-01-01T12:00:00Z")
+        )
+
+        val recent = calculateWatchedStatistics(
+            listOf(earlierCompletionAddedLater, laterCompletionAddedEarlier),
+            zone
+        ).recentlyCompletedTitles
+
+        assertEquals(listOf("later", "earlier"), recent.map { it.mediaRef.externalId })
+    }
+
+    @Test
+    fun explicitWatchedDateControlsDisplayWhileCompletionTimestampStaysPrecise() {
+        val completion = instant("2026-08-01T23:30:00Z")
+        val explicit = LocalDate.of(2020, 2, 3)
+        val entry = movie("movie", watchedAt = completion, watchedDate = explicit)
+
+        val stats = calculateWatchedStatistics(listOf(entry), zone)
+
+        assertEquals(explicit, entry.displayWatchedDate(zone))
+        assertEquals(completion, entry.completionTimestamp)
+        assertEquals(listOf(MonthYearCount(2020, 2, 1)), stats.watchedByMonthYear)
+    }
+
+    @Test
+    fun completionTimestampSuppliesLocalDisplayDateWhenUserDateMissing() {
+        val entry = movie("movie", watchedAt = instant("2026-08-01T23:30:00Z"))
+
+        val stats = calculateWatchedStatistics(listOf(entry), zone)
+
+        assertEquals(LocalDate.of(2026, 8, 2), entry.displayWatchedDate(zone))
+        assertEquals(listOf(MonthYearCount(2026, 8, 1)), stats.watchedByMonthYear)
         assertFalse(stats.isEmpty)
     }
 
-    @Test
-    fun ratingsAndMetadataAloneDoNotMakeStatisticsNonEmpty() {
-        val stats = WatchedStatistics(
-            estimatedWatchTimeMinutes = 90,
-            isWatchTimeIncomplete = true,
-            averagePersonalRating = 8.0,
-            ratedTitlesPercentage = 100.0,
-            mediaTypeDistribution = MediaTypeDistribution(0, 0),
-            watchedByMonthYear = listOf(MonthYearCount(2026, 1, 1))
-        )
+    private fun movie(
+        id: String,
+        watchedAt: Instant? = null,
+        watchedDate: LocalDate? = null,
+        rating: Int? = null,
+        addedAt: Instant = Instant.EPOCH,
+        inLibrary: Boolean = true
+    ) = entry(
+        id = id,
+        mediaType = MediaType.MOVIE,
+        addedAt = addedAt,
+        inLibrary = inLibrary,
+        rating = rating,
+        movieWatchedAt = watchedAt,
+        watchedDate = watchedDate
+    )
 
-        assertTrue(stats.isEmpty)
-    }
+    private fun series(
+        id: String,
+        watchedEpisodes: Int = 0,
+        completedAt: Instant? = null,
+        rating: Int? = null,
+        isAbandoned: Boolean = false,
+        inLibrary: Boolean = true
+    ) = entry(
+        id = id,
+        mediaType = MediaType.SERIES,
+        inLibrary = inLibrary,
+        rating = rating,
+        watchedRegularEpisodes = watchedEpisodes,
+        seriesCompletedAt = completedAt,
+        isAbandoned = isAbandoned
+    )
 
-    @Test
-    fun calculateWatchedStatisticsComputesCountsAndTemporalHistoryWithoutFabrication() {
-        val date1 = LocalDate.of(2026, 5, 10)
-        val date2 = LocalDate.of(2026, 6, 15)
+    private fun entry(
+        id: String,
+        mediaType: MediaType,
+        addedAt: Instant = Instant.EPOCH,
+        inLibrary: Boolean = true,
+        rating: Int? = null,
+        movieWatchedAt: Instant? = null,
+        watchedRegularEpisodes: Int = 0,
+        seriesCompletedAt: Instant? = null,
+        watchedDate: LocalDate? = null,
+        isAbandoned: Boolean = false
+    ) = PersonalViewingEntry(
+        mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
+        mediaType = mediaType,
+        title = "Title $id",
+        addedAt = addedAt,
+        inLibrary = inLibrary,
+        isFavorite = false,
+        isAbandoned = isAbandoned,
+        personalRating = rating?.let(::PersonalRating),
+        movieWatchedAt = movieWatchedAt,
+        watchedRegularEpisodes = watchedRegularEpisodes,
+        seriesCompletedAt = seriesCompletedAt,
+        watchedDate = watchedDate
+    )
 
-        val watchedMovieWithDate = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "1"),
-            mediaType = MediaType.MOVIE,
-            title = "Movie 1",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH, date1)),
-            personalRating = PersonalRating(8),
-            watchedDate = date1
-        )
-
-        val watchedMovieWithoutDate = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "2"),
-            mediaType = MediaType.MOVIE,
-            title = "Movie 2",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
-            personalRating = null,
-            watchedDate = null
-        )
-
-        val completedTvSeries = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "3"),
-            mediaType = MediaType.SERIES,
-            title = "Series 1",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Series(SeriesProgress(10, 10, 1, 1, isComplete = true)),
-            personalRating = PersonalRating(10),
-            watchedDate = date2
-        )
-
-        val unwatchedMovie = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "4"),
-            mediaType = MediaType.MOVIE,
-            title = "Unwatched",
-            addedAt = Instant.EPOCH,
-            progress = LibraryProgress.Movie(MovieWatchState.Unwatched),
-            watchedDate = null
-        )
-
-        val entries = listOf(watchedMovieWithDate, watchedMovieWithoutDate, completedTvSeries, unwatchedMovie)
-        val stats = calculateWatchedStatistics(entries)
-
-        assertEquals(2, stats.moviesWatchedCount)
-        assertEquals(1, stats.tvSeriesCompletedCount)
-        assertEquals(10, stats.episodesWatchedCount)
-        assertEquals(2, stats.mediaTypeDistribution.movieCount)
-        assertEquals(1, stats.mediaTypeDistribution.tvSeriesCount)
-
-        // Rating average: (8 + 10) / 2 = 9.0
-        assertEquals(9.0, stats.averagePersonalRating!!, 0.01)
-        // 2 of 3 watched entries are rated -> 66.67%
-        assertEquals(66.67, stats.ratedTitlesPercentage, 0.1)
-
-        // Temporal history must ONLY include entries with an explicit watchedDate (2 titles)
-        assertEquals(2, stats.watchedByMonthYear.size)
-    }
-
-    @Test
-    fun incompleteSeriesDoesNotCountAsCompletionHistory() {
-        val series = LibraryEntry(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "partial"),
-            mediaType = MediaType.SERIES,
-            title = "Partial",
-            addedAt = Instant.EPOCH,
-            watchedDate = LocalDate.of(2026, 8, 1),
-            progress = LibraryProgress.Series(SeriesProgress(1, 2, 0, 1, isComplete = false))
-        )
-
-        val stats = calculateWatchedStatistics(listOf(series))
-
-        assertEquals(0, stats.tvSeriesCompletedCount)
-        assertEquals(1, stats.episodesWatchedCount)
-        assertTrue(stats.watchedByMonthYear.isEmpty())
-        assertTrue(stats.recentlyCompletedTitles.isEmpty())
-    }
+    private fun instant(value: String): Instant = Instant.parse(value)
 }

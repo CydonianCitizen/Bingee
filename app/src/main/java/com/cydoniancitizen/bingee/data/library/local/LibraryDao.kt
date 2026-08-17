@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.data.library.local
 
 import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -15,6 +16,21 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal abstract class LibraryDao {
+    internal data class PersonalViewingRow(
+        @Embedded val media: MediaEntity,
+        val source: MediaSource,
+        @ColumnInfo(name = "external_id") val externalId: String,
+        @ColumnInfo(name = "membership_added_at") val membershipAddedAt: Instant?,
+        @ColumnInfo(name = "in_library") val inLibrary: Boolean,
+        @ColumnInfo(name = "is_abandoned") val isAbandoned: Boolean,
+        @ColumnInfo(name = "rating_value") val ratingValue: Int?,
+        @ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
+        @ColumnInfo(name = "movie_watched_date") val movieWatchedDate: LocalDate?,
+        @ColumnInfo(name = "watched_regular_episodes") val watchedRegularEpisodes: Int,
+        @ColumnInfo(name = "series_completed_at") val seriesCompletedAt: Instant?,
+        @ColumnInfo(name = "series_watched_date") val seriesWatchedDate: LocalDate?
+    )
+
     internal data class ContinueWatchingRow(
         @ColumnInfo(name = "media_type") val mediaType: MediaType,
         val title: String,
@@ -97,6 +113,58 @@ internal abstract class LibraryDao {
         """
     )
     abstract fun observeMembershipRefs(): Flow<List<ExternalRefEntity>>
+
+    @Query(
+        """
+        WITH regular_episode_activity AS (
+            SELECT seasons.local_media_id, COUNT(*) AS watched_regular_episodes
+            FROM seasons
+            INNER JOIN episodes USING(local_season_id)
+            INNER JOIN episode_watch_progress USING(local_episode_id)
+            WHERE seasons.season_number > 0
+              AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+            GROUP BY seasons.local_media_id
+        )
+        SELECT media_entries.*,
+               selected_ref.source,
+               selected_ref.external_id,
+               library_entries.added_at AS membership_added_at,
+               CASE WHEN library_entries.local_media_id IS NOT NULL THEN 1 ELSE 0 END AS in_library,
+               CASE WHEN series_state_overrides.is_abandoned = 1 THEN 1 ELSE 0 END AS is_abandoned,
+               media_ratings.rating_value,
+               movie_watch_progress.watched_at AS movie_watched_at,
+               movie_watch_progress.watched_date AS movie_watched_date,
+               COALESCE(regular_episode_activity.watched_regular_episodes, 0) AS watched_regular_episodes,
+               series_watch_progress.completed_at AS series_completed_at,
+               series_watch_progress.watched_date AS series_watched_date
+        FROM media_entries
+        INNER JOIN external_refs AS selected_ref
+          ON selected_ref.local_media_id = media_entries.local_media_id
+         AND NOT EXISTS (
+             SELECT 1
+             FROM external_refs AS earlier_ref
+             WHERE earlier_ref.local_media_id = selected_ref.local_media_id
+               AND (
+                   earlier_ref.source < selected_ref.source
+                   OR (
+                       earlier_ref.source = selected_ref.source
+                       AND earlier_ref.external_id < selected_ref.external_id
+                   )
+               )
+         )
+        LEFT JOIN library_entries USING(local_media_id)
+        LEFT JOIN media_ratings USING(local_media_id)
+        LEFT JOIN series_state_overrides USING(local_media_id)
+        LEFT JOIN movie_watch_progress USING(local_media_id)
+        LEFT JOIN series_watch_progress USING(local_media_id)
+        LEFT JOIN regular_episode_activity USING(local_media_id)
+        WHERE movie_watch_progress.local_media_id IS NOT NULL
+           OR series_watch_progress.local_media_id IS NOT NULL
+           OR regular_episode_activity.watched_regular_episodes > 0
+        ORDER BY media_entries.local_media_id
+        """
+    )
+    abstract fun observePersonalViewing(today: LocalDate): Flow<List<PersonalViewingRow>>
 
     @Query(
         """

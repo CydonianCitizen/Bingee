@@ -9,6 +9,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.applyLibraryStateAndSort
 import com.cydoniancitizen.bingee.core.model.normalizeLibrarySearch
@@ -81,6 +82,11 @@ internal class DefaultLibraryRepository @Inject constructor(
     override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
         libraryDao.observeMembershipRefs().asPersistenceResult { rows ->
             rows.mapTo(linkedSetOf()) { it.toDomain() }
+        }
+
+    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> =
+        libraryDao.observePersonalViewing(LocalDate.now(clock)).asPersistenceResult { rows ->
+            rows.map(LibraryDao.PersonalViewingRow::toDomain)
         }
 
     override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =

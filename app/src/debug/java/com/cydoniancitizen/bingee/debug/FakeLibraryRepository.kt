@@ -2,8 +2,12 @@ package com.cydoniancitizen.bingee.debug
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.organizeLibraryEntries
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -32,6 +36,10 @@ class FakeLibraryRepository(
 
     override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
         entries.map { current -> AppResult.Success(current.mapTo(linkedSetOf()) { it.mediaRef }) }
+
+    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> = entries.map { current ->
+        AppResult.Success(current.mapNotNull(::toPersonalViewingEntry))
+    }
 
     override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> {
         writeFailure?.let { return AppResult.Failure(it) }
@@ -104,5 +112,29 @@ class FakeLibraryRepository(
             if (entry.mediaRef == ref) entry.copy(watchedDate = watchedDate) else entry
         }
         return AppResult.Success(Unit)
+    }
+
+    private fun toPersonalViewingEntry(entry: LibraryEntry): PersonalViewingEntry? {
+        val movieWatchedAt = ((entry.progress as? LibraryProgress.Movie)?.state as? MovieWatchState.Watched)?.watchedAt
+        val seriesProgress = (entry.progress as? LibraryProgress.Series)?.progress
+        if (movieWatchedAt == null && seriesProgress?.watchedEpisodes == 0) return null
+        return PersonalViewingEntry(
+            mediaRef = entry.mediaRef,
+            mediaType = entry.mediaType,
+            title = entry.title,
+            originalTitle = entry.originalTitle,
+            posterUrl = entry.posterUrl,
+            addedAt = entry.addedAt,
+            inLibrary = entry.inLibrary,
+            isFavorite = entry.isFavorite,
+            isAbandoned = entry.isAbandoned,
+            personalRating = entry.personalRating,
+            movieWatchedAt = movieWatchedAt,
+            watchedRegularEpisodes = seriesProgress?.watchedEpisodes ?: 0,
+            seriesCompletedAt = now.takeIf {
+                entry.mediaType == MediaType.SERIES && seriesProgress?.isComplete == true
+            },
+            watchedDate = entry.watchedDate
+        )
     }
 }

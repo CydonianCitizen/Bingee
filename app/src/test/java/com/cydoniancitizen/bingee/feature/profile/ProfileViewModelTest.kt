@@ -8,8 +8,10 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalRating
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.isWatched
+import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
@@ -23,7 +25,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -133,7 +134,7 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun statisticsStateUsesSingleProfileLibraryObservation() = runTest {
+    fun statisticsUseOneFocusedPersonalViewingObservation() = runTest {
         val watchedMovie = entry("1", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
         val watchedSeries = entry("2", MediaType.SERIES, LibraryProgress.Series(SeriesProgress(1, 10, 0, 1, false)))
         val repo = FakeLibraryRepo(listOf(watchedMovie, watchedSeries))
@@ -153,6 +154,137 @@ class ProfileViewModelTest {
         viewModel.setCategory(ProfileCategory.TV_SERIES)
         assertSame(statistics, viewModel.uiState.value.statistics)
         assertEquals(1, repo.observeEntriesCalls)
+        assertEquals(1, repo.observePersonalViewingCalls)
+    }
+
+    @Test
+    fun removedHistoryAffectsStatisticsWithoutReappearingInCollection() = runTest {
+        val removedLibraryEntry = entry(
+            "removed",
+            MediaType.MOVIE,
+            LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
+            favorite = true,
+            inLibrary = false
+        )
+        val removed = PersonalViewingEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "removed"),
+            mediaType = MediaType.MOVIE,
+            title = "Removed",
+            addedAt = Instant.EPOCH,
+            inLibrary = false,
+            isFavorite = false,
+            movieWatchedAt = Instant.EPOCH
+        )
+        val repo = FakeLibraryRepo(listOf(removedLibraryEntry), listOf(removed))
+        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.entries.isEmpty())
+        assertEquals(1, viewModel.uiState.value.statistics.moviesWatchedCount)
+        assertEquals("removed", viewModel.uiState.value.statistics.recentlyCompletedTitles.single().mediaRef.externalId)
+    }
+
+    @Test
+    fun removedFavoriteMovieStaysFavoriteButNotWatched() = runTest {
+        val removed = entry(
+            "removed",
+            MediaType.MOVIE,
+            LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
+            favorite = true,
+            inLibrary = false
+        )
+        val viewModel = ProfileViewModel(FakeLibraryRepo(listOf(removed)), FakeDisplayModePrefs())
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.entries.isEmpty())
+        viewModel.setCollection(ProfileCollection.FAVORITES)
+        assertEquals(listOf("removed"), viewModel.uiState.value.entries.map { it.mediaRef.externalId })
+    }
+
+    @Test
+    fun removedFavoriteSeriesStaysFavoriteWithoutSerialLibraryState() = runTest {
+        val removed = entry(
+            "removed-series",
+            MediaType.SERIES,
+            LibraryProgress.Series(SeriesProgress(1, 1, 1, 1, true)),
+            favorite = true,
+            inLibrary = false
+        )
+        val viewModel = ProfileViewModel(FakeLibraryRepo(listOf(removed)), FakeDisplayModePrefs())
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.setCategory(ProfileCategory.TV_SERIES)
+
+        assertTrue(viewModel.uiState.value.entries.isEmpty())
+        assertEquals(null, removed.serialState)
+        viewModel.setCollection(ProfileCollection.FAVORITES)
+        assertEquals(listOf("removed-series"), viewModel.uiState.value.entries.map { it.mediaRef.externalId })
+    }
+
+    @Test
+    fun clearingRemovedFavoriteRemovesItFromFavorites() = runTest {
+        val removed = entry(
+            "removed",
+            MediaType.MOVIE,
+            LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)),
+            favorite = true,
+            inLibrary = false
+        )
+        val repo = FakeLibraryRepo(listOf(removed))
+        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.setCollection(ProfileCollection.FAVORITES)
+        assertEquals(1, viewModel.uiState.value.entries.size)
+
+        repo.emitEntries(emptyList())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.entries.isEmpty())
+    }
+
+    @Test
+    fun statisticsFailureDoesNotBlankCollectionAndOnlyStatisticsRecoveryClearsIt() = runTest {
+        val watched = entry(
+            "watched",
+            MediaType.MOVIE,
+            LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH))
+        )
+        val repo = FakeLibraryRepo(listOf(watched))
+        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        repo.emitViewingResult(AppResult.Failure(AppError.Unknown))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("watched"), viewModel.uiState.value.entries.map { it.mediaRef.externalId })
+        assertEquals(AppError.Unknown, viewModel.uiState.value.statisticsError)
+        assertEquals(null, viewModel.uiState.value.loadError)
+        assertFalse(viewModel.uiState.value.isLoading)
+
+        repo.emitEntries(listOf(watched))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(AppError.Unknown, viewModel.uiState.value.statisticsError)
+
+        repo.emitViewingResult(AppResult.Success(listOfNotNull(toViewing(watched))))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.statisticsError)
+    }
+
+    @Test
+    fun collectionFailureDoesNotOverwriteStatisticsError() = runTest {
+        val repo = FakeLibraryRepo(emptyList())
+        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        repo.emitViewingResult(AppResult.Failure(AppError.Unknown))
+        repo.emitEntriesResult(AppResult.Failure(AppError.LocalStorageFailure))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.loadError)
+        assertEquals(AppError.Unknown, viewModel.uiState.value.statisticsError)
     }
 
     @Test
@@ -206,31 +338,56 @@ class ProfileViewModelTest {
         progress: LibraryProgress,
         title: String = "Title $id",
         rating: Int? = null,
-        added: Instant = Instant.EPOCH
+        added: Instant = Instant.EPOCH,
+        favorite: Boolean = false,
+        inLibrary: Boolean = true
     ) = LibraryEntry(
         mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
         mediaType = type,
         title = title,
         addedAt = added,
         progress = progress,
-        personalRating = rating?.let { PersonalRating(it) }
+        personalRating = rating?.let { PersonalRating(it) },
+        isFavorite = favorite,
+        inLibrary = inLibrary
     )
 
-    private class FakeLibraryRepo(items: List<LibraryEntry>) : LibraryRepository {
-        private val observedEntries = MutableStateFlow(items)
+    private class FakeLibraryRepo(
+        items: List<LibraryEntry>,
+        viewing: List<PersonalViewingEntry> = items.mapNotNull(::toViewing)
+    ) : LibraryRepository {
+        private val observedEntries = MutableStateFlow<AppResult<List<LibraryEntry>>>(AppResult.Success(items))
+        private val observedViewing =
+            MutableStateFlow<AppResult<List<PersonalViewingEntry>>>(AppResult.Success(viewing))
         var observeEntriesCalls = 0
+        var observePersonalViewingCalls = 0
 
         fun emit(items: List<LibraryEntry>) {
-            observedEntries.value = items
+            emitEntries(items)
+            emitViewingResult(AppResult.Success(items.mapNotNull(::toViewing)))
+        }
+
+        fun emitEntries(items: List<LibraryEntry>) {
+            emitEntriesResult(AppResult.Success(items))
+        }
+
+        fun emitEntriesResult(result: AppResult<List<LibraryEntry>>) {
+            observedEntries.value = result
+        }
+
+        fun emitViewingResult(result: AppResult<List<PersonalViewingEntry>>) {
+            observedViewing.value = result
         }
 
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
-            observedEntries.map { AppResult.Success(it) }.also { observeEntriesCalls++ }
-        override fun observeEntryCount(): Flow<AppResult<Int>> = flowOf(AppResult.Success(observedEntries.value.size))
+            observedEntries.also { observeEntriesCalls++ }
+        override fun observeEntryCount(): Flow<AppResult<Int>> = flowOf(AppResult.Success(0))
         override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
-            flowOf(AppResult.Success(observedEntries.value.find { it.mediaRef == ref }))
+            flowOf(AppResult.Success(null))
         override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
-            flowOf(AppResult.Success(observedEntries.value.mapTo(mutableSetOf()) { it.mediaRef }))
+            flowOf(AppResult.Success(emptySet()))
+        override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> =
+            observedViewing.also { observePersonalViewingCalls++ }
         override suspend fun add(
             result: com.cydoniancitizen.bingee.core.model.MediaSearchResult
         ): AppResult<LibraryEntry> = AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.Unknown)
@@ -246,6 +403,30 @@ class ProfileViewModelTest {
         ): AppResult<Unit> = AppResult.Success(Unit)
         override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: java.time.LocalDate?): AppResult<Unit> =
             AppResult.Success(Unit)
+    }
+
+    private companion object {
+        fun toViewing(entry: LibraryEntry): PersonalViewingEntry? {
+            val movieWatchedAt = ((entry.progress as? LibraryProgress.Movie)?.state as? MovieWatchState.Watched)
+                ?.watchedAt
+            val seriesProgress = (entry.progress as? LibraryProgress.Series)?.progress
+            if (movieWatchedAt == null && (seriesProgress?.watchedEpisodes ?: 0) == 0) return null
+            return PersonalViewingEntry(
+                mediaRef = entry.mediaRef,
+                mediaType = entry.mediaType,
+                title = entry.title,
+                originalTitle = entry.originalTitle,
+                posterUrl = entry.posterUrl,
+                addedAt = entry.addedAt,
+                inLibrary = entry.inLibrary,
+                isFavorite = entry.isFavorite,
+                personalRating = entry.personalRating,
+                movieWatchedAt = movieWatchedAt,
+                watchedRegularEpisodes = seriesProgress?.watchedEpisodes ?: 0,
+                seriesCompletedAt = Instant.EPOCH.takeIf { seriesProgress?.isComplete == true },
+                watchedDate = entry.watchedDate
+            )
+        }
     }
 
     private class FakeDisplayModePrefs : ProfileDisplayModePreferences {

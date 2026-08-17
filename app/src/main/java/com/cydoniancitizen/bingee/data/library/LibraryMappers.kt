@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalRating
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
@@ -85,5 +86,22 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
 }
 
 internal fun ExternalRefEntity.toDomain(): ExternalMediaRef = ExternalMediaRef(source = source, externalId = externalId)
+
+internal fun LibraryDao.PersonalViewingRow.toDomain(): PersonalViewingEntry = PersonalViewingEntry(
+    mediaRef = ExternalMediaRef(source, externalId),
+    mediaType = media.mediaType,
+    title = media.title,
+    originalTitle = media.originalTitle,
+    posterUrl = media.posterUrl,
+    addedAt = membershipAddedAt ?: media.createdAt,
+    inLibrary = inLibrary,
+    isFavorite = media.isFavorite,
+    isAbandoned = isAbandoned,
+    personalRating = ratingValue?.let(::PersonalRating),
+    movieWatchedAt = movieWatchedAt,
+    watchedRegularEpisodes = watchedRegularEpisodes,
+    seriesCompletedAt = seriesCompletedAt,
+    watchedDate = if (media.mediaType == MediaType.MOVIE) movieWatchedDate else seriesWatchedDate
+)
 
 private fun String?.normalizedOptionalText(): String? = this?.trim()?.takeIf(String::isNotEmpty)

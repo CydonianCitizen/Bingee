@@ -56,7 +56,15 @@ SearchScreen/ProfileScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v2)
+                           LibraryDao -> Room bingee.db (v3)
+~~~
+
+Profile keeps current collection rendering and personal statistics on separate Room paths:
+
+~~~text
+ProfileViewModel -> LibraryRepository
+                    |-> observeEntries -> current Library/Favorites UI
+                    '-> observePersonalViewing -> focused watched/completed projection -> statistics
 ~~~
 
 Cache-first title details use Room as the observable source of truth:
@@ -144,7 +152,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
 - Source/type enums use names, dates use ISO `LocalDate`, and timestamps use UTC `Instant`; malformed values fail safely rather than changing meaning.
-- Version 3 is the canonical database version. `media_genres` identifies refreshed TMDB genres by (`source`, `genre_id`); localized `name` remains display metadata, while migrated legacy rows retain their names with null identity until a successful refresh. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. V1 `series_watch_progress` rows remain intact as non-authoritative metadata and cannot prove completion. Regular-episode unwatches clear completion metadata; re-completion writes a fresh marker. No Anime-specific Room structures exist.
+- Version 3 is the canonical database version. `media_genres` identifies refreshed TMDB genres by (`source`, `genre_id`); localized `name` remains display metadata, while migrated legacy rows retain their names with null identity until a successful refresh. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. `series_watch_progress.completed_at` is genuine historical completion evidence: full covered regular progress creates it, regular progress reversal clears it, Specials cannot create it, and Library removal preserves it. No Anime-specific Room structures exist.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
@@ -222,9 +230,17 @@ Season expansion remains state within the existing detail route. There is no sea
 - Season and episode provider IDs cannot collide across providers. Numbering is parent-scoped metadata, not global identity.
 - Unknown-air-date episodes are trackable. Future episodes are stored and visible but unavailable for watched actions. UTC date comes from the injected Clock.
 - Single-episode, season-bulk, and movie progress writes are local Room transactions. Existing timestamps survive bulk watched actions; newly watched episodes share one action timestamp.
-- Season progress is derived from trackable episodes. Overall series progress excludes season zero and requires regular trackable content. No completion state is persisted.
+- Season progress is derived from trackable episodes. Overall series progress excludes season zero and requires regular trackable content. Current Library state remains derived; the separate historical completion marker records the first genuine completion timestamp.
 - Removing Library membership or the TMDB credential removes neither metadata nor progress. Library progress is a local Room observation and performs no remote request.
 - Current limitations include no provider-removal reconciliation and no cache pruning. There is no episode-detail screen.
+
+## Personal viewing statistics
+
+- One focused Room projection reads only titles with movie progress, genuine series completion evidence, or watched regular episodes. It includes membership/favorite/rating metadata without observing the broad Library query twice.
+- Completed titles are watched Movies plus Series with persisted genuine `completed_at`. Viewed/taste titles are watched Movies plus Series with at least one watched regular episode; Specials alone are excluded.
+- Episode activity sums watched regular episodes regardless of current membership or Abandoned state. Ratings and media-type distribution use the viewed/taste title cohort.
+- `watched_date` remains an optional user-selected calendar date. Completion timestamps remain precise and separate; when no user date exists, history derives the local calendar date from the genuine timestamp. `added_at` never supplies history ordering or grouping.
+- Collection/Profile filtering still uses `LibraryEntry` and membership-dependent `SeriesTrackingState`; removed history does not reappear in current collection UI.
 
 ## TMDB credential security
 

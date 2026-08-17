@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import java.time.LocalDate
@@ -21,6 +22,8 @@ interface LibraryRepository {
     fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>>
 
     fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>>
+
+    fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>>
 
     fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
         observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.TV_SERIES)).map { result ->

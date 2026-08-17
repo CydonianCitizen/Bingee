@@ -48,7 +48,8 @@ internal data class ProfileUiState(
     val isLoading: Boolean = true,
     val pendingRemovals: Set<ExternalMediaRef> = emptySet(),
     val actionError: AppError? = null,
-    val loadError: AppError? = null
+    val loadError: AppError? = null,
+    val statisticsError: AppError? = null
 ) {
     val currentViewMode: ProfileViewMode get() = displayModes.getMode(collection, category)
 }
@@ -82,6 +83,7 @@ internal class ProfileViewModel @Inject constructor(
     init {
         observeDisplayModes()
         observeLibraryEntries()
+        observePersonalViewing()
     }
 
     fun setCollection(collection: ProfileCollection) {
@@ -185,8 +187,7 @@ internal class ProfileViewModel @Inject constructor(
                         mutableUiState.update {
                             it.copy(
                                 isLoading = false,
-                                loadError = null,
-                                statistics = calculateWatchedStatistics(result.value)
+                                loadError = null
                             )
                         }
                         refilter()
@@ -199,13 +200,29 @@ internal class ProfileViewModel @Inject constructor(
         }
     }
 
+    private fun observePersonalViewing() {
+        viewModelScope.launch {
+            libraryRepository.observePersonalViewing().collectLatest { result ->
+                when (result) {
+                    is AppResult.Success -> mutableUiState.update {
+                        it.copy(
+                            statistics = calculateWatchedStatistics(result.value),
+                            statisticsError = null
+                        )
+                    }
+                    is AppResult.Failure -> mutableUiState.update { it.copy(statisticsError = result.error) }
+                }
+            }
+        }
+    }
+
     private fun refilter() {
         val state = mutableUiState.value
         val allRaw = rawEntries.value
 
         val filtered = allRaw.filter { entry ->
             val matchesCollection = when (state.collection) {
-                ProfileCollection.WATCHED -> entry.isWatched()
+                ProfileCollection.WATCHED -> entry.inLibrary && entry.isWatched()
                 ProfileCollection.WATCH_LATER -> when (entry.mediaType) {
                     MediaType.SERIES -> entry.serialState == SeriesTrackingState.WATCH_LATER
                     MediaType.MOVIE -> !entry.isWatched() && entry.inLibrary

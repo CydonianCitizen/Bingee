@@ -367,6 +367,24 @@ class SeriesAndProgressDaoTest {
         assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
     }
 
+    @Test
+    fun specialsOnlyProgressNeverCreatesSeriesCompletion() = runBlocking {
+        seriesDao.storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            season("10", 0),
+            listOf(episode("special-1", 1)),
+            now
+        )
+
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "special-1", today, now)
+
+        assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
+        val row = libraryDao.observeLibraryProgress(today).first().single { it.localMediaId == 1L }
+        assertEquals(0, row.watchedEpisodes)
+        assertEquals(0, row.trackableEpisodes)
+    }
+
     private suspend fun storeRegularEpisodes() {
         seriesDao.storeSeasonEpisodes(
             MediaSource.TMDB,

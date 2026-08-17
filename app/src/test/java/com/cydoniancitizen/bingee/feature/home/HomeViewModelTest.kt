@@ -272,6 +272,10 @@ class HomeViewModelTest {
 
         override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
             MutableStateFlow(AppResult.Success(emptySet()))
+        override fun observePersonalViewing() =
+            MutableStateFlow<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
+                AppResult.Success(emptyList())
+            )
 
         override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> =
             AppResult.Failure(AppError.Unknown)

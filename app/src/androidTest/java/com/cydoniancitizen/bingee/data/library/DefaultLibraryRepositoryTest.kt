@@ -19,6 +19,7 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
+import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import java.time.Clock
 import java.time.Instant
@@ -29,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -261,6 +263,150 @@ class DefaultLibraryRepositoryTest {
             PersonalRating(9),
             (repository.observeEntries().first() as AppResult.Success).value.single().personalRating
         )
+    }
+
+    @Test
+    fun removedWatchedMovieRemainsInPersonalViewingWithCompletionTimestamp() = runBlocking {
+        val result = mediaResult()
+        val watchedDate = LocalDate.of(2020, 2, 3)
+        repository.add(result)
+        database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
+        repository.setWatchedDate(result.externalRef, watchedDate)
+        database.ratingDao().setRating(MediaSource.TMDB, "42", 9, now)
+
+        repository.remove(result.externalRef)
+
+        val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        assertEquals(result.externalRef, history.mediaRef)
+        assertEquals(now, history.movieWatchedAt)
+        assertEquals(now, history.completionTimestamp)
+        assertEquals(watchedDate, history.watchedDate)
+        assertEquals(PersonalRating(9), history.personalRating)
+        assertFalse(history.inLibrary)
+        assertTrue(history.isCompletedTitle)
+        assertTrue(history.isViewingTasteEligible)
+        assertTrue((repository.observeEntries().first() as AppResult.Success).value.isEmpty())
+    }
+
+    @Test
+    fun personalViewingProjectionReturnsOneCanonicalRowForMultipleExternalRefs() = runBlocking {
+        val result = mediaResult()
+        repository.add(result)
+        repository.setFavorite(result.externalRef, true)
+        database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
+        database.ratingDao().setRating(MediaSource.TMDB, "42", 8, now)
+        val localMediaId = database.portableSnapshotDao().readSnapshot().refs.single().localMediaId
+        database.portableSnapshotDao().insertExternalRef(
+            ExternalRefEntity(localMediaId, MediaSource.IMDB, "tt2543164")
+        )
+
+        repository.remove(result.externalRef)
+
+        val entries = (repository.observePersonalViewing().first() as AppResult.Success).value
+        val entry = entries.single()
+        assertEquals(1, entries.size)
+        assertEquals(ExternalMediaRef(MediaSource.IMDB, "tt2543164"), entry.mediaRef)
+        assertTrue(entry.isFavorite)
+        assertEquals(PersonalRating(8), entry.personalRating)
+        assertEquals(now, entry.movieWatchedAt)
+        assertTrue(entry.isViewingTasteEligible)
+        assertFalse(entry.inLibrary)
+    }
+
+    @Test
+    fun removedCompletedSeriesRetainsGenuineCompletionHistory() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Completed Series"
+        )
+        repository.add(series)
+        storeSeries("100", 2)
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-episode-1", today(), now)
+        val completedAt = now.plusSeconds(1)
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "100-episode-2",
+            today(),
+            completedAt
+        )
+
+        repository.remove(series.externalRef)
+
+        val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        assertEquals(completedAt, history.seriesCompletedAt)
+        assertEquals(2, history.watchedRegularEpisodes)
+        assertFalse(history.inLibrary)
+        assertTrue(history.isCompletedTitle)
+        assertTrue(history.isViewingTasteEligible)
+    }
+
+    @Test
+    fun removedIncompleteSeriesKeepsRegularActivityWithoutCompletion() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Incomplete Series"
+        )
+        repository.add(series)
+        storeSeries("100", 2)
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-episode-1", today(), now)
+        repository.setSeriesAbandoned(series.externalRef, true)
+
+        repository.remove(series.externalRef)
+
+        val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        assertEquals(1, history.watchedRegularEpisodes)
+        assertNull(history.seriesCompletedAt)
+        assertFalse(history.isCompletedTitle)
+        assertTrue(history.isViewingTasteEligible)
+        assertFalse(history.isAbandoned)
+        assertFalse(history.inLibrary)
+    }
+
+    @Test
+    fun specialsOnlyProgressDoesNotEnterPersonalViewingCohorts() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Specials Only"
+        )
+        repository.add(series)
+        database.seriesDao().storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            SeasonEntity(
+                localMediaId = 0,
+                source = MediaSource.TMDB,
+                externalId = "specials",
+                seasonNumber = 0,
+                name = "Specials",
+                overview = null,
+                posterUrl = null,
+                airDate = null,
+                episodeCount = 1,
+                metadataUpdatedAt = now,
+                episodesFetchedAt = null
+            ),
+            listOf(
+                EpisodeEntity(
+                    localSeasonId = 0,
+                    source = MediaSource.TMDB,
+                    externalId = "special-1",
+                    episodeNumber = 1,
+                    title = "Special",
+                    overview = null,
+                    airDate = null,
+                    runtimeMinutes = null,
+                    stillUrl = null,
+                    metadataUpdatedAt = now
+                )
+            ),
+            now
+        )
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "special-1", today(), now)
+
+        assertTrue((repository.observePersonalViewing().first() as AppResult.Success).value.isEmpty())
     }
 
     private fun mediaResult() = MediaSearchResult(
