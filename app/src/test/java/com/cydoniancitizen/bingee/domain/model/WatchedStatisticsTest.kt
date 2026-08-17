@@ -6,6 +6,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
+import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -280,6 +281,100 @@ class WatchedStatisticsTest {
         assertEquals(100L, stats.movieWatchTimeMinutes)
     }
 
+    @Test
+    fun monthlyViewingUsesGenuineMovieAndEpisodeDates() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie("movie", watchedAt = instant("2026-03-10T10:00:00Z"), runtimeMinutes = 120),
+                series(
+                    "series",
+                    watchedEpisodes = 2,
+                    watchedRuntimeMinutes = 90,
+                    activities = listOf(
+                        WatchedEpisodeActivity(instant("2026-01-04T10:00:00Z"), 45),
+                        WatchedEpisodeActivity(instant("2026-02-04T10:00:00Z"), 45)
+                    )
+                )
+            ),
+            zone,
+            LocalDate.of(2026, 8, 17),
+            2026
+        )
+
+        assertEquals(12, stats.monthlyViewing.months.size)
+        assertEquals(120L, stats.monthlyViewing.months[2].movieMinutes)
+        assertEquals(45L, stats.monthlyViewing.months[0].seriesMinutes)
+        assertEquals(45L, stats.monthlyViewing.months[1].seriesMinutes)
+        assertEquals(0L, stats.monthlyViewing.months[7].totalMinutes)
+        assertEquals(listOf(2026), stats.monthlyViewing.availableYears)
+    }
+
+    @Test
+    fun viewingYearsIncludeIntermediateEmptyYearsAndExcludeFutureYears() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie("old", watchedAt = instant("2024-05-01T10:00:00Z"), runtimeMinutes = 100)
+            ),
+            zone,
+            LocalDate.of(2026, 8, 17),
+            2025
+        )
+
+        assertEquals(listOf(2026, 2025, 2024), stats.monthlyViewing.availableYears)
+        assertEquals(2025, stats.monthlyViewing.selectedYear)
+        assertTrue(stats.monthlyViewing.months.all { it.totalMinutes == 0L })
+    }
+
+    @Test
+    fun undatedLegacyEpisodeActivityStaysOutOfMonthlyBuckets() {
+        val stats = calculateWatchedStatistics(
+            listOf(series("legacy", watchedEpisodes = 2, watchedRuntimeMinutes = 80)),
+            zone,
+            LocalDate.of(2026, 8, 17),
+            2026
+        )
+
+        assertEquals(80L, stats.seriesWatchTimeMinutes)
+        assertEquals(listOf(2026), stats.monthlyViewing.availableYears)
+        assertTrue(stats.monthlyViewing.months.all { it.totalMinutes == 0L })
+    }
+
+    @Test
+    fun missingRuntimeMarksAffectedMonthUnavailableWithoutFabricatingMinutes() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                series(
+                    "partial",
+                    watchedEpisodes = 1,
+                    activities = listOf(WatchedEpisodeActivity(instant("2026-03-02T10:00:00Z"), null))
+                )
+            ),
+            zone,
+            LocalDate.of(2026, 8, 17),
+            2026
+        )
+
+        val march = stats.monthlyViewing.months[2]
+        assertEquals(0L, march.seriesMinutes)
+        assertTrue(march.seriesTimeIncomplete)
+        assertTrue(march.isIncomplete)
+    }
+
+    @Test
+    fun viewingNormalizationHandlesZerosAndExactRatios() {
+        val months = listOf(
+            MonthlyViewingData(2026, 3, movieMinutes = 2_400),
+            MonthlyViewingData(2026, 4, movieMinutes = 1_200),
+            MonthlyViewingData(2026, 5, movieMinutes = 600)
+        )
+
+        assertEquals(listOf(1f, 0.5f, 0.25f), relativeViewingNormalization(months))
+        assertEquals(
+            listOf(0f, 0f),
+            relativeViewingNormalization(listOf(MonthlyViewingData(2026, 1), MonthlyViewingData(2026, 2)))
+        )
+    }
+
     private fun movie(
         id: String,
         watchedAt: Instant? = null,
@@ -311,6 +406,7 @@ class WatchedStatisticsTest {
         watchedRuntimeMinutes: Long = 0L,
         missingRuntimeEpisodes: Int = 0,
         seriesIsCurrentlyComplete: Boolean? = null,
+        activities: List<WatchedEpisodeActivity> = emptyList(),
         genres: List<Genre> = emptyList()
     ) = entry(
         id = id,
@@ -322,6 +418,7 @@ class WatchedStatisticsTest {
         isAbandoned = isAbandoned,
         watchedRegularRuntimeMinutes = watchedRuntimeMinutes,
         watchedRegularEpisodesWithoutRuntime = missingRuntimeEpisodes,
+        watchedRegularEpisodeActivities = activities,
         seriesIsCurrentlyComplete = seriesIsCurrentlyComplete,
         genres = genres
     )
@@ -340,6 +437,7 @@ class WatchedStatisticsTest {
         movieRuntimeMinutes: Int? = null,
         watchedRegularRuntimeMinutes: Long = 0L,
         watchedRegularEpisodesWithoutRuntime: Int = 0,
+        watchedRegularEpisodeActivities: List<WatchedEpisodeActivity> = emptyList(),
         seriesIsCurrentlyComplete: Boolean? = null,
         genres: List<Genre> = emptyList()
     ) = PersonalViewingEntry(
@@ -358,6 +456,7 @@ class WatchedStatisticsTest {
         movieRuntimeMinutes = movieRuntimeMinutes,
         watchedRegularRuntimeMinutes = watchedRegularRuntimeMinutes,
         watchedRegularEpisodesWithoutRuntime = watchedRegularEpisodesWithoutRuntime,
+        watchedRegularEpisodeActivities = watchedRegularEpisodeActivities,
         seriesIsCurrentlyComplete = seriesIsCurrentlyComplete,
         genres = genres
     )

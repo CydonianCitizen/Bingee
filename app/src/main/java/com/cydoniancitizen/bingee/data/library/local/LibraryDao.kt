@@ -34,6 +34,12 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "watched_regular_episodes_without_runtime") val watchedRegularEpisodesWithoutRuntime: Int
     )
 
+    internal data class PersonalViewingActivityRow(
+        @ColumnInfo(name = "local_media_id") val localMediaId: Long,
+        @ColumnInfo(name = "runtime_minutes") val runtimeMinutes: Int?,
+        @ColumnInfo(name = "watched_at") val watchedAt: Instant
+    )
+
     internal data class PersonalViewingGenreRow(
         @ColumnInfo(name = "local_media_id") val localMediaId: Long,
         val source: MediaSource?,
@@ -199,6 +205,23 @@ internal abstract class LibraryDao {
         """
     )
     abstract fun observePersonalViewing(today: LocalDate): Flow<List<PersonalViewingRow>>
+
+    @Query(
+        """
+        SELECT seasons.local_media_id,
+               episodes.runtime_minutes AS runtime_minutes,
+               episode_watch_progress.watched_at AS watched_at
+        FROM seasons
+        INNER JOIN media_entries USING(local_media_id)
+        INNER JOIN episodes USING(local_season_id)
+        INNER JOIN episode_watch_progress USING(local_episode_id)
+        WHERE media_entries.media_type = 'SERIES'
+          AND seasons.season_number > 0
+          AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+        ORDER BY watched_at, local_media_id
+        """
+    )
+    abstract fun observePersonalViewingActivities(today: LocalDate): Flow<List<PersonalViewingActivityRow>>
 
     @Query(
         """

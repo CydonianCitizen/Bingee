@@ -4,6 +4,14 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+data class WatchedEpisodeActivity(val watchedAt: Instant, val runtimeMinutes: Int?) {
+    init {
+        require(runtimeMinutes == null || runtimeMinutes > 0) {
+            "Episode runtime must be positive"
+        }
+    }
+}
+
 data class PersonalViewingEntry(
     val mediaRef: ExternalMediaRef,
     val mediaType: MediaType,
@@ -22,6 +30,7 @@ data class PersonalViewingEntry(
     val movieRuntimeMinutes: Int? = null,
     val watchedRegularRuntimeMinutes: Long = 0L,
     val watchedRegularEpisodesWithoutRuntime: Int = 0,
+    val watchedRegularEpisodeActivities: List<WatchedEpisodeActivity> = emptyList(),
     val seriesIsCurrentlyComplete: Boolean? = null,
     val genres: List<Genre> = emptyList()
 ) {

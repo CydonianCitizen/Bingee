@@ -129,9 +129,6 @@ fun BingeeNavHost(
             }
             StatisticsScreen(
                 onBack = navController::popBackStack,
-                onOpenDetails = { reference, mediaType ->
-                    navController.openDetails(reference, mediaType)
-                },
                 viewModel = hiltViewModel(profileEntry)
             )
         }

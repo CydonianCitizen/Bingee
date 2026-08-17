@@ -469,7 +469,37 @@
     <string name="update_error_rate_limited">GitHub request limit reached. Try again later.</string>
     <string name="update_error_invalid_response">GitHub returned an invalid release.</string>
     <string name="update_error_unexpected">Unable to check for updates.</string>
-    <string name="statistics_title">Watch Statistics</string>
+    <string name="statistics_title">Statistics</string>
+    <string name="statistics_loading">Loading your taste…</string>
+    <string name="statistics_error_title">Statistics unavailable</string>
+    <string name="statistics_taste">Your taste</string>
+    <string name="statistics_filter_all">All</string>
+    <string name="statistics_filter_movies">Movies</string>
+    <string name="statistics_filter_series">Series</string>
+    <string name="statistics_viewing">Your viewing</string>
+    <string name="statistics_viewing_total">Total viewing time</string>
+    <string name="statistics_series_viewed">Series viewed</string>
+    <string name="statistics_viewing_time">Viewing time</string>
+    <string name="statistics_movies_short">Movies</string>
+    <string name="statistics_series_short">Series</string>
+    <string name="statistics_total_short">Total</string>
+    <string name="statistics_viewing_breakdown">%1$s %2$s · %3$s %4$s</string>
+    <string name="statistics_viewing_choose_year">Choose year</string>
+    <string name="statistics_viewing_chart_description">Viewing time by month for %1$d</string>
+    <string name="statistics_viewing_month_accessibility">%1$s %2$d, Movies %3$s, Series %4$s, Total %5$s</string>
+    <string name="statistics_viewing_month_detail_accessibility">%1$s %2$d. Movies %3$s, Series %4$s, Total %5$s</string>
+    <string name="statistics_viewing_month_title">%1$s %2$d</string>
+    <string name="statistics_viewing_no_activity">No viewing activity for this year</string>
+    <string name="statistics_viewing_incomplete_year">Some monthly totals are incomplete because runtime data is unavailable.</string>
+    <string name="statistics_viewing_incomplete">Some runtime data is unavailable for this month</string>
+    <string name="statistics_genres">Your genres</string>
+    <string name="statistics_not_enough_data">Not enough data yet</string>
+    <string name="statistics_radar_description">Relative genre taste chart. Genres: %1$s</string>
+    <string name="statistics_radar_empty_description">Relative genre taste chart. Not enough data yet</string>
+    <plurals name="statistics_genre_row_description">
+        <item quantity="one">%1$s: %2$d title</item>
+        <item quantity="other">%1$s: %2$d titles</item>
+    </plurals>
     <string name="statistics_movies_watched">Movies Watched</string>
     <string name="statistics_tv_completed">TV Series Completed</string>
     <string name="statistics_episodes_watched">Episodes Watched</string>
@@ -487,4 +517,12 @@
     <string name="statistics_recently_completed">Recently Completed</string>
     <string name="statistics_empty_title">No statistics available</string>
     <string name="statistics_empty_subtitle">Mark movies or TV series as watched to generate statistics.</string>
+    <string-array name="statistics_months_short">
+        <item>Jan</item><item>Feb</item><item>Mar</item><item>Apr</item><item>May</item><item>Jun</item>
+        <item>Jul</item><item>Aug</item><item>Sep</item><item>Oct</item><item>Nov</item><item>Dec</item>
+    </string-array>
+    <string-array name="statistics_months_full">
+        <item>January</item><item>February</item><item>March</item><item>April</item><item>May</item><item>June</item>
+        <item>July</item><item>August</item><item>September</item><item>October</item><item>November</item><item>December</item>
+    </string-array>
 </resources>

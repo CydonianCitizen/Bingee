@@ -82,7 +82,7 @@ class ProfileScreenTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Watch Statistics").performClick()
+        composeRule.onNodeWithContentDescription("Statistics").performClick()
         assertTrue(statisticsClicked.get())
     }
 

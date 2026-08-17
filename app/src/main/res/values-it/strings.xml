@@ -248,7 +248,37 @@
     <string name="update_error_rate_limited">Limite di richieste GitHub raggiunto. Riprova più tardi.</string>
     <string name="update_error_invalid_response">GitHub ha restituito una release non valida.</string>
     <string name="update_error_unexpected">Impossibile controllare gli aggiornamenti.</string>
-    <string name="statistics_title">Statistiche visione</string>
+    <string name="statistics_title">Statistiche</string>
+    <string name="statistics_loading">Caricamento del tuo gusto…</string>
+    <string name="statistics_error_title">Statistiche non disponibili</string>
+    <string name="statistics_taste">Il tuo gusto</string>
+    <string name="statistics_filter_all">Tutto</string>
+    <string name="statistics_filter_movies">Film</string>
+    <string name="statistics_filter_series">Serie</string>
+    <string name="statistics_viewing">La tua visione</string>
+    <string name="statistics_viewing_total">Tempo totale</string>
+    <string name="statistics_series_viewed">Serie viste</string>
+    <string name="statistics_viewing_time">Tempo di visione</string>
+    <string name="statistics_movies_short">Film</string>
+    <string name="statistics_series_short">Serie</string>
+    <string name="statistics_total_short">Totale</string>
+    <string name="statistics_viewing_breakdown">%1$s %2$s · %3$s %4$s</string>
+    <string name="statistics_viewing_choose_year">Scegli anno</string>
+    <string name="statistics_viewing_chart_description">Tempo di visione per mese nel %1$d</string>
+    <string name="statistics_viewing_month_accessibility">%1$s %2$d, Film %3$s, Serie %4$s, Totale %5$s</string>
+    <string name="statistics_viewing_month_detail_accessibility">%1$s %2$d. Film %3$s, Serie %4$s, Totale %5$s</string>
+    <string name="statistics_viewing_month_title">%1$s %2$d</string>
+    <string name="statistics_viewing_no_activity">Nessuna attività di visione per questo anno</string>
+    <string name="statistics_viewing_incomplete_year">Alcuni totali mensili sono incompleti perché mancano dati sulla durata.</string>
+    <string name="statistics_viewing_incomplete">Alcuni dati sulla durata non sono disponibili per questo mese</string>
+    <string name="statistics_genres">I tuoi generi</string>
+    <string name="statistics_not_enough_data">Non ci sono ancora abbastanza dati</string>
+    <string name="statistics_radar_description">Grafico relativo dei generi. Generi: %1$s</string>
+    <string name="statistics_radar_empty_description">Grafico relativo dei generi. Non ci sono ancora abbastanza dati</string>
+    <plurals name="statistics_genre_row_description">
+        <item quantity="one">%1$s: %2$d titolo</item>
+        <item quantity="other">%1$s: %2$d titoli</item>
+    </plurals>
     <string name="statistics_movies_watched">Film visti</string>
     <string name="statistics_tv_completed">Serie TV completate</string>
     <string name="statistics_episodes_watched">Episodi visti</string>
@@ -266,6 +296,14 @@
     <string name="statistics_duration_day_short">g</string>
     <string name="statistics_duration_hour_short">h</string>
     <string name="statistics_duration_minute_short">m</string>
+    <string-array name="statistics_months_short">
+        <item>gen</item><item>feb</item><item>mar</item><item>apr</item><item>mag</item><item>giu</item>
+        <item>lug</item><item>ago</item><item>set</item><item>ott</item><item>nov</item><item>dic</item>
+    </string-array>
+    <string-array name="statistics_months_full">
+        <item>gennaio</item><item>febbraio</item><item>marzo</item><item>aprile</item><item>maggio</item><item>giugno</item>
+        <item>luglio</item><item>agosto</item><item>settembre</item><item>ottobre</item><item>novembre</item><item>dicembre</item>
+    </string-array>
     <string name="detail_status_rumored">Rumor</string>
     <string name="detail_status_planned">Pianificato</string>
     <string name="detail_status_in_production">In produzione</string>

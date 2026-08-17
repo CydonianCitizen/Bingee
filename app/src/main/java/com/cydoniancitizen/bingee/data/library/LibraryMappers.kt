@@ -10,6 +10,7 @@ import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
 import com.cydoniancitizen.bingee.data.library.local.LibraryItemWithRefs
@@ -97,7 +98,8 @@ internal fun ExternalRefEntity.toDomain(): ExternalMediaRef = ExternalMediaRef(s
 
 internal fun LibraryDao.PersonalViewingRow.toDomain(
     currentProgress: LibraryDao.LibraryProgressRow? = null,
-    genres: List<Genre> = emptyList()
+    genres: List<Genre> = emptyList(),
+    watchedRegularEpisodeActivities: List<WatchedEpisodeActivity> = emptyList()
 ): PersonalViewingEntry = PersonalViewingEntry(
     mediaRef = ExternalMediaRef(source, externalId),
     mediaType = media.mediaType,
@@ -116,6 +118,7 @@ internal fun LibraryDao.PersonalViewingRow.toDomain(
     movieRuntimeMinutes = movieRuntimeMinutes,
     watchedRegularRuntimeMinutes = watchedRegularRuntimeMinutes,
     watchedRegularEpisodesWithoutRuntime = watchedRegularEpisodesWithoutRuntime,
+    watchedRegularEpisodeActivities = watchedRegularEpisodeActivities,
     seriesIsCurrentlyComplete = if (media.mediaType == MediaType.SERIES && currentProgress != null) {
         (currentProgress.toDomainProgress(media.mediaType) as? LibraryProgress.Series)?.progress?.isComplete == true
     } else {
@@ -126,5 +129,8 @@ internal fun LibraryDao.PersonalViewingRow.toDomain(
 
 internal fun LibraryDao.PersonalViewingGenreRow.toDomainOrNull(): Genre? =
     if (source != null && genreId != null) Genre(name = name, source = source, genreId = genreId) else null
+
+internal fun LibraryDao.PersonalViewingActivityRow.toDomain(): WatchedEpisodeActivity =
+    WatchedEpisodeActivity(watchedAt = watchedAt, runtimeMinutes = runtimeMinutes)
 
 private fun String?.normalizedOptionalText(): String? = this?.trim()?.takeIf(String::isNotEmpty)

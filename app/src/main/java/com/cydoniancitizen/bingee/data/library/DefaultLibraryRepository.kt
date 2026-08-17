@@ -25,6 +25,7 @@ import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -84,22 +85,30 @@ internal class DefaultLibraryRepository @Inject constructor(
             rows.mapTo(linkedSetOf()) { it.toDomain() }
         }
 
-    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> = combine(
-        libraryDao.observePersonalViewing(LocalDate.now(clock)),
-        libraryDao.observeLibraryProgress(LocalDate.now(clock)),
-        libraryDao.observePersonalViewingGenres()
-    ) { rows, progressRows, genreRows ->
-        val progressByMedia = progressRows.associateBy { it.localMediaId }
-        val genresByMedia = genreRows.mapNotNull { row ->
-            row.toDomainOrNull()?.let { row.localMediaId to it }
-        }.groupBy({ it.first }, { it.second })
-        rows.map { row ->
-            row.toDomain(
-                currentProgress = progressByMedia[row.media.localMediaId],
-                genres = genresByMedia[row.media.localMediaId].orEmpty()
-            )
-        }
-    }.asPersistenceResult { it }
+    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> {
+        val today = LocalDate.now(clock.withZone(ZoneId.systemDefault()))
+        return combine(
+            libraryDao.observePersonalViewing(today),
+            libraryDao.observeLibraryProgress(today),
+            libraryDao.observePersonalViewingGenres(),
+            libraryDao.observePersonalViewingActivities(today)
+        ) { rows, progressRows, genreRows, activityRows ->
+            val progressByMedia = progressRows.associateBy { it.localMediaId }
+            val genresByMedia = genreRows.mapNotNull { row ->
+                row.toDomainOrNull()?.let { row.localMediaId to it }
+            }.groupBy({ it.first }, { it.second })
+            val activitiesByMedia = activityRows.groupBy { it.localMediaId }
+            rows.map { row ->
+                row.toDomain(
+                    currentProgress = progressByMedia[row.media.localMediaId],
+                    genres = genresByMedia[row.media.localMediaId].orEmpty(),
+                    watchedRegularEpisodeActivities = activitiesByMedia[row.media.localMediaId]
+                        .orEmpty()
+                        .map { it.toDomain() }
+                )
+            }
+        }.asPersistenceResult { it }
+    }
 
     override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
         libraryDao.observeContinueWatchingRows(MediaSource.TMDB, LocalDate.now(clock))

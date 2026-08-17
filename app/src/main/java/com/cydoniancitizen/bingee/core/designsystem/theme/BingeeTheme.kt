@@ -117,6 +117,13 @@ object BingeeStatusColors {
     val completed = Color(0xFF7B1FA2)
 }
 
+object BingeeChartColors {
+    val taste = Color(0xFFFFCC33)
+    val viewingMovieLight = Color(0xFF8A6500)
+    val viewingSeriesLight = Color(0xFF477FAD)
+    val viewingSeriesDark = Color(0xFF91C4E5)
+}
+
 object BingeePodiumColors {
     val gold = Color(0xFFE0A800)
     val onGold = Color(0xFF2A2100)

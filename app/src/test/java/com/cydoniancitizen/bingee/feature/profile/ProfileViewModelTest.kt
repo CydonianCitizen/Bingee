@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.feature.profile
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
@@ -10,6 +11,7 @@ import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
 import com.cydoniancitizen.bingee.core.model.isWatched
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -18,8 +20,11 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -158,6 +163,27 @@ class ProfileViewModelTest {
     }
 
     @Test
+    fun statisticsTasteScopeDefaultsToAllAndRecomputesGenres() = runTest {
+        val movie = viewing("movie", MediaType.MOVIE, "Drama", 18)
+        val series = viewing("series", MediaType.SERIES, "Comedy", 35)
+        val viewModel = ProfileViewModel(
+            FakeLibraryRepo(emptyList(), viewing = listOf(movie, series)),
+            FakeDisplayModePrefs()
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(StatisticsMediaScope.ALL, viewModel.uiState.value.statisticsMediaScope)
+        assertEquals(listOf(18L, 35L), viewModel.uiState.value.tasteStatistics.rankedGenres.map { it.genreId })
+
+        viewModel.setStatisticsMediaScope(StatisticsMediaScope.MOVIES)
+        assertEquals(listOf(18L), viewModel.uiState.value.tasteStatistics.rankedGenres.map { it.genreId })
+
+        viewModel.setStatisticsMediaScope(StatisticsMediaScope.SERIES)
+        assertEquals(listOf(35L), viewModel.uiState.value.tasteStatistics.rankedGenres.map { it.genreId })
+    }
+
+    @Test
     fun removedHistoryAffectsStatisticsWithoutReappearingInCollection() = runTest {
         val removedLibraryEntry = entry(
             "removed",
@@ -183,6 +209,50 @@ class ProfileViewModelTest {
         assertTrue(viewModel.uiState.value.entries.isEmpty())
         assertEquals(1, viewModel.uiState.value.statistics.moviesWatchedCount)
         assertEquals("removed", viewModel.uiState.value.statistics.recentlyCompletedTitles.single().mediaRef.externalId)
+    }
+
+    @Test
+    fun viewingYearChangesMonthlyDataOnlyAndClearsMonthSelection() = runTest {
+        val movie = PersonalViewingEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "movie"),
+            mediaType = MediaType.MOVIE,
+            title = "Movie",
+            addedAt = Instant.EPOCH,
+            inLibrary = false,
+            isFavorite = false,
+            movieWatchedAt = Instant.parse("2024-03-01T10:00:00Z"),
+            movieRuntimeMinutes = 120
+        )
+        val series = PersonalViewingEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "series"),
+            mediaType = MediaType.SERIES,
+            title = "Series",
+            addedAt = Instant.EPOCH,
+            inLibrary = false,
+            isFavorite = false,
+            watchedRegularEpisodes = 1,
+            watchedRegularRuntimeMinutes = 45,
+            watchedRegularEpisodeActivities = listOf(
+                WatchedEpisodeActivity(Instant.parse("2025-02-01T10:00:00Z"), 45)
+            )
+        )
+        val viewModel = ProfileViewModel(
+            FakeLibraryRepo(emptyList(), listOf(movie, series)),
+            FakeDisplayModePrefs(),
+            Clock.fixed(Instant.parse("2026-08-17T10:00:00Z"), ZoneOffset.UTC)
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        val initial = viewModel.uiState.value.statistics
+        viewModel.setStatisticsViewingMonth(3)
+        viewModel.setStatisticsViewingYear(2025)
+
+        val updated = viewModel.uiState.value
+        assertEquals(2025, updated.statistics.monthlyViewing.selectedYear)
+        assertEquals(45L, updated.statistics.monthlyViewing.months[1].seriesMinutes)
+        assertEquals(initial.moviesWatchedCount, updated.statistics.moviesWatchedCount)
+        assertEquals(initial.seriesWatchTimeMinutes, updated.statistics.seriesWatchTimeMinutes)
+        assertEquals(null, updated.selectedStatisticsMonth)
     }
 
     @Test
@@ -350,6 +420,18 @@ class ProfileViewModelTest {
         personalRating = rating?.let { PersonalRating(it) },
         isFavorite = favorite,
         inLibrary = inLibrary
+    )
+
+    private fun viewing(id: String, type: MediaType, genreName: String, genreId: Long) = PersonalViewingEntry(
+        mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
+        mediaType = type,
+        title = id,
+        addedAt = Instant.EPOCH,
+        inLibrary = false,
+        isFavorite = false,
+        movieWatchedAt = if (type == MediaType.MOVIE) Instant.EPOCH else null,
+        watchedRegularEpisodes = if (type == MediaType.SERIES) 1 else 0,
+        genres = listOf(Genre(genreName, MediaSource.TMDB, genreId))
     )
 
     private class FakeLibraryRepo(

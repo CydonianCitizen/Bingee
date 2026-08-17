@@ -3,7 +3,11 @@ package com.cydoniancitizen.bingee.domain.model
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
+import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
+import java.time.LocalDate
 import java.time.ZoneId
+
+const val TASTE_RADAR_GENRE_LIMIT = 6
 
 data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
     val total: Int get() = movieCount + tvSeriesCount
@@ -13,12 +17,51 @@ data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
 
 data class MonthYearCount(val year: Int, val month: Int, val count: Int)
 
+data class MonthlyViewingData(
+    val year: Int,
+    val month: Int,
+    val movieMinutes: Long = 0L,
+    val seriesMinutes: Long = 0L,
+    val movieTimeIncomplete: Boolean = false,
+    val seriesTimeIncomplete: Boolean = false
+) {
+    init {
+        require(month in 1..12) { "Viewing month must be between 1 and 12" }
+        require(movieMinutes >= 0) { "Movie viewing minutes must not be negative" }
+        require(seriesMinutes >= 0) { "Series viewing minutes must not be negative" }
+    }
+
+    val totalMinutes: Long get() = movieMinutes + seriesMinutes
+    val isIncomplete: Boolean get() = movieTimeIncomplete || seriesTimeIncomplete
+}
+
+data class MonthlyViewingStatistics(
+    val currentYear: Int = 0,
+    val currentMonth: Int = 0,
+    val selectedYear: Int = 0,
+    val availableYears: List<Int> = emptyList(),
+    val months: List<MonthlyViewingData> = emptyList()
+)
+
 data class GenreStatistic(val source: MediaSource, val genreId: Long, val name: String, val titleCount: Int) {
     init {
         require(genreId > 0) { "Genre ID must be positive" }
         require(name.isNotBlank()) { "Genre name must not be blank" }
         require(titleCount > 0) { "Genre count must be positive" }
     }
+}
+
+enum class StatisticsMediaScope {
+    ALL,
+    MOVIES,
+    SERIES
+}
+
+data class TasteStatistics(
+    val scope: StatisticsMediaScope = StatisticsMediaScope.ALL,
+    val rankedGenres: List<GenreStatistic> = emptyList()
+) {
+    val radarGenres: List<GenreStatistic> get() = rankedGenres.take(TASTE_RADAR_GENRE_LIMIT)
 }
 
 data class WatchedStatistics(
@@ -35,7 +78,8 @@ data class WatchedStatistics(
     val watchedByMonthYear: List<MonthYearCount> = emptyList(),
     val recentlyCompletedTitles: List<PersonalViewingEntry> = emptyList(),
     val movieGenres: List<GenreStatistic> = emptyList(),
-    val seriesGenres: List<GenreStatistic> = emptyList()
+    val seriesGenres: List<GenreStatistic> = emptyList(),
+    val monthlyViewing: MonthlyViewingStatistics = MonthlyViewingStatistics()
 ) {
     val watchTimeMinutes: Long get() = movieWatchTimeMinutes + seriesWatchTimeMinutes
     val isWatchTimeIncomplete: Boolean get() = movieWatchTimeIncomplete || seriesWatchTimeIncomplete
@@ -51,10 +95,19 @@ fun calculateWatchedStatistics(
     entries: List<PersonalViewingEntry>,
     zoneId: ZoneId = ZoneId.systemDefault()
 ): WatchedStatistics {
+    val currentDate = LocalDate.now(zoneId)
+    return calculateWatchedStatistics(entries, zoneId, currentDate, currentDate.year)
+}
+
+fun calculateWatchedStatistics(
+    entries: List<PersonalViewingEntry>,
+    zoneId: ZoneId,
+    currentDate: LocalDate,
+    selectedYear: Int
+): WatchedStatistics {
     val uniqueEntries = entries.distinctBy { it.mediaRef }
     val completedTitles = uniqueEntries.filter(PersonalViewingEntry::isCompletedTitle)
     val viewedTitles = uniqueEntries.filter(PersonalViewingEntry::isViewingTasteEligible)
-    if (completedTitles.isEmpty() && viewedTitles.isEmpty()) return WatchedStatistics()
 
     val moviesWatchedCount = completedTitles.count { it.mediaType == MediaType.MOVIE }
     val tvSeriesCompletedCount = completedTitles.count { it.mediaType == MediaType.SERIES }
@@ -102,11 +155,106 @@ fun calculateWatchedStatistics(
         watchedByMonthYear = watchedByMonthYear,
         recentlyCompletedTitles = recentlyCompletedTitles,
         movieGenres = topGenreStatistics(movieTitles),
-        seriesGenres = topGenreStatistics(seriesTitles)
+        seriesGenres = topGenreStatistics(seriesTitles),
+        monthlyViewing = calculateMonthlyViewing(
+            entries = uniqueEntries,
+            zoneId = zoneId,
+            currentDate = currentDate,
+            selectedYear = selectedYear
+        )
     )
 }
 
-private fun topGenreStatistics(entries: List<PersonalViewingEntry>): List<GenreStatistic> {
+private data class DatedViewingActivity(val mediaType: MediaType, val watchedDate: LocalDate, val runtimeMinutes: Int?)
+
+private fun calculateMonthlyViewing(
+    entries: List<PersonalViewingEntry>,
+    zoneId: ZoneId,
+    currentDate: LocalDate,
+    selectedYear: Int
+): MonthlyViewingStatistics {
+    val datedActivities = entries.flatMap { entry ->
+        when (entry.mediaType) {
+            MediaType.MOVIE -> entry.movieWatchedAt?.let {
+                listOf(
+                    DatedViewingActivity(MediaType.MOVIE, it.atZone(zoneId).toLocalDate(), entry.movieRuntimeMinutes)
+                )
+            }.orEmpty()
+            MediaType.SERIES -> entry.watchedRegularEpisodeActivities.map { activity ->
+                activity.toDatedViewingActivity(zoneId)
+            }
+        }
+    }.filter { !it.watchedDate.isAfter(currentDate) }
+
+    val availableYears = datedActivities
+        .map { it.watchedDate.year }
+        .filter { it <= currentDate.year }
+        .minOrNull()
+        ?.let { firstYear -> (firstYear..currentDate.year).toList().asReversed() }
+        ?: listOf(currentDate.year)
+    val year = selectedYear.takeIf { it in availableYears } ?: currentDate.year
+    val months = (1..12).map { month ->
+        val activities = datedActivities.filter { it.watchedDate.year == year && it.watchedDate.monthValue == month }
+        val movieActivities = activities.filter { it.mediaType == MediaType.MOVIE }
+        val seriesActivities = activities.filter { it.mediaType == MediaType.SERIES }
+        MonthlyViewingData(
+            year = year,
+            month = month,
+            movieMinutes = movieActivities.sumOf { it.runtimeMinutes?.toLong() ?: 0L },
+            seriesMinutes = seriesActivities.sumOf { it.runtimeMinutes?.toLong() ?: 0L },
+            movieTimeIncomplete = movieActivities.any { it.runtimeMinutes == null },
+            seriesTimeIncomplete = seriesActivities.any { it.runtimeMinutes == null }
+        )
+    }
+    return MonthlyViewingStatistics(
+        currentYear = currentDate.year,
+        currentMonth = currentDate.monthValue,
+        selectedYear = year,
+        availableYears = availableYears,
+        months = months
+    )
+}
+
+private fun WatchedEpisodeActivity.toDatedViewingActivity(zoneId: ZoneId): DatedViewingActivity =
+    DatedViewingActivity(MediaType.SERIES, watchedAt.atZone(zoneId).toLocalDate(), runtimeMinutes)
+
+fun relativeViewingNormalization(months: List<MonthlyViewingData>): List<Float> {
+    val maximum = months.maxOfOrNull { it.totalMinutes } ?: return emptyList()
+    if (maximum == 0L) return months.map { 0f }
+    return months.map { it.totalMinutes.toFloat() / maximum }
+}
+
+fun calculateTasteStatistics(
+    entries: List<PersonalViewingEntry>,
+    scope: StatisticsMediaScope = StatisticsMediaScope.ALL
+): TasteStatistics = TasteStatistics(
+    scope = scope,
+    rankedGenres = rankedGenreStatistics(
+        entries
+            .asSequence()
+            .distinctBy { it.mediaRef }
+            .filter(PersonalViewingEntry::isViewingTasteEligible)
+            .filter { entry ->
+                when (scope) {
+                    StatisticsMediaScope.ALL -> true
+                    StatisticsMediaScope.MOVIES -> entry.mediaType == MediaType.MOVIE
+                    StatisticsMediaScope.SERIES -> entry.mediaType == MediaType.SERIES
+                }
+            }
+            .toList()
+    )
+)
+
+fun relativeGenreNormalization(counts: List<Int>): List<Float> {
+    val maximum = counts.maxOrNull()?.coerceAtLeast(0) ?: return emptyList()
+    if (maximum == 0) return counts.map { 0f }
+    return counts.map { it.coerceAtLeast(0).toFloat() / maximum }
+}
+
+private fun topGenreStatistics(entries: List<PersonalViewingEntry>): List<GenreStatistic> =
+    rankedGenreStatistics(entries).take(3)
+
+private fun rankedGenreStatistics(entries: List<PersonalViewingEntry>): List<GenreStatistic> {
     val counts = linkedMapOf<Pair<MediaSource, Long>, GenreStatistic>()
     entries.forEach { entry ->
         entry.genres
@@ -126,5 +274,4 @@ private fun topGenreStatistics(entries: List<PersonalViewingEntry>): List<GenreS
                 .thenBy { it.source.name }
                 .thenBy { it.genreId }
         )
-        .take(3)
 }
