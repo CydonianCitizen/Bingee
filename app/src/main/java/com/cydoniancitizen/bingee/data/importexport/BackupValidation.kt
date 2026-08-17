@@ -49,6 +49,7 @@ internal object BackupValidator {
             checkText(media.originalTitle)
             checkText(media.overview)
             checkUrl(media.posterUrl)
+            require(media.favoriteAddedAt == null || media.isFavorite, BackupFailureKind.VALIDATION)
             val expectedSource = MediaSource.TMDB
             require(media.primaryRef.source == expectedSource, BackupFailureKind.CONFLICTING_REFERENCE)
             require(

@@ -23,10 +23,12 @@ import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
 import com.cydoniancitizen.bingee.feature.notifications.NotificationsScreen
 import com.cydoniancitizen.bingee.feature.onboarding.OnboardingRoute
+import com.cydoniancitizen.bingee.feature.profile.ProfileCollectionShortcut
 import com.cydoniancitizen.bingee.feature.profile.ProfileScreen
 import com.cydoniancitizen.bingee.feature.profile.StatisticsScreen
 import com.cydoniancitizen.bingee.feature.search.SearchScreen
@@ -82,8 +84,44 @@ fun BingeeNavHost(
                         launchSingleTop = true
                         restoreState = true
                     }
+                },
+                onOpenCollection = { shortcut ->
+                    navController.navigate(AppRoute.profileCollection(shortcut.name.lowercase()))
                 }
             )
+        }
+        composable(
+            route = AppRoute.PROFILE_COLLECTION,
+            arguments = listOf(navArgument("collection") { type = NavType.StringType })
+        ) { entry ->
+            val shortcut = entry.arguments?.getString("collection")
+                ?.let { value -> ProfileCollectionShortcut.entries.firstOrNull { it.name.equals(value, true) } }
+            if (shortcut == null) {
+                InvalidDetailRoute(onBack = navController::popBackStack)
+            } else {
+                ProfileScreen(
+                    onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
+                    onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
+                    onOpenDetails = { reference, mediaType -> navController.openDetails(reference, mediaType) },
+                    onNavigateToSearch = {
+                        navController.navigate(TopLevelDestination.SEARCH.route) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    collectionFilter = when (shortcut) {
+                        ProfileCollectionShortcut.WATCHING -> null
+                        ProfileCollectionShortcut.WATCHED -> ProfileCollection.WATCHED
+                        ProfileCollectionShortcut.WATCH_LATER -> ProfileCollection.WATCH_LATER
+                        ProfileCollectionShortcut.FAVORITES -> ProfileCollection.FAVORITES
+                        ProfileCollectionShortcut.ABANDONED -> null
+                    },
+                    abandonedCollection = shortcut == ProfileCollectionShortcut.ABANDONED,
+                    watchingCollection = shortcut == ProfileCollectionShortcut.WATCHING,
+                    onNavigateBack = navController::popBackStack
+                )
+            }
         }
         composable(AppRoute.STATISTICS) { entry ->
             val profileEntry = remember(entry) {

@@ -61,6 +61,7 @@ internal fun LibraryItemWithRefs.toDomain(
         progress = domainProgress,
         personalRating = rating?.let { PersonalRating(it.ratingValue) },
         isFavorite = media.isFavorite,
+        favoriteAddedAt = media.favoriteAddedAt,
         watchedDate = domainWatchedDate,
         isAbandoned = progressRow?.isAbandoned == true,
         inLibrary = inLibrary
@@ -80,7 +81,13 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
             completedSeasons = completedSeasons,
             trackableSeasons = trackableSeasons,
             isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes && hasSufficientCoverage,
-            watchedDate = seriesWatchedDate
+            watchedDate = seriesWatchedDate,
+            lastWatchedAt = lastProgressAt,
+            nextEpisode = if (nextSeasonNumber != null && nextEpisodeNumber != null) {
+                com.cydoniancitizen.bingee.core.model.EpisodePosition(nextSeasonNumber, nextEpisodeNumber)
+            } else {
+                null
+            }
         )
     )
 }

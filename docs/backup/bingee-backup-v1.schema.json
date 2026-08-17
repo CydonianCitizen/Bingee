@@ -33,7 +33,8 @@
         "overview": {"type": ["string", "null"], "maxLength": 8192},
         "posterUrl": {"type": ["string", "null"], "maxLength": 2048},
         "releaseDate": {"type": ["string", "null"], "format": "date"},
-        "isFavorite": {"type": "boolean"}
+        "isFavorite": {"type": "boolean"},
+        "favoriteAddedAt": {"type": ["string", "null"], "format": "date-time"}
       },
       "additionalProperties": true
     },

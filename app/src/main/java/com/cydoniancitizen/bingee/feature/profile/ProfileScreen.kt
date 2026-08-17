@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
@@ -52,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,27 +95,57 @@ internal fun ProfileScreen(
     modifier: Modifier = Modifier,
     onOpenStatistics: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onOpenCollection: (ProfileCollectionShortcut) -> Unit = {},
+    collectionFilter: ProfileCollection? = null,
+    abandonedCollection: Boolean = false,
+    watchingCollection: Boolean = false,
+    onNavigateBack: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    ProfileContent(
-        state = state,
-        onCollectionSelected = viewModel::setCollection,
-        onCategorySelected = viewModel::setCategory,
-        onSortSelected = viewModel::setSortOption,
-        onViewModeSelected = viewModel::setViewMode,
-        onSearchQueryChanged = viewModel::onSearchQueryChanged,
-        onClearSearch = viewModel::clearSearch,
-        onRemove = viewModel::remove,
-        onToggleFavorite = viewModel::toggleFavorite,
-        onSetWatchedDate = viewModel::setWatchedDate,
-        onOpenSettings = onOpenSettings,
-        onOpenStatistics = onOpenStatistics,
-        onOpenDetails = onOpenDetails,
-        onNavigateToSearch = onNavigateToSearch,
-        onDismissActionError = viewModel::clearActionError,
-        modifier = modifier
-    )
+    LaunchedEffect(collectionFilter, abandonedCollection, watchingCollection) {
+        if (watchingCollection) {
+            viewModel.setWatchingCollection()
+            viewModel.setCategory(ProfileCategory.TV_SERIES)
+        } else if (abandonedCollection) {
+            viewModel.setAbandonedCollection()
+            viewModel.setCategory(ProfileCategory.TV_SERIES)
+        } else {
+            collectionFilter?.let(viewModel::setCollection)
+        }
+    }
+    if (collectionFilter == null && !abandonedCollection && !watchingCollection) {
+        YourBingeeContent(
+            state = state,
+            onOpenSettings = onOpenSettings,
+            onOpenDetails = onOpenDetails,
+            onOpenCollection = onOpenCollection,
+            onNavigateToSearch = onNavigateToSearch,
+            onRetry = viewModel::retry,
+            modifier = modifier
+        )
+    } else {
+        ProfileContent(
+            state = state,
+            onCollectionSelected = viewModel::setCollection,
+            onCategorySelected = viewModel::setCategory,
+            onSortSelected = viewModel::setSortOption,
+            onViewModeSelected = viewModel::setViewMode,
+            onSearchQueryChanged = viewModel::onSearchQueryChanged,
+            onClearSearch = viewModel::clearSearch,
+            onRemove = viewModel::remove,
+            onToggleFavorite = viewModel::toggleFavorite,
+            onSetWatchedDate = viewModel::setWatchedDate,
+            onOpenSettings = onOpenSettings,
+            onOpenStatistics = onOpenStatistics,
+            onOpenDetails = onOpenDetails,
+            onNavigateToSearch = onNavigateToSearch,
+            onDismissActionError = viewModel::clearActionError,
+            onNavigateBack = onNavigateBack,
+            onRetry = viewModel::retry,
+            modifier = modifier
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,7 +166,9 @@ internal fun ProfileContent(
     modifier: Modifier = Modifier,
     onToggleFavorite: (LibraryEntry) -> Unit = {},
     onSetWatchedDate: (LibraryEntry, java.time.LocalDate?) -> Unit = { _, _ -> },
-    onOpenStatistics: () -> Unit = {}
+    onOpenStatistics: () -> Unit = {},
+    onNavigateBack: (() -> Unit)? = null,
+    onRetry: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -147,6 +181,14 @@ internal fun ProfileContent(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onNavigateBack != null) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.detail_back)
+                    )
+                }
+            }
             Text(
                 text = stringResource(R.string.profile_title),
                 modifier = Modifier
@@ -213,36 +255,38 @@ internal fun ProfileContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Collection Chips
-                FilterChip(
-                    selected = state.collection == ProfileCollection.WATCHED,
-                    onClick = { onCollectionSelected(ProfileCollection.WATCHED) },
-                    label = { Text(stringResource(R.string.profile_tab_watched)) },
-                    leadingIcon = if (state.collection == ProfileCollection.WATCHED) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else {
-                        null
-                    }
-                )
-                FilterChip(
-                    selected = state.collection == ProfileCollection.WATCH_LATER,
-                    onClick = { onCollectionSelected(ProfileCollection.WATCH_LATER) },
-                    label = { Text(stringResource(R.string.profile_tab_watch_later)) },
-                    leadingIcon = if (state.collection == ProfileCollection.WATCH_LATER) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else {
-                        null
-                    }
-                )
-                FilterChip(
-                    selected = state.collection == ProfileCollection.FAVORITES,
-                    onClick = { onCollectionSelected(ProfileCollection.FAVORITES) },
-                    label = { Text(stringResource(R.string.profile_tab_favorites)) },
-                    leadingIcon = if (state.collection == ProfileCollection.FAVORITES) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else {
-                        null
-                    }
-                )
+                if (!state.isWatchingCollection && !state.isAbandonedCollection) {
+                    FilterChip(
+                        selected = state.collection == ProfileCollection.WATCHED,
+                        onClick = { onCollectionSelected(ProfileCollection.WATCHED) },
+                        label = { Text(stringResource(R.string.profile_tab_watched)) },
+                        leadingIcon = if (state.collection == ProfileCollection.WATCHED) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else {
+                            null
+                        }
+                    )
+                    FilterChip(
+                        selected = state.collection == ProfileCollection.WATCH_LATER,
+                        onClick = { onCollectionSelected(ProfileCollection.WATCH_LATER) },
+                        label = { Text(stringResource(R.string.profile_tab_watch_later)) },
+                        leadingIcon = if (state.collection == ProfileCollection.WATCH_LATER) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else {
+                            null
+                        }
+                    )
+                    FilterChip(
+                        selected = state.collection == ProfileCollection.FAVORITES,
+                        onClick = { onCollectionSelected(ProfileCollection.FAVORITES) },
+                        label = { Text(stringResource(R.string.profile_tab_favorites)) },
+                        leadingIcon = if (state.collection == ProfileCollection.FAVORITES) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else {
+                            null
+                        }
+                    )
+                }
                 // Category Chips
                 FilterChip(
                     selected = state.category == ProfileCategory.MOVIES,
@@ -339,7 +383,9 @@ internal fun ProfileContent(
                 val uiError = state.loadError.toUiError()
                 ErrorState(
                     title = stringResource(R.string.library_error_title),
-                    message = stringResource(uiError.messageRes)
+                    message = stringResource(uiError.messageRes),
+                    retryLabel = stringResource(R.string.action_retry),
+                    onRetry = onRetry
                 )
             }
             state.entries.isEmpty() -> {
@@ -411,6 +457,14 @@ private fun ProfileEmptyState(
         body = stringResource(R.string.profile_empty_search_body, state.searchQuery)
     } else {
         when {
+            state.isWatchingCollection -> {
+                title = stringResource(R.string.profile_watching_empty_title)
+                body = stringResource(R.string.profile_watching_empty_body)
+            }
+            state.isAbandonedCollection -> {
+                title = stringResource(R.string.profile_empty_abandoned_title)
+                body = stringResource(R.string.profile_empty_abandoned_body)
+            }
             state.collection == ProfileCollection.WATCHED && state.category == ProfileCategory.MOVIES -> {
                 title = stringResource(R.string.profile_empty_watched_movies_title)
                 body = stringResource(R.string.profile_empty_watched_movies_body)
@@ -552,10 +606,12 @@ private fun ProfileGridItem(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
-                        onClick = { showMenu = true },
-                        modifier = Modifier.size(24.dp)
+                        onClick = { showMenu = true }
                     ) {
-                        Icon(Icons.Default.MoreVert, contentDescription = null)
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.profile_more_actions)
+                        )
                     }
                     DropdownMenu(
                         expanded = showMenu,

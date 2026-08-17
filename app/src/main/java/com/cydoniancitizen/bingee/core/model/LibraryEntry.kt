@@ -15,6 +15,7 @@ data class LibraryEntry(
     val progress: LibraryProgress = LibraryProgress.Unavailable,
     val personalRating: PersonalRating? = null,
     val isFavorite: Boolean = false,
+    val favoriteAddedAt: Instant? = null,
     val watchedDate: LocalDate? = null,
     val isAbandoned: Boolean = false,
     val inLibrary: Boolean = true

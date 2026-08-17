@@ -10,15 +10,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cydoniancitizen.bingee.R
 
 @Composable
-fun MediaPoster(title: String, posterUrl: String?, modifier: Modifier = Modifier) {
+fun MediaPoster(
+    title: String,
+    posterUrl: String?,
+    modifier: Modifier = Modifier,
+    width: Dp = 96.dp,
+    height: Dp = 144.dp
+) {
     val posterModifier = modifier
-        .width(96.dp)
-        .height(144.dp)
+        .width(width)
+        .height(height)
         .clip(MaterialTheme.shapes.medium)
     val placeholder = painterResource(R.drawable.poster_placeholder)
     if (posterUrl == null) {

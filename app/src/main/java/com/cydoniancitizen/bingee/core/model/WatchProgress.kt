@@ -36,7 +36,9 @@ data class SeriesProgress(
     val completedSeasons: Int,
     val trackableSeasons: Int,
     val isComplete: Boolean,
-    val watchedDate: LocalDate? = null
+    val watchedDate: LocalDate? = null,
+    val lastWatchedAt: Instant? = null,
+    val nextEpisode: EpisodePosition? = null
 ) {
     init {
         require(watchedEpisodes in 0..trackableEpisodes) { "Invalid series episode counts" }

@@ -30,7 +30,8 @@ internal data class BackupMedia(
     val overview: String?,
     val posterUrl: String?,
     val releaseDate: LocalDate?,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val favoriteAddedAt: Instant? = null
 )
 
 internal data class BackupSeason(

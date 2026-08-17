@@ -60,8 +60,8 @@ private fun LibraryEntry.toContinueWatchingItem(): ContinueWatchingItem? = (prog
         title = title,
         posterUrl = posterUrl,
         progress = it.progress,
-        nextEpisode = null,
-        updatedAt = null,
+        nextEpisode = it.progress.nextEpisode,
+        updatedAt = it.progress.lastWatchedAt,
         isAbandoned = isAbandoned,
         inLibrary = inLibrary
     )

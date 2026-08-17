@@ -110,6 +110,13 @@ object BingeeDimensions {
     val elementSpacing = 8.dp
 }
 
+object BingeeStatusColors {
+    val progressing = Color(0xFFD69E00)
+    val caughtUp = Color(0xFF2E7D32)
+    val abandoned = Color(0xFFB3261E)
+    val completed = Color(0xFF7B1FA2)
+}
+
 @Composable
 fun BingeeTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(

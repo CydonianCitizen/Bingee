@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
@@ -19,10 +20,14 @@ import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
 import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
 import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
+import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Instant
 import java.time.LocalDate
+import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,19 +42,33 @@ enum class ProfileSortOption {
     PROGRESS
 }
 
+internal enum class ProfileCollectionShortcut { WATCHING, WATCH_LATER, WATCHED, FAVORITES, ABANDONED }
+
+internal data class ProfileCollectionCounts(
+    val watchLater: Int = 0,
+    val watched: Int = 0,
+    val favorites: Int = 0,
+    val abandoned: Int = 0
+)
+
 internal data class ProfileUiState(
     val collection: ProfileCollection = ProfileCollection.WATCHED,
     val category: ProfileCategory = ProfileCategory.MOVIES,
     val sortOption: ProfileSortOption = ProfileSortOption.RECENTLY_ADDED,
     val displayModes: ProfileDisplayModes = ProfileDisplayModes(),
     val entries: List<LibraryEntry> = emptyList(),
+    val watching: List<ContinueWatchingItem> = emptyList(),
+    val favorites: List<LibraryEntry> = emptyList(),
+    val collectionCounts: ProfileCollectionCounts = ProfileCollectionCounts(),
     val statistics: WatchedStatistics = WatchedStatistics(),
     val searchQuery: String = "",
     val isLoading: Boolean = true,
     val pendingRemovals: Set<ExternalMediaRef> = emptySet(),
     val actionError: AppError? = null,
     val loadError: AppError? = null,
-    val statisticsError: AppError? = null
+    val statisticsError: AppError? = null,
+    val isAbandonedCollection: Boolean = false,
+    val isWatchingCollection: Boolean = false
 ) {
     val currentViewMode: ProfileViewMode get() = displayModes.getMode(collection, category)
 }
@@ -79,6 +98,7 @@ internal class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<ProfileUiState> = mutableUiState.asStateFlow()
 
     private val rawEntries = MutableStateFlow<List<LibraryEntry>>(emptyList())
+    private var libraryEntriesJob: Job? = null
 
     init {
         observeDisplayModes()
@@ -87,7 +107,28 @@ internal class ProfileViewModel @Inject constructor(
     }
 
     fun setCollection(collection: ProfileCollection) {
-        mutableUiState.update { it.copy(collection = collection) }
+        mutableUiState.update {
+            it.copy(collection = collection, isAbandonedCollection = false, isWatchingCollection = false)
+        }
+        refilter()
+    }
+
+    fun setAbandonedCollection() {
+        mutableUiState.update {
+            it.copy(collection = ProfileCollection.WATCHED, isAbandonedCollection = true, isWatchingCollection = false)
+        }
+        refilter()
+    }
+
+    fun setWatchingCollection() {
+        mutableUiState.update {
+            it.copy(
+                collection = ProfileCollection.WATCHED,
+                sortOption = ProfileSortOption.RECENTLY_ADDED,
+                isAbandonedCollection = false,
+                isWatchingCollection = true
+            )
+        }
         refilter()
     }
 
@@ -170,6 +211,11 @@ internal class ProfileViewModel @Inject constructor(
         mutableUiState.update { it.copy(actionError = null) }
     }
 
+    fun retry() {
+        mutableUiState.update { it.copy(isLoading = true, loadError = null) }
+        observeLibraryEntries()
+    }
+
     private fun observeDisplayModes() {
         viewModelScope.launch {
             displayModePreferences.observeDisplayModes().collectLatest { modes ->
@@ -179,7 +225,8 @@ internal class ProfileViewModel @Inject constructor(
     }
 
     private fun observeLibraryEntries() {
-        viewModelScope.launch {
+        libraryEntriesJob?.cancel()
+        libraryEntriesJob = viewModelScope.launch {
             libraryRepository.observeEntries(LibraryQuery()).collectLatest { result ->
                 when (result) {
                     is AppResult.Success -> {
@@ -190,6 +237,7 @@ internal class ProfileViewModel @Inject constructor(
                                 loadError = null
                             )
                         }
+                        updateDashboard(result.value)
                         refilter()
                     }
                     is AppResult.Failure -> {
@@ -221,13 +269,22 @@ internal class ProfileViewModel @Inject constructor(
         val allRaw = rawEntries.value
 
         val filtered = allRaw.filter { entry ->
-            val matchesCollection = when (state.collection) {
-                ProfileCollection.WATCHED -> entry.inLibrary && entry.isWatched()
-                ProfileCollection.WATCH_LATER -> when (entry.mediaType) {
-                    MediaType.SERIES -> entry.serialState == SeriesTrackingState.WATCH_LATER
-                    MediaType.MOVIE -> !entry.isWatched() && entry.inLibrary
+            val matchesCollection = if (state.isWatchingCollection) {
+                entry.toDashboardContinueWatchingItem()?.let(ContinueWatchingPolicy::isContinueWatching) == true
+            } else {
+                when (state.collection) {
+                    ProfileCollection.WATCHED -> if (state.isAbandonedCollection) {
+                        entry.inLibrary && entry.mediaType == MediaType.SERIES &&
+                            entry.serialState == SeriesTrackingState.ABANDONED
+                    } else {
+                        entry.inLibrary && entry.isWatched()
+                    }
+                    ProfileCollection.WATCH_LATER -> when (entry.mediaType) {
+                        MediaType.SERIES -> entry.serialState == SeriesTrackingState.WATCH_LATER
+                        MediaType.MOVIE -> !entry.isWatched() && entry.inLibrary
+                    }
+                    ProfileCollection.FAVORITES -> entry.isFavorite
                 }
-                ProfileCollection.FAVORITES -> entry.isFavorite
             }
             val matchesCategory = entry.belongsToCategory(state.category)
             val matchesSearch = if (state.searchQuery.isBlank()) {
@@ -241,7 +298,18 @@ internal class ProfileViewModel @Inject constructor(
         }
 
         val sorted = when (state.sortOption) {
-            ProfileSortOption.RECENTLY_ADDED -> filtered.sortedByDescending { it.addedAt }
+            ProfileSortOption.RECENTLY_ADDED -> when {
+                state.isWatchingCollection -> filtered.sortedByDescending {
+                    (it.progress as? LibraryProgress.Series)?.progress?.lastWatchedAt ?: Instant.MIN
+                }
+                state.collection == ProfileCollection.FAVORITES -> filtered.sortedWith(
+                    compareByDescending<LibraryEntry> { it.favoriteAddedAt ?: Instant.MIN }
+                        .thenBy { it.title.lowercase(Locale.ROOT) }
+                        .thenBy { it.mediaRef.source.name }
+                        .thenBy { it.mediaRef.externalId }
+                )
+                else -> filtered.sortedByDescending { it.addedAt }
+            }
             ProfileSortOption.TITLE -> filtered.sortedBy { it.title.lowercase() }
             ProfileSortOption.RATING -> filtered.sortedWith(
                 compareByDescending<LibraryEntry> { it.personalRating?.value ?: -1 }
@@ -255,4 +323,70 @@ internal class ProfileViewModel @Inject constructor(
 
         mutableUiState.update { it.copy(entries = sorted) }
     }
+
+    private fun updateDashboard(entries: List<LibraryEntry>) {
+        mutableUiState.update {
+            it.copy(
+                watching = selectWatchingPreview(entries),
+                favorites = selectFavoritePreview(entries),
+                collectionCounts = countCollections(entries)
+            )
+        }
+    }
+}
+
+internal const val PROFILE_PREVIEW_LIMIT = 7
+
+internal fun selectWatchingPreview(
+    entries: Iterable<LibraryEntry>,
+    limit: Int = PROFILE_PREVIEW_LIMIT
+): List<ContinueWatchingItem> = ContinueWatchingPolicy.select(
+    entries.mapNotNull(LibraryEntry::toDashboardContinueWatchingItem)
+).take(limit.coerceAtLeast(0))
+
+internal fun LibraryEntry.toDashboardContinueWatchingItem(): ContinueWatchingItem? {
+    val seriesProgress = (progress as? LibraryProgress.Series)?.progress ?: return null
+    return ContinueWatchingItem(
+        mediaRef = mediaRef,
+        mediaType = mediaType,
+        title = title,
+        posterUrl = posterUrl,
+        progress = seriesProgress,
+        nextEpisode = seriesProgress.nextEpisode,
+        updatedAt = seriesProgress.lastWatchedAt,
+        isAbandoned = isAbandoned,
+        inLibrary = inLibrary
+    )
+}
+
+internal fun selectFavoritePreview(
+    entries: Iterable<LibraryEntry>,
+    limit: Int = PROFILE_PREVIEW_LIMIT
+): List<LibraryEntry> = entries.asSequence()
+    .filter(LibraryEntry::isFavorite)
+    // ponytail: legacy favorites have no timestamp; identity tie-break keeps ordering honest until re-favorited.
+    .sortedWith(
+        compareByDescending<LibraryEntry> { it.favoriteAddedAt ?: Instant.MIN }
+            .thenBy { it.title.lowercase(Locale.ROOT) }
+            .thenBy { it.mediaRef.source.name }
+            .thenBy { it.mediaRef.externalId }
+    )
+    .take(limit.coerceAtLeast(0))
+    .toList()
+
+internal fun countCollections(entries: Iterable<LibraryEntry>): ProfileCollectionCounts {
+    val all = entries.toList()
+    return ProfileCollectionCounts(
+        watchLater = all.count { entry ->
+            entry.inLibrary && when (entry.mediaType) {
+                MediaType.SERIES -> entry.serialState == SeriesTrackingState.WATCH_LATER
+                MediaType.MOVIE -> !entry.isWatched()
+            }
+        },
+        watched = all.count { it.inLibrary && it.isWatched() },
+        favorites = all.count(LibraryEntry::isFavorite),
+        abandoned = all.count {
+            it.inLibrary && it.mediaType == MediaType.SERIES && it.serialState == SeriesTrackingState.ABANDONED
+        }
+    )
 }

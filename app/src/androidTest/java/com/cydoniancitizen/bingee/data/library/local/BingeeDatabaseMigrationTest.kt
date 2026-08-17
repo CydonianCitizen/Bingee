@@ -156,6 +156,28 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationThreeToFourPreservesFavoriteAndLeavesLegacyChronologyUnknown() {
+        val name = "bingee-v3-to-v4"
+        val legacy = helper.createDatabase(name, 3)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, original_title, overview, poster_url, release_date, " +
+                "created_at, metadata_updated_at, is_favorite) VALUES " +
+                "(1, 'MOVIE', 'Legacy Favorite', NULL, NULL, NULL, NULL, " +
+                "'2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 1)"
+        )
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 4, true, *ALL_MIGRATIONS)
+        migrated.query("SELECT is_favorite, favorite_added_at FROM media_entries WHERE local_media_id = 1").use {
+            it.moveToFirst()
+            assertEquals(1, it.getInt(0))
+            assertEquals(true, it.isNull(1))
+        }
+        migrated.close()
+    }
+
+    @Test
     fun fullMigrationChainPreservesCanonicalPersonalData() {
         val name = "bingee-v1-to-v3"
         val legacy = helper.createDatabase(name, 1)

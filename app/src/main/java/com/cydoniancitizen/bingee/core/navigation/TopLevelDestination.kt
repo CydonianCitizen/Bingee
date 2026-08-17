@@ -27,7 +27,10 @@ enum class TopLevelDestination(val route: String, @param:StringRes val labelRes:
 }
 
 fun topLevelDestinationForRoute(route: String?): TopLevelDestination? =
-    TopLevelDestination.entries.firstOrNull { destination -> destination.route == route }
+    TopLevelDestination.entries.firstOrNull { destination ->
+        route == destination.route ||
+            (destination == TopLevelDestination.PROFILE && route?.startsWith("profile/") == true)
+    }
 
 object AppRoute {
     const val ONBOARDING = "onboarding"
@@ -40,4 +43,7 @@ object AppRoute {
     const val SETTINGS_ABOUT = "settings/about"
     const val NOTIFICATIONS = "notifications"
     const val STATISTICS = "statistics"
+    const val PROFILE_COLLECTION = "profile/collection/{collection}"
+
+    fun profileCollection(collection: String): String = "profile/collection/$collection"
 }

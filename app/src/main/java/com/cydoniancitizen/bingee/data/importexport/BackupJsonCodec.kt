@@ -150,6 +150,7 @@ internal object BackupJsonCodec {
         writeNullable(writer, "posterUrl", media.posterUrl)
         writeNullable(writer, "releaseDate", media.releaseDate?.toString())
         writer.name("isFavorite").value(media.isFavorite)
+        writeNullable(writer, "favoriteAddedAt", media.favoriteAddedAt?.toString())
         writer.endObject()
     }
 
@@ -314,7 +315,8 @@ internal object BackupJsonCodec {
             overview = nullableString(objectValue, "overview"),
             posterUrl = nullableString(objectValue, "posterUrl"),
             releaseDate = nullableDate(objectValue, "releaseDate"),
-            isFavorite = booleanOrDefault(objectValue, "isFavorite", false)
+            isFavorite = booleanOrDefault(objectValue, "isFavorite", false),
+            favoriteAddedAt = nullableInstant(objectValue, "favoriteAddedAt")
         )
     }
 

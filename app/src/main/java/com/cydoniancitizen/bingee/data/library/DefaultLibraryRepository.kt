@@ -152,7 +152,7 @@ internal class DefaultLibraryRepository @Inject constructor(
     override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
         withNormalizedExternalId(ref) { externalId ->
             persistenceRead {
-                val updated = libraryDao.updateFavoriteState(ref.source, externalId, isFavorite)
+                val updated = libraryDao.updateFavoriteState(ref.source, externalId, isFavorite, clock.instant())
                 if (updated == 0) {
                     throw IllegalStateException("Media entity not found for favorite state update")
                 }
@@ -164,7 +164,7 @@ internal class DefaultLibraryRepository @Inject constructor(
             persistenceRead {
                 val now = clock.instant()
                 libraryDao.ensureMediaAndSetFavorite(
-                    candidate = result.toMediaEntity(now),
+                    candidate = result.toMediaEntity(now).copy(favoriteAddedAt = now.takeIf { isFavorite }),
                     source = result.externalRef.source,
                     externalId = externalId,
                     isFavorite = isFavorite

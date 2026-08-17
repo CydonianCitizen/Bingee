@@ -90,7 +90,8 @@ internal class BackupDataStore @Inject constructor(
                     overview = entity.overview,
                     posterUrl = entity.posterUrl,
                     releaseDate = entity.releaseDate,
-                    isFavorite = entity.isFavorite
+                    isFavorite = entity.isFavorite,
+                    favoriteAddedAt = entity.favoriteAddedAt
                 )
             }.sortedWith(compareBy({ it.primaryRef.source.name }, { it.primaryRef.externalId }, { it.mediaType.name }))
 
@@ -219,7 +220,8 @@ internal class BackupDataStore @Inject constructor(
                         releaseDate = media.releaseDate,
                         createdAt = exportedAt,
                         metadataUpdatedAt = exportedAt,
-                        isFavorite = media.isFavorite
+                        isFavorite = media.isFavorite,
+                        favoriteAddedAt = media.favoriteAddedAt
                     )
                 )
                 mediaIds[media.primaryRef.key()] = localId

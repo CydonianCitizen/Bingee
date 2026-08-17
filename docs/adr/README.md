@@ -32,3 +32,4 @@ To add an ADR, copy `0000-template.md`, use the next available four-digit number
 | 0022 | Assisted cross-provider equivalence and reversible media links |
 | 0023 | Multiplatform readiness without premature Android migration |
 | 0024 | Stable TMDB genre identity and Room v3 |
+| 0025 | Favorite chronology for personal dashboard ordering |
