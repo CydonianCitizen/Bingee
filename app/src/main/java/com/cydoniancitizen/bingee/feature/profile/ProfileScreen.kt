@@ -121,6 +121,8 @@ internal fun ProfileScreen(
             onOpenDetails = onOpenDetails,
             onOpenCollection = onOpenCollection,
             onNavigateToSearch = onNavigateToSearch,
+            onOpenStatistics = onOpenStatistics,
+            onRetryStatistics = viewModel::retryStatistics,
             onRetry = viewModel::retry,
             modifier = modifier
         )

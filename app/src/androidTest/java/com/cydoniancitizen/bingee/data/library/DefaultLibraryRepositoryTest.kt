@@ -20,6 +20,8 @@ import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import java.time.Clock
 import java.time.Instant
@@ -409,6 +411,62 @@ class DefaultLibraryRepositoryTest {
         assertTrue((repository.observePersonalViewing().first() as AppResult.Success).value.isEmpty())
     }
 
+    @Test
+    fun personalViewingProjectsPersistedRuntimeAndCanonicalGenres() = runBlocking {
+        val movie = mediaResult()
+        repository.add(movie)
+        database.detailsDao().storeDetails(
+            candidate = checkNotNull(database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, "42")),
+            source = MediaSource.TMDB,
+            externalId = "42",
+            details = MediaDetailsEntity(
+                localMediaId = 0,
+                backdropUrl = null,
+                productionStatus = "RELEASED",
+                originalLanguage = "en",
+                runtimeMinutes = 137,
+                episodeRuntimeMinutes = null,
+                numberOfSeasons = null,
+                numberOfEpisodes = null,
+                detailsFetchedAt = now
+            ),
+            genres = listOf(
+                MediaGenreEntity(0, 0, "Drama", MediaSource.TMDB, 18),
+                MediaGenreEntity(0, 1, "Dramma", MediaSource.TMDB, 18)
+            )
+        )
+        database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
+
+        val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+
+        assertEquals(137, history.movieRuntimeMinutes)
+        assertEquals(0L, history.watchedRegularRuntimeMinutes)
+        assertEquals(listOf(18L), history.genres.mapNotNull { it.genreId })
+    }
+
+    @Test
+    fun personalViewingUsesCurrentProgressWhenNewEpisodeAppears() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Dynamic Series"
+        )
+        repository.add(series)
+        storeSeries("100", 2, runtimes = listOf(42, 48))
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-episode-1", today(), now)
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-episode-2", today(), now)
+
+        var history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        assertTrue(history.isCompletedTitle)
+        assertEquals(90L, history.watchedRegularRuntimeMinutes)
+
+        storeSeries("100", 3, runtimes = listOf(42, 48, 51))
+
+        history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        assertFalse(history.isCompletedTitle)
+        assertEquals(2, history.watchedRegularEpisodes)
+    }
+
     private fun mediaResult() = MediaSearchResult(
         externalRef = ExternalMediaRef(MediaSource.TMDB, "42"),
         mediaType = MediaType.MOVIE,
@@ -419,7 +477,11 @@ class DefaultLibraryRepositoryTest {
         overview = "First contact."
     )
 
-    private suspend fun storeSeries(seriesId: String, episodeCount: Int) {
+    private suspend fun storeSeries(
+        seriesId: String,
+        episodeCount: Int,
+        runtimes: List<Int?> = List(episodeCount) { null }
+    ) {
         database.seriesDao().storeSeasonEpisodes(
             MediaSource.TMDB,
             seriesId,
@@ -445,7 +507,7 @@ class DefaultLibraryRepositoryTest {
                     title = "Episode $number",
                     overview = null,
                     airDate = null,
-                    runtimeMinutes = null,
+                    runtimeMinutes = runtimes.getOrNull(number - 1),
                     stillUrl = null,
                     metadataUpdatedAt = now
                 )

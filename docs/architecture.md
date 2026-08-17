@@ -237,8 +237,9 @@ Season expansion remains state within the existing detail route. There is no sea
 ## Personal viewing statistics
 
 - One focused Room projection reads only titles with movie progress, genuine series completion evidence, or watched regular episodes. It includes membership/favorite/rating metadata without observing the broad Library query twice.
-- Completed titles are watched Movies plus Series with persisted genuine `completed_at`. Viewed/taste titles are watched Movies plus Series with at least one watched regular episode; Specials alone are excluded.
-- Episode activity sums watched regular episodes regardless of current membership or Abandoned state. Ratings and media-type distribution use the viewed/taste title cohort.
+- Completed titles are watched Movies plus Series whose current canonical regular-episode progress is complete. An open Series counts while caught up; a newly available unwatched regular episode removes it until watched. Specials/Season 0 never participate.
+- Episode activity sums watched regular episodes regardless of current membership or Abandoned state. Viewing time uses only persisted movie and episode runtimes, never estimates; if a required runtime is missing, the affected total is marked unavailable rather than fabricated.
+- Ratings and media-type distribution use the viewed/taste title cohort. Genre taste uses canonical `(source, genre_id)` identity, counts each eligible title once per genre, and selects a deterministic top three.
 - `watched_date` remains an optional user-selected calendar date. Completion timestamps remain precise and separate; when no user date exists, history derives the local calendar date from the genuine timestamp. `added_at` never supplies history ordering or grouping.
 - Collection/Profile filtering still uses `LibraryEntry` and membership-dependent `SeriesTrackingState`; removed history does not reappear in current collection UI.
 

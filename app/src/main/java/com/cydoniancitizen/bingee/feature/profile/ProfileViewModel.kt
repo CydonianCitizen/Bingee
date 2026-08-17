@@ -67,6 +67,7 @@ internal data class ProfileUiState(
     val actionError: AppError? = null,
     val loadError: AppError? = null,
     val statisticsError: AppError? = null,
+    val isStatisticsLoading: Boolean = true,
     val isAbandonedCollection: Boolean = false,
     val isWatchingCollection: Boolean = false
 ) {
@@ -99,6 +100,7 @@ internal class ProfileViewModel @Inject constructor(
 
     private val rawEntries = MutableStateFlow<List<LibraryEntry>>(emptyList())
     private var libraryEntriesJob: Job? = null
+    private var personalViewingJob: Job? = null
 
     init {
         observeDisplayModes()
@@ -216,6 +218,11 @@ internal class ProfileViewModel @Inject constructor(
         observeLibraryEntries()
     }
 
+    fun retryStatistics() {
+        mutableUiState.update { it.copy(isStatisticsLoading = true, statisticsError = null) }
+        observePersonalViewing()
+    }
+
     private fun observeDisplayModes() {
         viewModelScope.launch {
             displayModePreferences.observeDisplayModes().collectLatest { modes ->
@@ -249,16 +256,20 @@ internal class ProfileViewModel @Inject constructor(
     }
 
     private fun observePersonalViewing() {
-        viewModelScope.launch {
+        personalViewingJob?.cancel()
+        personalViewingJob = viewModelScope.launch {
             libraryRepository.observePersonalViewing().collectLatest { result ->
                 when (result) {
                     is AppResult.Success -> mutableUiState.update {
                         it.copy(
                             statistics = calculateWatchedStatistics(result.value),
+                            isStatisticsLoading = false,
                             statisticsError = null
                         )
                     }
-                    is AppResult.Failure -> mutableUiState.update { it.copy(statisticsError = result.error) }
+                    is AppResult.Failure -> mutableUiState.update {
+                        it.copy(isStatisticsLoading = false, statisticsError = result.error)
+                    }
                 }
             }
         }

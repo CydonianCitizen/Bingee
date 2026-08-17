@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.data.library
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
@@ -68,7 +69,7 @@ internal fun LibraryItemWithRefs.toDomain(
     )
 }
 
-private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType): LibraryProgress = when {
+internal fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType): LibraryProgress = when {
     this == null -> LibraryProgress.Unavailable
     mediaType == MediaType.MOVIE -> LibraryProgress.Movie(
         movieWatchedAt?.let { MovieWatchState.Watched(it, movieWatchedDate) } ?: MovieWatchState.Unwatched
@@ -94,7 +95,10 @@ private fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaType
 
 internal fun ExternalRefEntity.toDomain(): ExternalMediaRef = ExternalMediaRef(source = source, externalId = externalId)
 
-internal fun LibraryDao.PersonalViewingRow.toDomain(): PersonalViewingEntry = PersonalViewingEntry(
+internal fun LibraryDao.PersonalViewingRow.toDomain(
+    currentProgress: LibraryDao.LibraryProgressRow? = null,
+    genres: List<Genre> = emptyList()
+): PersonalViewingEntry = PersonalViewingEntry(
     mediaRef = ExternalMediaRef(source, externalId),
     mediaType = media.mediaType,
     title = media.title,
@@ -108,7 +112,19 @@ internal fun LibraryDao.PersonalViewingRow.toDomain(): PersonalViewingEntry = Pe
     movieWatchedAt = movieWatchedAt,
     watchedRegularEpisodes = watchedRegularEpisodes,
     seriesCompletedAt = seriesCompletedAt,
-    watchedDate = if (media.mediaType == MediaType.MOVIE) movieWatchedDate else seriesWatchedDate
+    watchedDate = if (media.mediaType == MediaType.MOVIE) movieWatchedDate else seriesWatchedDate,
+    movieRuntimeMinutes = movieRuntimeMinutes,
+    watchedRegularRuntimeMinutes = watchedRegularRuntimeMinutes,
+    watchedRegularEpisodesWithoutRuntime = watchedRegularEpisodesWithoutRuntime,
+    seriesIsCurrentlyComplete = if (media.mediaType == MediaType.SERIES && currentProgress != null) {
+        (currentProgress.toDomainProgress(media.mediaType) as? LibraryProgress.Series)?.progress?.isComplete == true
+    } else {
+        null
+    },
+    genres = genres
 )
+
+internal fun LibraryDao.PersonalViewingGenreRow.toDomainOrNull(): Genre? =
+    if (source != null && genreId != null) Genre(name = name, source = source, genreId = genreId) else null
 
 private fun String?.normalizedOptionalText(): String? = this?.trim()?.takeIf(String::isNotEmpty)

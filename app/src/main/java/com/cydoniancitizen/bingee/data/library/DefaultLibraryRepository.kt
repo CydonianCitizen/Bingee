@@ -84,10 +84,22 @@ internal class DefaultLibraryRepository @Inject constructor(
             rows.mapTo(linkedSetOf()) { it.toDomain() }
         }
 
-    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> =
-        libraryDao.observePersonalViewing(LocalDate.now(clock)).asPersistenceResult { rows ->
-            rows.map(LibraryDao.PersonalViewingRow::toDomain)
+    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> = combine(
+        libraryDao.observePersonalViewing(LocalDate.now(clock)),
+        libraryDao.observeLibraryProgress(LocalDate.now(clock)),
+        libraryDao.observePersonalViewingGenres()
+    ) { rows, progressRows, genreRows ->
+        val progressByMedia = progressRows.associateBy { it.localMediaId }
+        val genresByMedia = genreRows.mapNotNull { row ->
+            row.toDomainOrNull()?.let { row.localMediaId to it }
+        }.groupBy({ it.first }, { it.second })
+        rows.map { row ->
+            row.toDomain(
+                currentProgress = progressByMedia[row.media.localMediaId],
+                genres = genresByMedia[row.media.localMediaId].orEmpty()
+            )
         }
+    }.asPersistenceResult { it }
 
     override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
         libraryDao.observeContinueWatchingRows(MediaSource.TMDB, LocalDate.now(clock))

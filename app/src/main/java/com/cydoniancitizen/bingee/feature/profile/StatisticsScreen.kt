@@ -46,7 +46,9 @@ import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.domain.model.ViewingDurationLabels
 import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
+import com.cydoniancitizen.bingee.domain.model.formatViewingDuration
 import java.time.Month
 import java.time.format.TextStyle
 import java.util.Locale
@@ -91,6 +93,11 @@ internal fun StatisticsContent(
     modifier: Modifier = Modifier
 ) {
     val currentLocale = LocalConfiguration.current.locales[0]
+    val durationLabels = ViewingDurationLabels(
+        day = stringResource(R.string.statistics_duration_day_short),
+        hour = stringResource(R.string.statistics_duration_hour_short),
+        minute = stringResource(R.string.statistics_duration_minute_short)
+    )
 
     if (statistics.isEmpty) {
         Box(
@@ -158,19 +165,16 @@ internal fun StatisticsContent(
                         value = statistics.episodesWatchedCount.toString(),
                         modifier = Modifier.weight(1f)
                     )
-                    val hours = statistics.estimatedWatchTimeMinutes / 60
-                    val watchTimeText = if (hours > 0) {
-                        stringResource(R.string.statistics_watch_time_hours, hours)
+                    val watchTimeText = if (statistics.isWatchTimeIncomplete) {
+                        stringResource(R.string.statistics_watch_time_unavailable)
                     } else {
-                        stringResource(R.string.statistics_watch_time_minutes, statistics.estimatedWatchTimeMinutes)
+                        formatViewingDuration(statistics.watchTimeMinutes, durationLabels)
                     }
                     StatCard(
                         title = stringResource(R.string.statistics_watch_time),
                         value = watchTimeText,
                         subtitle = if (statistics.isWatchTimeIncomplete) {
-                            stringResource(
-                                R.string.statistics_watch_time_incomplete
-                            )
+                            stringResource(R.string.statistics_watch_time_incomplete)
                         } else {
                             null
                         },

@@ -28,7 +28,17 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "movie_watched_date") val movieWatchedDate: LocalDate?,
         @ColumnInfo(name = "watched_regular_episodes") val watchedRegularEpisodes: Int,
         @ColumnInfo(name = "series_completed_at") val seriesCompletedAt: Instant?,
-        @ColumnInfo(name = "series_watched_date") val seriesWatchedDate: LocalDate?
+        @ColumnInfo(name = "series_watched_date") val seriesWatchedDate: LocalDate?,
+        @ColumnInfo(name = "movie_runtime_minutes") val movieRuntimeMinutes: Int?,
+        @ColumnInfo(name = "watched_regular_runtime_minutes") val watchedRegularRuntimeMinutes: Long,
+        @ColumnInfo(name = "watched_regular_episodes_without_runtime") val watchedRegularEpisodesWithoutRuntime: Int
+    )
+
+    internal data class PersonalViewingGenreRow(
+        @ColumnInfo(name = "local_media_id") val localMediaId: Long,
+        val source: MediaSource?,
+        @ColumnInfo(name = "genre_id") val genreId: Long?,
+        val name: String
     )
 
     internal data class ContinueWatchingRow(
@@ -139,7 +149,27 @@ internal abstract class LibraryDao {
                movie_watch_progress.watched_date AS movie_watched_date,
                COALESCE(regular_episode_activity.watched_regular_episodes, 0) AS watched_regular_episodes,
                series_watch_progress.completed_at AS series_completed_at,
-               series_watch_progress.watched_date AS series_watched_date
+               series_watch_progress.watched_date AS series_watched_date,
+               media_details.runtime_minutes AS movie_runtime_minutes,
+               COALESCE((
+                   SELECT SUM(episodes.runtime_minutes)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+               ), 0) AS watched_regular_runtime_minutes,
+               (
+                   SELECT COUNT(*)
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     AND episodes.runtime_minutes IS NULL
+               ) AS watched_regular_episodes_without_runtime
         FROM media_entries
         INNER JOIN external_refs AS selected_ref
           ON selected_ref.local_media_id = media_entries.local_media_id
@@ -157,6 +187,7 @@ internal abstract class LibraryDao {
          )
         LEFT JOIN library_entries USING(local_media_id)
         LEFT JOIN media_ratings USING(local_media_id)
+        LEFT JOIN media_details USING(local_media_id)
         LEFT JOIN series_state_overrides USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
         LEFT JOIN series_watch_progress USING(local_media_id)
@@ -168,6 +199,16 @@ internal abstract class LibraryDao {
         """
     )
     abstract fun observePersonalViewing(today: LocalDate): Flow<List<PersonalViewingRow>>
+
+    @Query(
+        """
+        SELECT local_media_id, source, genre_id, name
+        FROM media_genres
+        WHERE source IS NOT NULL AND genre_id IS NOT NULL
+        ORDER BY local_media_id, source, genre_id, genre_order
+        """
+    )
+    abstract fun observePersonalViewingGenres(): Flow<List<PersonalViewingGenreRow>>
 
     @Query(
         """

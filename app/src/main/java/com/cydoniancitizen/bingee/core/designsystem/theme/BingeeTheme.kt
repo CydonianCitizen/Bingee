@@ -117,6 +117,15 @@ object BingeeStatusColors {
     val completed = Color(0xFF7B1FA2)
 }
 
+object BingeePodiumColors {
+    val gold = Color(0xFFE0A800)
+    val onGold = Color(0xFF2A2100)
+    val silver = Color(0xFF8E99A6)
+    val onSilver = Color(0xFF12161D)
+    val bronze = Color(0xFFB56B3A)
+    val onBronze = Color(0xFF1E0D05)
+}
+
 @Composable
 fun BingeeTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(

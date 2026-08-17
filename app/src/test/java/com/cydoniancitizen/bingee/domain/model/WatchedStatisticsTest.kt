@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.domain.model
 
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalRating
@@ -143,13 +144,151 @@ class WatchedStatisticsTest {
         assertFalse(stats.isEmpty)
     }
 
+    @Test
+    fun currentSeriesCompletionUsesCurrentRegularProgress() {
+        assertTrue(
+            series(
+                "caught-up",
+                watchedEpisodes = 10,
+                completedAt = Instant.EPOCH,
+                seriesIsCurrentlyComplete = true
+            ).isCompletedTitle
+        )
+        assertFalse(
+            series(
+                "new-episode",
+                watchedEpisodes = 10,
+                completedAt = Instant.EPOCH,
+                seriesIsCurrentlyComplete = false
+            ).isCompletedTitle
+        )
+        val stats = calculateWatchedStatistics(
+            listOf(
+                series(
+                    "caught-up",
+                    watchedEpisodes = 10,
+                    completedAt = Instant.EPOCH,
+                    seriesIsCurrentlyComplete = true
+                ),
+                series(
+                    "new-episode",
+                    watchedEpisodes = 10,
+                    completedAt = Instant.EPOCH,
+                    seriesIsCurrentlyComplete = false
+                ),
+                series("watching", watchedEpisodes = 9),
+                series(
+                    "abandoned-complete",
+                    watchedEpisodes = 10,
+                    completedAt = Instant.EPOCH,
+                    isAbandoned = true,
+                    seriesIsCurrentlyComplete = true
+                )
+            ),
+            zone
+        )
+
+        assertEquals(1, stats.tvSeriesCompletedCount)
+    }
+
+    @Test
+    fun viewingTimeUsesPersistedMinutesWithoutRoundingOrDefaults() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie("removed", watchedAt = Instant.EPOCH, inLibrary = false, runtimeMinutes = 137),
+                series(
+                    "series",
+                    watchedEpisodes = 2,
+                    watchedRuntimeMinutes = 73
+                )
+            ),
+            zone
+        )
+
+        assertEquals(137L, stats.movieWatchTimeMinutes)
+        assertEquals(73L, stats.seriesWatchTimeMinutes)
+        assertEquals(210L, stats.watchTimeMinutes)
+        assertFalse(stats.isWatchTimeIncomplete)
+    }
+
+    @Test
+    fun missingRuntimeNeverBecomesFabricatedTime() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie("known", watchedAt = Instant.EPOCH, runtimeMinutes = 48),
+                movie("missing", watchedAt = Instant.EPOCH),
+                series("partial", watchedEpisodes = 2, watchedRuntimeMinutes = 50, missingRuntimeEpisodes = 1)
+            ),
+            zone
+        )
+
+        assertEquals(48L, stats.movieWatchTimeMinutes)
+        assertEquals(50L, stats.seriesWatchTimeMinutes)
+        assertTrue(stats.isWatchTimeIncomplete)
+    }
+
+    @Test
+    fun genreAggregationUsesCanonicalIdentityAndCountsEachTitleOnce() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie(
+                    "one",
+                    watchedAt = Instant.EPOCH,
+                    genres = listOf(
+                        Genre("Drama", MediaSource.TMDB, 18),
+                        Genre("Dramma", MediaSource.TMDB, 18),
+                        Genre("Thriller", MediaSource.TMDB, 53)
+                    )
+                ),
+                movie(
+                    "two",
+                    watchedAt = Instant.EPOCH,
+                    genres = listOf(
+                        Genre("Dramma", MediaSource.TMDB, 18),
+                        Genre("Comedy", MediaSource.TMDB, 35)
+                    )
+                ),
+                movie(
+                    "three",
+                    watchedAt = Instant.EPOCH,
+                    genres = listOf(
+                        Genre("Drama", MediaSource.TMDB, 18),
+                        Genre("Legacy", null, null),
+                        Genre("Science Fiction", MediaSource.TMDB, 878)
+                    )
+                )
+            ),
+            zone
+        )
+
+        assertEquals(listOf(18L, 35L, 53L), stats.movieGenres.map { it.genreId })
+        assertEquals(listOf(3, 1, 1), stats.movieGenres.map { it.titleCount })
+        assertEquals("Drama", stats.movieGenres.first().name)
+    }
+
+    @Test
+    fun duplicateCanonicalViewingRowsCountOnce() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie("same", watchedAt = Instant.EPOCH, runtimeMinutes = 100),
+                movie("same", watchedAt = Instant.EPOCH, runtimeMinutes = 100)
+            ),
+            zone
+        )
+
+        assertEquals(1, stats.moviesWatchedCount)
+        assertEquals(100L, stats.movieWatchTimeMinutes)
+    }
+
     private fun movie(
         id: String,
         watchedAt: Instant? = null,
         watchedDate: LocalDate? = null,
         rating: Int? = null,
         addedAt: Instant = Instant.EPOCH,
-        inLibrary: Boolean = true
+        inLibrary: Boolean = true,
+        runtimeMinutes: Int? = null,
+        genres: List<Genre> = emptyList()
     ) = entry(
         id = id,
         mediaType = MediaType.MOVIE,
@@ -157,7 +296,9 @@ class WatchedStatisticsTest {
         inLibrary = inLibrary,
         rating = rating,
         movieWatchedAt = watchedAt,
-        watchedDate = watchedDate
+        watchedDate = watchedDate,
+        movieRuntimeMinutes = runtimeMinutes,
+        genres = genres
     )
 
     private fun series(
@@ -166,7 +307,11 @@ class WatchedStatisticsTest {
         completedAt: Instant? = null,
         rating: Int? = null,
         isAbandoned: Boolean = false,
-        inLibrary: Boolean = true
+        inLibrary: Boolean = true,
+        watchedRuntimeMinutes: Long = 0L,
+        missingRuntimeEpisodes: Int = 0,
+        seriesIsCurrentlyComplete: Boolean? = null,
+        genres: List<Genre> = emptyList()
     ) = entry(
         id = id,
         mediaType = MediaType.SERIES,
@@ -174,7 +319,11 @@ class WatchedStatisticsTest {
         rating = rating,
         watchedRegularEpisodes = watchedEpisodes,
         seriesCompletedAt = completedAt,
-        isAbandoned = isAbandoned
+        isAbandoned = isAbandoned,
+        watchedRegularRuntimeMinutes = watchedRuntimeMinutes,
+        watchedRegularEpisodesWithoutRuntime = missingRuntimeEpisodes,
+        seriesIsCurrentlyComplete = seriesIsCurrentlyComplete,
+        genres = genres
     )
 
     private fun entry(
@@ -187,7 +336,12 @@ class WatchedStatisticsTest {
         watchedRegularEpisodes: Int = 0,
         seriesCompletedAt: Instant? = null,
         watchedDate: LocalDate? = null,
-        isAbandoned: Boolean = false
+        isAbandoned: Boolean = false,
+        movieRuntimeMinutes: Int? = null,
+        watchedRegularRuntimeMinutes: Long = 0L,
+        watchedRegularEpisodesWithoutRuntime: Int = 0,
+        seriesIsCurrentlyComplete: Boolean? = null,
+        genres: List<Genre> = emptyList()
     ) = PersonalViewingEntry(
         mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
         mediaType = mediaType,
@@ -200,7 +354,12 @@ class WatchedStatisticsTest {
         movieWatchedAt = movieWatchedAt,
         watchedRegularEpisodes = watchedRegularEpisodes,
         seriesCompletedAt = seriesCompletedAt,
-        watchedDate = watchedDate
+        watchedDate = watchedDate,
+        movieRuntimeMinutes = movieRuntimeMinutes,
+        watchedRegularRuntimeMinutes = watchedRegularRuntimeMinutes,
+        watchedRegularEpisodesWithoutRuntime = watchedRegularEpisodesWithoutRuntime,
+        seriesIsCurrentlyComplete = seriesIsCurrentlyComplete,
+        genres = genres
     )
 
     private fun instant(value: String): Instant = Instant.parse(value)

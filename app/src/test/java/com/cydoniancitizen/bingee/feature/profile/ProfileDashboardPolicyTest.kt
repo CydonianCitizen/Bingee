@@ -6,12 +6,24 @@ import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.domain.model.GenreStatistic
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProfileDashboardPolicyTest {
+    @Test
+    fun podiumPresentationPlacesSecondFirstThird() {
+        val ranked = listOf(
+            GenreStatistic(MediaSource.TMDB, 18, "Drama", 10),
+            GenreStatistic(MediaSource.TMDB, 35, "Comedy", 8),
+            GenreStatistic(MediaSource.TMDB, 53, "Thriller", 6)
+        )
+
+        assertEquals(listOf(35L, 18L, 53L), podiumPresentationOrder(ranked).map { it.genreId })
+    }
+
     @Test
     fun watchingExcludesNotStartedCaughtUpAbandonedMoviesAndSpecialsOnly() {
         val entries = listOf(

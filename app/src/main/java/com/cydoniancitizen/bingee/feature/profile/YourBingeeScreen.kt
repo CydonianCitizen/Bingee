@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -45,6 +47,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cydoniancitizen.bingee.R
@@ -52,12 +55,17 @@ import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.designsystem.theme.BingeePodiumColors
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeStatusColors
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.ui.toUiError
+import com.cydoniancitizen.bingee.domain.model.GenreStatistic
+import com.cydoniancitizen.bingee.domain.model.ViewingDurationLabels
+import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
+import com.cydoniancitizen.bingee.domain.model.formatViewingDuration
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +75,8 @@ internal fun YourBingeeContent(
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     onOpenCollection: (ProfileCollectionShortcut) -> Unit,
     onNavigateToSearch: () -> Unit,
+    onOpenStatistics: () -> Unit,
+    onRetryStatistics: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -140,8 +150,202 @@ internal fun YourBingeeContent(
                         onNavigateToSearch = onNavigateToSearch
                     )
                 }
+                item {
+                    StatisticsSection(
+                        state = state,
+                        onOpenStatistics = onOpenStatistics,
+                        onRetry = onRetryStatistics
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun StatisticsSection(state: ProfileUiState, onOpenStatistics: () -> Unit, onRetry: () -> Unit) {
+    SectionHeader(title = stringResource(R.string.profile_statistics_title))
+    when {
+        state.statisticsError != null -> {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(state.statisticsError.toUiError().messageRes),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                TextButton(onClick = onRetry, contentPadding = PaddingValues(0.dp)) {
+                    Text(stringResource(R.string.action_retry))
+                }
+            }
+        }
+        state.isStatisticsLoading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        else -> StatisticsPreview(
+            statistics = state.statistics,
+            onOpenStatistics = onOpenStatistics
+        )
+    }
+}
+
+@Composable
+private fun StatisticsPreview(statistics: WatchedStatistics, onOpenStatistics: () -> Unit) {
+    val durationLabels = ViewingDurationLabels(
+        day = stringResource(R.string.statistics_duration_day_short),
+        hour = stringResource(R.string.statistics_duration_hour_short),
+        minute = stringResource(R.string.statistics_duration_minute_short)
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatisticsMediaBlock(
+            heading = stringResource(R.string.profile_statistics_movies_heading),
+            watchedLabel = stringResource(R.string.profile_statistics_movies_watched),
+            watchedCount = statistics.moviesWatchedCount,
+            watchTime = statistics.movieWatchTimeMinutes,
+            watchTimeIncomplete = statistics.movieWatchTimeIncomplete,
+            genres = statistics.movieGenres,
+            durationLabels = durationLabels
+        )
+        Spacer(Modifier.height(20.dp))
+        StatisticsMediaBlock(
+            heading = stringResource(R.string.profile_statistics_series_heading),
+            watchedLabel = stringResource(R.string.profile_statistics_series_watched),
+            watchedCount = statistics.tvSeriesCompletedCount,
+            watchTime = statistics.seriesWatchTimeMinutes,
+            watchTimeIncomplete = statistics.seriesWatchTimeIncomplete,
+            genres = statistics.seriesGenres,
+            durationLabels = durationLabels
+        )
+        TextButton(
+            onClick = onOpenStatistics,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text(stringResource(R.string.profile_statistics_view_all))
+        }
+    }
+}
+
+@Composable
+private fun StatisticsMediaBlock(
+    heading: String,
+    watchedLabel: String,
+    watchedCount: Int,
+    watchTime: Long,
+    watchTimeIncomplete: Boolean,
+    genres: List<GenreStatistic>,
+    durationLabels: ViewingDurationLabels
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = heading,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() }
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            StatisticsMetric(
+                value = watchedCount.toString(),
+                label = watchedLabel,
+                modifier = Modifier.weight(1f)
+            )
+            StatisticsMetric(
+                value = if (watchTimeIncomplete) {
+                    stringResource(R.string.statistics_watch_time_unavailable)
+                } else {
+                    formatViewingDuration(watchTime, durationLabels)
+                },
+                label = stringResource(R.string.profile_statistics_watch_time),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Text(
+            text = stringResource(R.string.profile_statistics_genres),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() }
+        )
+        if (genres.size < 3) {
+            Text(
+                text = stringResource(R.string.profile_statistics_not_enough_data),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            GenrePodium(genres)
+        }
+    }
+}
+
+@Composable
+private fun StatisticsMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+internal fun podiumPresentationOrder(ranked: List<GenreStatistic>): List<GenreStatistic> = listOfNotNull(
+    ranked.getOrNull(1),
+    ranked.getOrNull(0),
+    ranked.getOrNull(2)
+)
+
+@Composable
+private fun GenrePodium(ranked: List<GenreStatistic>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 90.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        podiumPresentationOrder(ranked).forEachIndexed { index, genre ->
+            val (height, background, content) = when (index) {
+                0 -> Triple(70.dp, BingeePodiumColors.silver, BingeePodiumColors.onSilver)
+                1 -> Triple(90.dp, BingeePodiumColors.gold, BingeePodiumColors.onGold)
+                else -> Triple(64.dp, BingeePodiumColors.bronze, BingeePodiumColors.onBronze)
+            }
+            GenrePodiumStep(
+                genre = genre,
+                background = background,
+                content = content,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = height)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GenrePodiumStep(genre: GenreStatistic, background: Color, content: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+            .background(background)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = genre.name,
+            color = content,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = genre.titleCount.toString(),
+            color = content,
+            style = MaterialTheme.typography.titleMedium
+        )
     }
 }
 
