@@ -18,7 +18,7 @@ sealed interface WatchedDateValidationResult {
 fun validateWatchedDate(
     watchedDate: LocalDate?,
     releaseDate: LocalDate?,
-    today: LocalDate = LocalDate.now()
+    today: LocalDate
 ): WatchedDateValidationResult {
     if (watchedDate == null) return WatchedDateValidationResult.Valid
     if (watchedDate.isAfter(today)) {

@@ -19,12 +19,14 @@ import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.RatingRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +97,7 @@ internal data class SeriesDetailUiState(
 )
 
 internal data class MediaDetailsUiState(
+    val today: LocalDate,
     val content: DetailContentState = DetailContentState.Resolving,
     val refresh: DetailRefreshState = DetailRefreshState.Idle,
     val isInLibrary: Boolean? = null,
@@ -118,9 +121,10 @@ internal class MediaDetailsViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val seriesRepository: SeriesRepository,
     private val progressRepository: WatchProgressRepository,
-    private val ratingRepository: RatingRepository
+    private val ratingRepository: RatingRepository,
+    private val dateSource: CalendarDateSource
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(MediaDetailsUiState())
+    private val mutableUiState = MutableStateFlow(MediaDetailsUiState(today = dateSource.currentDate()))
     val uiState: StateFlow<MediaDetailsUiState> = mutableUiState.asStateFlow()
 
     private val routeArgs: DetailRouteArgs? = DetailRoute.parse(
@@ -134,6 +138,11 @@ internal class MediaDetailsViewModel @Inject constructor(
     private val seasonRefreshJobs = mutableMapOf<ExternalMediaRef, Job>()
 
     init {
+        viewModelScope.launch {
+            dateSource.observeDate().collect { today ->
+                mutableUiState.update { it.copy(today = today) }
+            }
+        }
         val args = routeArgs
         when {
             args == null -> mutableUiState.update {

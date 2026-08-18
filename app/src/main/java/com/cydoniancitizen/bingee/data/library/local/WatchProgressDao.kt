@@ -10,7 +10,6 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
 
 internal enum class ProgressWriteOutcome {
@@ -235,8 +234,8 @@ internal abstract class WatchProgressDao {
         source: MediaSource,
         externalId: String,
         completedAt: Instant,
-        watchedDate: LocalDate? = null,
-        today: LocalDate = completedAt.atZone(ZoneOffset.UTC).toLocalDate()
+        today: LocalDate,
+        watchedDate: LocalDate? = null
     ): ProgressWriteOutcome {
         val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH

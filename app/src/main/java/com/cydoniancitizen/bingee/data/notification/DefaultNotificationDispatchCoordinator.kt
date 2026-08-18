@@ -5,6 +5,7 @@ import com.cydoniancitizen.bingee.core.model.NotificationDelivery
 import com.cydoniancitizen.bingee.core.model.NotificationDeliveryIdentity
 import com.cydoniancitizen.bingee.core.model.NotificationDispatchSummary
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.notification.NotificationDispatchCoordinator
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationCapability
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationContentMapper
@@ -14,7 +15,6 @@ import com.cydoniancitizen.bingee.domain.repository.NotificationDeliveryReposito
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
 import java.time.Clock
-import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,7 +29,8 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
     private val deliveryRepository: NotificationDeliveryRepository,
     private val contentMapper: ReleaseNotificationContentMapper,
     private val notifier: ReleaseNotifier,
-    private val clock: Clock
+    private val clock: Clock,
+    private val dateSource: CalendarDateSource
 ) : NotificationDispatchCoordinator {
     override suspend fun dispatch(): NotificationDispatchSummary {
         val preferences = try {
@@ -46,7 +47,7 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
             return NotificationDispatchSummary(capability = capabilityStatus)
         }
 
-        val today = LocalDate.now(clock)
+        val today = dateSource.currentDate()
         if (deliveryRepository.prune(today.minusDays(RETENTION_DAYS.toLong())) is AppResult.Failure) {
             return NotificationDispatchSummary(failed = 1, transientFailure = true)
         }

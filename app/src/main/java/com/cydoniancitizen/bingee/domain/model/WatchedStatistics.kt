@@ -2,10 +2,14 @@ package com.cydoniancitizen.bingee.domain.model
 
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
+import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 
 const val TASTE_RADAR_GENRE_LIMIT = 6
 
@@ -64,6 +68,35 @@ data class TasteStatistics(
     val radarGenres: List<GenreStatistic> get() = rankedGenres.take(TASTE_RADAR_GENRE_LIMIT)
 }
 
+data class RatingHistogramBucket(val rating: Int, val titleCount: Int) {
+    init {
+        require(rating in PersonalRating.MIN_VALUE..PersonalRating.MAX_VALUE) {
+            "Rating histogram value must be between 1 and 10"
+        }
+        require(titleCount >= 0) { "Rating histogram count must not be negative" }
+    }
+}
+
+data class PersonalRatingStatistics(
+    val averageRating: Double? = null,
+    val histogram: List<RatingHistogramBucket> = emptyRatingHistogram(),
+    val ratedTitles: List<PersonalViewingEntry> = emptyList()
+) {
+    val ratedTitleCount: Int get() = ratedTitles.size
+
+    init {
+        require(histogram.map(RatingHistogramBucket::rating) == PERSONAL_RATING_VALUES) {
+            "Rating histogram must contain values 1 through 10"
+        }
+    }
+}
+
+private val PERSONAL_RATING_VALUES = (PersonalRating.MIN_VALUE..PersonalRating.MAX_VALUE).toList()
+
+private fun emptyRatingHistogram(): List<RatingHistogramBucket> = PERSONAL_RATING_VALUES.map {
+    RatingHistogramBucket(it, 0)
+}
+
 data class WatchedStatistics(
     val moviesWatchedCount: Int = 0,
     val tvSeriesCompletedCount: Int = 0,
@@ -74,6 +107,7 @@ data class WatchedStatistics(
     val seriesWatchTimeIncomplete: Boolean = false,
     val averagePersonalRating: Double? = null,
     val ratedTitlesPercentage: Double = 0.0,
+    val personalRatingStatistics: PersonalRatingStatistics = PersonalRatingStatistics(),
     val mediaTypeDistribution: MediaTypeDistribution = MediaTypeDistribution(0, 0),
     val watchedByMonthYear: List<MonthYearCount> = emptyList(),
     val recentlyCompletedTitles: List<PersonalViewingEntry> = emptyList(),
@@ -116,12 +150,11 @@ fun calculateWatchedStatistics(
     val seriesTitles = viewedTitles.filter { it.mediaType == MediaType.SERIES }
     val movieWatchTimeMinutes = movieTitles.sumOf { it.movieRuntimeMinutes?.toLong() ?: 0L }
     val seriesWatchTimeMinutes = seriesTitles.sumOf { it.watchedRegularRuntimeMinutes }
-    val ratedTitles = viewedTitles.filter { it.personalRating != null }
-    val averagePersonalRating = ratedTitles.map { it.personalRating!!.value }.average().takeUnless(Double::isNaN)
+    val personalRatingStatistics = calculatePersonalRatingStatistics(viewedTitles)
     val ratedTitlesPercentage = if (viewedTitles.isEmpty()) {
         0.0
     } else {
-        ratedTitles.size.toDouble() / viewedTitles.size * 100.0
+        personalRatingStatistics.ratedTitleCount.toDouble() / viewedTitles.size * 100.0
     }
 
     val watchedByMonthYear = completedTitles
@@ -146,8 +179,9 @@ fun calculateWatchedStatistics(
         seriesWatchTimeMinutes = seriesWatchTimeMinutes,
         movieWatchTimeIncomplete = movieTitles.any { it.movieRuntimeMinutes == null },
         seriesWatchTimeIncomplete = seriesTitles.any { it.watchedRegularEpisodesWithoutRuntime > 0 },
-        averagePersonalRating = averagePersonalRating,
+        averagePersonalRating = personalRatingStatistics.averageRating,
         ratedTitlesPercentage = ratedTitlesPercentage,
+        personalRatingStatistics = personalRatingStatistics,
         mediaTypeDistribution = MediaTypeDistribution(
             movieCount = viewedTitles.count { it.mediaType == MediaType.MOVIE },
             tvSeriesCount = viewedTitles.count { it.mediaType == MediaType.SERIES }
@@ -164,6 +198,43 @@ fun calculateWatchedStatistics(
         )
     )
 }
+
+fun calculatePersonalRatingStatistics(entries: List<PersonalViewingEntry>): PersonalRatingStatistics {
+    val ratedTitles = entries
+        .asSequence()
+        .distinctBy { it.mediaRef }
+        .filter { it.personalRating != null }
+        .sortedWith(
+            compareByDescending<PersonalViewingEntry> { it.personalRatingUpdatedAt != null }
+                .thenByDescending { it.personalRatingUpdatedAt ?: Instant.MIN }
+                .thenBy { it.mediaRef.source.name }
+                .thenBy { it.mediaRef.externalId }
+        )
+        .toList()
+    val counts = ratedTitles.groupingBy { it.personalRating!!.value }.eachCount()
+    val histogram = PERSONAL_RATING_VALUES.map { rating ->
+        RatingHistogramBucket(rating, counts[rating] ?: 0)
+    }
+    return PersonalRatingStatistics(
+        averageRating = ratedTitles.map { it.personalRating!!.value }.average().takeUnless(Double::isNaN),
+        histogram = histogram,
+        ratedTitles = ratedTitles
+    )
+}
+
+fun relativeRatingNormalization(histogram: List<RatingHistogramBucket>): List<Float> {
+    val maximum = histogram.maxOfOrNull { it.titleCount } ?: return emptyList()
+    if (maximum == 0) return histogram.map { 0f }
+    return histogram.map { it.titleCount.toFloat() / maximum }
+}
+
+fun formatPersonalRatingAverage(value: Double, locale: Locale): String = NumberFormat
+    .getNumberInstance(locale)
+    .apply {
+        minimumFractionDigits = 1
+        maximumFractionDigits = 1
+    }
+    .format(value)
 
 private data class DatedViewingActivity(val mediaType: MediaType, val watchedDate: LocalDate, val runtimeMinutes: Int?)
 

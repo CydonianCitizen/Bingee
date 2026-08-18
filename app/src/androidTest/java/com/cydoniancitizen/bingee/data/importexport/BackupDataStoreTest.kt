@@ -10,6 +10,7 @@ import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -26,6 +27,7 @@ class BackupDataStoreTest {
     private lateinit var database: BingeeDatabase
     private lateinit var store: BackupDataStore
     private val exportedAt = Instant.parse("2026-08-04T10:00:00Z")
+    private val validationDate = LocalDate.of(2026, 8, 18)
 
     @Before
     fun setUp() {
@@ -109,7 +111,7 @@ class BackupDataStoreTest {
         val first = exportedDocument(BackupExporter(store, clock).export().bytes)
 
         assertEquals(exportedAt, first.exportedAt)
-        val validated = BackupValidator.validate(first)
+        val validated = validate(first)
         assertTrue(validated is BackupValidationResult.Success)
         store.restore((validated as BackupValidationResult.Success).plan)
 
@@ -203,7 +205,7 @@ class BackupDataStoreTest {
             abandonedSeries = listOf(BackupAbandonedSeries(series))
         )
         val document = BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, data)
-        return (BackupValidator.validate(document) as BackupValidationResult.Success).plan
+        return (validate(document) as BackupValidationResult.Success).plan
     }
 
     private fun plan(
@@ -258,6 +260,8 @@ class BackupDataStoreTest {
             preferences = BackupPreferences(3, true, false, true)
         )
         val document = BackupDocument(BACKUP_FORMAT_ID, schemaVersion, exportedAt, data)
-        return (BackupValidator.validate(document) as BackupValidationResult.Success).plan
+        return (validate(document) as BackupValidationResult.Success).plan
     }
+
+    private fun validate(document: BackupDocument) = BackupValidator.validate(document, validationDate)
 }

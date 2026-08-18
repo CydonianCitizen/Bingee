@@ -19,6 +19,7 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.model.TasteStatistics
 import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
@@ -27,7 +28,6 @@ import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
 import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -58,6 +59,7 @@ internal data class ProfileCollectionCounts(
 )
 
 internal data class ProfileUiState(
+    val today: LocalDate,
     val collection: ProfileCollection = ProfileCollection.WATCHED,
     val category: ProfileCategory = ProfileCategory.MOVIES,
     val sortOption: ProfileSortOption = ProfileSortOption.RECENTLY_ADDED,
@@ -102,15 +104,14 @@ fun LibraryEntry.progressSortMetric(): Double = when (val p = progress) {
 internal class ProfileViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val displayModePreferences: ProfileDisplayModePreferences,
-    private val clock: Clock = Clock.systemUTC()
+    private val dateSource: CalendarDateSource
 ) : ViewModel() {
 
-    private val mutableUiState = MutableStateFlow(ProfileUiState())
+    private val mutableUiState = MutableStateFlow(ProfileUiState(today = dateSource.currentDate()))
     val uiState: StateFlow<ProfileUiState> = mutableUiState.asStateFlow()
 
     private val rawEntries = MutableStateFlow<List<LibraryEntry>>(emptyList())
     private var personalViewingEntries: List<PersonalViewingEntry> = emptyList()
-    private val localZone: ZoneId = ZoneId.systemDefault()
     private var libraryEntriesJob: Job? = null
     private var personalViewingJob: Job? = null
 
@@ -248,7 +249,8 @@ internal class ProfileViewModel @Inject constructor(
         val current = mutableUiState.value
         val availableYears = current.statistics.monthlyViewing.availableYears
         if (availableYears.isNotEmpty() && year !in availableYears) return
-        val currentDate = LocalDate.now(clock.withZone(localZone))
+        val currentDate = dateSource.currentDate()
+        val localZone = ZoneId.systemDefault()
         mutableUiState.update {
             it.copy(
                 statistics = calculateWatchedStatistics(
@@ -306,17 +308,22 @@ internal class ProfileViewModel @Inject constructor(
     private fun observePersonalViewing() {
         personalViewingJob?.cancel()
         personalViewingJob = viewModelScope.launch {
-            libraryRepository.observePersonalViewing().collectLatest { result ->
+            combine(
+                libraryRepository.observePersonalViewing(),
+                dateSource.observeDate()
+            ) { result, currentDate -> result to currentDate }.collectLatest { (result, currentDate) ->
                 when (result) {
                     is AppResult.Success -> {
                         personalViewingEntries = result.value
                         val scope = mutableUiState.value.statisticsMediaScope
-                        val currentDate = LocalDate.now(clock.withZone(localZone))
-                        val selectedYear = mutableUiState.value.statistics.monthlyViewing.selectedYear
-                            .takeIf { it > 0 }
+                        val previousMonthly = mutableUiState.value.statistics.monthlyViewing
+                        val selectedYear = previousMonthly.selectedYear
+                            .takeIf { it > 0 && it != previousMonthly.currentYear }
                             ?: currentDate.year
+                        val localZone = ZoneId.systemDefault()
                         mutableUiState.update {
                             it.copy(
+                                today = currentDate,
                                 statistics = calculateWatchedStatistics(
                                     entries = result.value,
                                     zoneId = localZone,
@@ -330,7 +337,7 @@ internal class ProfileViewModel @Inject constructor(
                         }
                     }
                     is AppResult.Failure -> mutableUiState.update {
-                        it.copy(isStatisticsLoading = false, statisticsError = result.error)
+                        it.copy(today = currentDate, isStatisticsLoading = false, statisticsError = result.error)
                     }
                 }
             }

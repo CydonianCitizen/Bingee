@@ -16,8 +16,10 @@ import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.library.local.StoredSeasonEpisodes
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -135,7 +137,8 @@ class DefaultSeriesRepositoryTest {
         metadataStore = FakeMetadataStore(dao),
         remote = remote,
         freshnessPolicy = SeasonCacheFreshnessPolicy(clock),
-        clock = clock
+        clock = clock,
+        dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3))
     )
 
     private fun payload(number: Int): TmdbSeasonPayload {

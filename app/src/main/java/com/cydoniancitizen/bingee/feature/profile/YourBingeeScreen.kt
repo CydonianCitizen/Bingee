@@ -61,6 +61,7 @@ import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.toNavigableDetailsRef
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import com.cydoniancitizen.bingee.domain.model.GenreStatistic
 import com.cydoniancitizen.bingee.domain.model.ViewingDurationLabels
@@ -374,7 +375,9 @@ private fun WatchingSection(
             items.forEach { item ->
                 WatchingPosterItem(
                     item = item,
-                    onClick = { onOpenDetails(item.mediaRef, item.mediaType) }
+                    onClick = item.mediaRef.toNavigableDetailsRef()?.let { reference ->
+                        { onOpenDetails(reference, item.mediaType) }
+                    }
                 )
             }
         }
@@ -446,7 +449,9 @@ private fun FavoritesSection(
             items.forEach { entry ->
                 FavoritePosterItem(
                     entry = entry,
-                    onClick = { onOpenDetails(entry.mediaRef, entry.mediaType) }
+                    onClick = entry.navigableDetailsRef?.let { reference ->
+                        { onOpenDetails(reference, entry.mediaType) }
+                    }
                 )
             }
         }
@@ -484,7 +489,7 @@ private fun PosterRow(content: @Composable RowScope.() -> Unit) {
 }
 
 @Composable
-private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: () -> Unit) {
+private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: (() -> Unit)?) {
     val position = item.nextEpisode?.let {
         stringResource(R.string.profile_episode_position, it.seasonNumber, it.episodeNumber)
     } ?: stringResource(
@@ -502,7 +507,7 @@ private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: () -> Unit) 
     Column(
         modifier = Modifier
             .width(132.dp)
-            .clickable(onClick = onClick)
+            .clickable(enabled = onClick != null, onClick = onClick ?: {})
             .semantics(mergeDescendants = true) {
                 contentDescription = description
                 role = Role.Button
@@ -540,7 +545,7 @@ private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: () -> Unit) 
 }
 
 @Composable
-private fun FavoritePosterItem(entry: LibraryEntry, onClick: () -> Unit) {
+private fun FavoritePosterItem(entry: LibraryEntry, onClick: (() -> Unit)?) {
     val mediaMeta = stringResource(
         if (entry.mediaType == MediaType.MOVIE) {
             R.string.profile_media_type_movie
@@ -560,7 +565,7 @@ private fun FavoritePosterItem(entry: LibraryEntry, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(132.dp)
-            .clickable(onClick = onClick)
+            .clickable(enabled = onClick != null, onClick = onClick ?: {})
             .semantics(mergeDescendants = true) {
                 contentDescription = description
                 role = Role.Button

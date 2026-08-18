@@ -9,9 +9,9 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import java.time.Clock
-import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.map
 @Singleton
 internal class DefaultWatchProgressRepository @Inject constructor(
     private val dao: WatchProgressDao,
-    private val clock: Clock
+    private val clock: Clock,
+    private val dateSource: CalendarDateSource
 ) : WatchProgressRepository {
     override fun observeMovie(reference: ExternalMediaRef): Flow<AppResult<MovieWatchState>> {
         val normalized = reference.normalizedRefOrNull()
@@ -47,7 +48,7 @@ internal class DefaultWatchProgressRepository @Inject constructor(
         dao.markEpisodeWatched(
             source = it.source,
             externalId = it.externalId,
-            today = LocalDate.now(clock),
+            today = dateSource.currentDate(),
             watchedAt = clock.instant()
         )
     }
@@ -59,7 +60,7 @@ internal class DefaultWatchProgressRepository @Inject constructor(
         dao.markSeasonWatched(
             source = it.source,
             externalId = it.externalId,
-            today = LocalDate.now(clock),
+            today = dateSource.currentDate(),
             watchedAt = clock.instant()
         )
     }
@@ -78,7 +79,7 @@ internal class DefaultWatchProgressRepository @Inject constructor(
             source = it.source,
             externalId = it.externalId,
             completedAt = clock.instant(),
-            today = LocalDate.now(clock)
+            today = dateSource.currentDate()
         )
     }
 

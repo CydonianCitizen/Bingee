@@ -8,12 +8,14 @@ import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.deriveSeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.debug.FakeMediaData
+import java.time.LocalDate
 
 @Preview(name = "Movie fresh", showBackground = true)
 @Preview(name = "Movie dark", showBackground = true, uiMode = 0x20)
 @Composable
 private fun MoviePreview() = PreviewState(
     MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
         content = DetailContentState.Content(FakeMediaData.freshMovieDetails),
         isInLibrary = false,
         rating = DetailRatingState.Ready(PersonalRating(10), selectedValue = 10),
@@ -25,6 +27,7 @@ private fun MoviePreview() = PreviewState(
 @Composable
 private fun TvRefreshingPreview() = PreviewState(
     MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
         content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),
         refresh = DetailRefreshState.Refreshing,
         isInLibrary = true,
@@ -45,6 +48,7 @@ private fun TvRefreshingPreview() = PreviewState(
 @Composable
 private fun StaleErrorPreview() = PreviewState(
     MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
         content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),
         refresh = DetailRefreshState.Error(AppError.NetworkUnavailable),
         isInLibrary = true,
@@ -64,24 +68,33 @@ private fun StaleErrorPreview() = PreviewState(
 
 @Preview(name = "Loading", showBackground = true)
 @Composable
-private fun LoadingPreview() = PreviewState(MediaDetailsUiState(content = DetailContentState.Loading))
+private fun LoadingPreview() = PreviewState(
+    MediaDetailsUiState(today = LocalDate.of(2026, 8, 18), content = DetailContentState.Loading)
+)
 
 @Preview(name = "No cache error", showBackground = true)
 @Composable
 private fun ErrorPreview() = PreviewState(
-    MediaDetailsUiState(content = DetailContentState.Error(AppError.NetworkUnavailable))
+    MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
+        content = DetailContentState.Error(AppError.NetworkUnavailable)
+    )
 )
 
 @Preview(name = "Unauthorized", showBackground = true)
 @Composable
 private fun UnauthorizedPreview() = PreviewState(
-    MediaDetailsUiState(content = DetailContentState.Error(AppError.Unauthorized))
+    MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
+        content = DetailContentState.Error(AppError.Unauthorized)
+    )
 )
 
 @Preview(name = "Library updating", showBackground = true, fontScale = 1.5f)
 @Composable
 private fun UpdatingLargeFontPreview() = PreviewState(
     MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
         content = DetailContentState.Content(FakeMediaData.freshMovieDetails),
         isInLibrary = false,
         libraryAction = DetailLibraryActionState.UPDATING,

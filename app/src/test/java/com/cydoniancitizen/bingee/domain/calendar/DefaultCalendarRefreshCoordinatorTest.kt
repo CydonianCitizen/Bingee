@@ -26,6 +26,7 @@ import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.TmdbCredentialRepository
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -274,6 +275,7 @@ class DefaultCalendarRefreshCoordinatorTest {
         calendarRepository = calendar,
         credentialRepository = FakeCredentialRepository(credential),
         clock = clock,
+        dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3)),
         window = ReleaseCalendarWindow()
     )
 

@@ -15,6 +15,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackupJsonCodecTest {
+    private val validationDate = LocalDate.of(2026, 8, 18)
+
     @Test
     fun encodesStableContractAndPortableOnlyFields() {
         val json = BackupJsonCodec.encode(fullDocument()).toString(Charsets.UTF_8)
@@ -48,7 +50,7 @@ class BackupJsonCodecTest {
         val parsed = BackupJsonCodec.parse(payload.toString().toByteArray(Charsets.UTF_8))
         assertTrue(parsed is BackupParseResult.Success)
         assertTrue(
-            BackupValidator.validate((parsed as BackupParseResult.Success).document) is BackupValidationResult.Success
+            validate((parsed as BackupParseResult.Success).document) is BackupValidationResult.Success
         )
 
         payload.asJsonObject.addProperty("futureField", true)
@@ -84,7 +86,7 @@ class BackupJsonCodecTest {
         val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
 
         assertEquals(listOf(BackupAbandonedSeries(ref)), parsed.document.data.abandonedSeries)
-        assertTrue(BackupValidator.validate(parsed.document) is BackupValidationResult.Success)
+        assertTrue(validate(parsed.document) is BackupValidationResult.Success)
     }
 
     @Test
@@ -98,7 +100,7 @@ class BackupJsonCodecTest {
         assertTrue(parsed is BackupParseResult.Success)
         val document = (parsed as BackupParseResult.Success).document
         assertEquals(BACKUP_SCHEMA_VERSION_V1, document.schemaVersion)
-        assertTrue(BackupValidator.validate(document) is BackupValidationResult.Success)
+        assertTrue(validate(document) is BackupValidationResult.Success)
     }
 
     @Test
@@ -128,6 +130,8 @@ class BackupJsonCodecTest {
                 ).failure.kind
         )
     }
+
+    private fun validate(document: BackupDocument) = BackupValidator.validate(document, validationDate)
 
     @Test
     fun rejectsInvalidUtf8AndOversizedInput() {

@@ -9,6 +9,7 @@ import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.domain.model.GenreStatistic
 import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
+import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +26,7 @@ class YourBingeeScreenTest {
             BingeeTheme {
                 YourBingeeContent(
                     state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
                         isLoading = false,
                         isStatisticsLoading = false,
                         statistics = WatchedStatistics(
@@ -58,6 +60,7 @@ class YourBingeeScreenTest {
             BingeeTheme {
                 YourBingeeContent(
                     state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
                         isLoading = false,
                         isStatisticsLoading = false,
                         statistics = WatchedStatistics(

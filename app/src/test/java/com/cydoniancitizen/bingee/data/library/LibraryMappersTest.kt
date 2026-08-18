@@ -57,6 +57,53 @@ class LibraryMappersTest {
         assertEquals(now, entry.addedAt)
     }
 
+    @Test
+    fun tmdbReferenceWinsRegardlessOfExternalReferenceOrder() {
+        val media = mediaEntity()
+        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
+        val imdb = ExternalRefEntity(7, MediaSource.IMDB, "84")
+
+        listOf(listOf(imdb, tmdb), listOf(tmdb, imdb)).forEach { refs ->
+            val entry = LibraryItemWithRefs(
+                media = media,
+                addedAt = now,
+                inLibrary = true,
+                externalRefs = refs
+            ).toDomain()
+
+            assertEquals(tmdb.toDomain(), entry.mediaRef)
+            assertEquals(tmdb.toDomain(), entry.navigableDetailsRef)
+        }
+    }
+
+    @Test
+    fun tmdbOnlyReferenceRemainsNavigable() {
+        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
+        val entry = LibraryItemWithRefs(
+            media = mediaEntity(),
+            addedAt = now,
+            inLibrary = true,
+            externalRefs = listOf(tmdb)
+        ).toDomain()
+
+        assertEquals(tmdb.toDomain(), entry.mediaRef)
+        assertEquals(tmdb.toDomain(), entry.navigableDetailsRef)
+    }
+
+    @Test
+    fun imdbOnlyReferenceHasNoNavigableDetailsIdentity() {
+        val imdb = ExternalRefEntity(7, MediaSource.IMDB, "tt1234567")
+        val entry = LibraryItemWithRefs(
+            media = mediaEntity(),
+            addedAt = now,
+            inLibrary = true,
+            externalRefs = listOf(imdb)
+        ).toDomain()
+
+        assertEquals(imdb.toDomain(), entry.mediaRef)
+        assertNull(entry.navigableDetailsRef)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun relationWithoutExternalIdentityFailsSafely() {
         LibraryItemWithRefs(

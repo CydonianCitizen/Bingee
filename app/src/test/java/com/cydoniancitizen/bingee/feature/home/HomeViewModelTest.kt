@@ -5,6 +5,7 @@ import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
+import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
@@ -14,6 +15,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
@@ -216,6 +218,23 @@ class HomeViewModelTest {
         assertEquals(today.plusDays(1), viewModel.uiState.value.today)
     }
 
+    @Test
+    fun homeUsesSharedPolicyAndExcludesFullProgressWithoutActionableEpisode() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel(
+            FakeCalendarRepository(emptyList()),
+            FakeCoordinator(success()),
+            libraryRepository = FakeLibraryRepo(
+                listOf(
+                    libraryEntry("actionable", watched = 3, total = 5),
+                    libraryEntry("incomplete", watched = 3, total = 3, complete = false)
+                )
+            )
+        )
+        runCurrent()
+
+        assertEquals(listOf("actionable"), viewModel.uiState.value.continueWatching.map { it.title })
+    }
+
     private fun event(
         id: String,
         subjectType: ReleaseSubjectType,
@@ -261,9 +280,9 @@ class HomeViewModelTest {
         override suspend fun getFeaturedReleases(): AppResult<List<MediaSearchResult>> = AppResult.Success(emptyList())
     }
 
-    private class FakeLibraryRepo : LibraryRepository {
+    private class FakeLibraryRepo(private val entries: List<LibraryEntry> = emptyList()) : LibraryRepository {
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
-            MutableStateFlow(AppResult.Success(emptyList()))
+            MutableStateFlow(AppResult.Success(entries))
 
         override fun observeEntryCount(): Flow<AppResult<Int>> = MutableStateFlow(AppResult.Success(0))
 
@@ -295,6 +314,16 @@ class HomeViewModelTest {
         override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
             AppResult.Success(Unit)
     }
+
+    private fun libraryEntry(id: String, watched: Int, total: Int, complete: Boolean = watched == total) = LibraryEntry(
+        mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
+        mediaType = MediaType.SERIES,
+        title = id,
+        addedAt = Instant.EPOCH,
+        progress = LibraryProgress.Series(
+            SeriesProgress(watched, total, 0, 1, complete)
+        )
+    )
 
     private class FakeDateSource(initial: LocalDate) : CalendarDateSource {
         private val dates = MutableStateFlow(initial)

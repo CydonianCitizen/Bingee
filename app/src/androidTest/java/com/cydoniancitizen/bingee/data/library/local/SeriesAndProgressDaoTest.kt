@@ -8,6 +8,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.DefaultLibraryRepository
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -29,6 +30,7 @@ class SeriesAndProgressDaoTest {
     private lateinit var libraryDao: LibraryDao
     private lateinit var seriesDao: SeriesDao
     private lateinit var progressDao: WatchProgressDao
+    private lateinit var dateSource: TestCalendarDateSource
     private val now = Instant.parse("2026-08-03T12:00:00Z")
     private val today = LocalDate.of(2026, 8, 3)
 
@@ -39,6 +41,7 @@ class SeriesAndProgressDaoTest {
         libraryDao = database.libraryDao()
         seriesDao = database.seriesDao()
         progressDao = database.watchProgressDao()
+        dateSource = TestCalendarDateSource(today)
         runBlocking {
             addMedia("100", MediaType.SERIES, "Series")
             addMedia("200", MediaType.MOVIE, "Movie")
@@ -201,7 +204,8 @@ class SeriesAndProgressDaoTest {
             libraryDao,
             progressDao,
             database.ratingDao(),
-            Clock.fixed(now, ZoneOffset.UTC)
+            Clock.fixed(now, ZoneOffset.UTC),
+            dateSource
         )
         val result = repository.observeContinueWatching().first()
 
@@ -347,7 +351,7 @@ class SeriesAndProgressDaoTest {
 
         assertEquals(
             ProgressWriteOutcome.INCOMPLETE,
-            progressDao.markSeriesWatched(MediaSource.TMDB, "100", now)
+            progressDao.markSeriesWatched(MediaSource.TMDB, "100", now, today)
         )
         assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
 

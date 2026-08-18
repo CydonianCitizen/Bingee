@@ -79,6 +79,10 @@ class DetailsDaoTest {
         assertEquals(true, detailsDao.getCachedDetails(MediaSource.TMDB, "550")?.media?.isFavorite)
         assertEquals(addedAt, libraryDao.observeLibraryItem(MediaSource.TMDB, "550").first()?.addedAt)
         assertEquals(1, count("media_ratings"))
+        assertEquals(
+            Instant.parse("2026-08-01T00:00:00Z"),
+            database.ratingDao().observeRating(MediaSource.TMDB, "550").first()?.updatedAt
+        )
     }
 
     @Test

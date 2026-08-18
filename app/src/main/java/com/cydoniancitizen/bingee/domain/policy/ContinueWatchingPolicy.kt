@@ -19,5 +19,6 @@ object ContinueWatchingPolicy {
 
     fun isContinueWatching(item: ContinueWatchingItem): Boolean = item.mediaType == MediaType.SERIES &&
         resolveSeriesTrackingState(item.inLibrary, item.progress, item.isAbandoned) ==
-        SeriesTrackingState.WATCHING
+        SeriesTrackingState.WATCHING &&
+        item.progress.watchedEpisodes < item.progress.trackableEpisodes
 }

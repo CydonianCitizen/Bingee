@@ -37,8 +37,6 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.data.importexport.BACKUP_MIME_TYPE
 import com.cydoniancitizen.bingee.data.importexport.BackupFailureKind
-import java.time.Clock
-import java.time.LocalDate
 
 @Composable
 internal fun DataBackupSettingsScreen(
@@ -58,7 +56,7 @@ internal fun DataBackupSettingsScreen(
     DataBackupSettingsContent(
         backupState = backupState,
         onSaveBackup = {
-            createBackupLauncher.launch("bingee-backup-${LocalDate.now(Clock.systemUTC())}.json")
+            createBackupLauncher.launch("bingee-backup-${backupState.today}.json")
         },
         onShareBackup = backupViewModel::share,
         onRestoreBackup = { openBackupLauncher.launch(arrayOf(BACKUP_MIME_TYPE, "text/json", "text/plain")) },

@@ -16,6 +16,7 @@ import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeriesCompletionRow
 import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -30,11 +31,12 @@ import org.junit.Test
 class DefaultWatchProgressRepositoryTest {
     private val now = Instant.parse("2026-08-03T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
+    private val dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3))
 
     @Test
     fun movieObservationAndWritesUseLocalClockAndMapTypeFailures() = runTest {
         val dao = FakeProgressDao()
-        val repository = DefaultWatchProgressRepository(dao, clock)
+        val repository = DefaultWatchProgressRepository(dao, clock, dateSource)
         val movie = ref("200")
 
         assertEquals(AppResult.Success(MovieWatchState.Unwatched), repository.observeMovie(movie).first())
@@ -53,7 +55,7 @@ class DefaultWatchProgressRepositoryTest {
     @Test
     fun episodeAndSeasonOutcomesAreSafeAndUseExactUtcDateBoundary() = runTest {
         val dao = FakeProgressDao()
-        val repository = DefaultWatchProgressRepository(dao, clock)
+        val repository = DefaultWatchProgressRepository(dao, clock, dateSource)
 
         assertEquals(AppResult.Success(Unit), repository.markEpisodeWatched(ref("101")))
         assertEquals(LocalDate.of(2026, 8, 3), dao.lastDate)
@@ -77,7 +79,7 @@ class DefaultWatchProgressRepositoryTest {
     @Test
     fun unsupportedProviderAndInvalidIdentityNeverReachDao() = runTest {
         val dao = FakeProgressDao()
-        val repository = DefaultWatchProgressRepository(dao, clock)
+        val repository = DefaultWatchProgressRepository(dao, clock, dateSource)
 
         assertEquals(
             AppResult.Failure(AppError.UnsupportedData),

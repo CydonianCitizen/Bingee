@@ -24,6 +24,7 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "in_library") val inLibrary: Boolean,
         @ColumnInfo(name = "is_abandoned") val isAbandoned: Boolean,
         @ColumnInfo(name = "rating_value") val ratingValue: Int?,
+        @ColumnInfo(name = "rating_updated_at") val ratingUpdatedAt: Instant?,
         @ColumnInfo(name = "movie_watched_at") val movieWatchedAt: Instant?,
         @ColumnInfo(name = "movie_watched_date") val movieWatchedDate: LocalDate?,
         @ColumnInfo(name = "watched_regular_episodes") val watchedRegularEpisodes: Int,
@@ -141,7 +142,6 @@ internal abstract class LibraryDao {
             INNER JOIN episodes USING(local_season_id)
             INNER JOIN episode_watch_progress USING(local_episode_id)
             WHERE seasons.season_number > 0
-              AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
             GROUP BY seasons.local_media_id
         )
         SELECT media_entries.*,
@@ -151,6 +151,7 @@ internal abstract class LibraryDao {
                CASE WHEN library_entries.local_media_id IS NOT NULL THEN 1 ELSE 0 END AS in_library,
                CASE WHEN series_state_overrides.is_abandoned = 1 THEN 1 ELSE 0 END AS is_abandoned,
                media_ratings.rating_value,
+               media_ratings.updated_at AS rating_updated_at,
                movie_watch_progress.watched_at AS movie_watched_at,
                movie_watch_progress.watched_date AS movie_watched_date,
                COALESCE(regular_episode_activity.watched_regular_episodes, 0) AS watched_regular_episodes,
@@ -161,20 +162,18 @@ internal abstract class LibraryDao {
                    SELECT SUM(episodes.runtime_minutes)
                    FROM episodes
                    INNER JOIN seasons USING(local_season_id)
-                   INNER JOIN episode_watch_progress USING(local_episode_id)
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-               ), 0) AS watched_regular_runtime_minutes,
+                    INNER JOIN episode_watch_progress USING(local_episode_id)
+                    WHERE seasons.local_media_id = media_entries.local_media_id
+                      AND seasons.season_number > 0
+                ), 0) AS watched_regular_runtime_minutes,
                (
                    SELECT COUNT(*)
                    FROM episodes
                    INNER JOIN seasons USING(local_season_id)
-                   INNER JOIN episode_watch_progress USING(local_episode_id)
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
-                     AND episodes.runtime_minutes IS NULL
+                    INNER JOIN episode_watch_progress USING(local_episode_id)
+                    WHERE seasons.local_media_id = media_entries.local_media_id
+                      AND seasons.season_number > 0
+                      AND episodes.runtime_minutes IS NULL
                ) AS watched_regular_episodes_without_runtime
         FROM media_entries
         INNER JOIN external_refs AS selected_ref
@@ -183,14 +182,19 @@ internal abstract class LibraryDao {
              SELECT 1
              FROM external_refs AS earlier_ref
              WHERE earlier_ref.local_media_id = selected_ref.local_media_id
-               AND (
-                   earlier_ref.source < selected_ref.source
-                   OR (
-                       earlier_ref.source = selected_ref.source
-                       AND earlier_ref.external_id < selected_ref.external_id
-                   )
-               )
-         )
+                AND (
+                    earlier_ref.source = 'TMDB' AND selected_ref.source <> 'TMDB'
+                    OR (
+                        earlier_ref.source = selected_ref.source
+                        AND earlier_ref.external_id < selected_ref.external_id
+                    )
+                    OR (
+                        earlier_ref.source <> 'TMDB'
+                        AND selected_ref.source <> 'TMDB'
+                        AND earlier_ref.source < selected_ref.source
+                    )
+                )
+          )
         LEFT JOIN library_entries USING(local_media_id)
         LEFT JOIN media_ratings USING(local_media_id)
         LEFT JOIN media_details USING(local_media_id)
@@ -204,7 +208,7 @@ internal abstract class LibraryDao {
         ORDER BY media_entries.local_media_id
         """
     )
-    abstract fun observePersonalViewing(today: LocalDate): Flow<List<PersonalViewingRow>>
+    abstract fun observePersonalViewing(): Flow<List<PersonalViewingRow>>
 
     @Query(
         """
@@ -217,11 +221,10 @@ internal abstract class LibraryDao {
         INNER JOIN episode_watch_progress USING(local_episode_id)
         WHERE media_entries.media_type = 'SERIES'
           AND seasons.season_number > 0
-          AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
         ORDER BY watched_at, local_media_id
         """
     )
-    abstract fun observePersonalViewingActivities(today: LocalDate): Flow<List<PersonalViewingActivityRow>>
+    abstract fun observePersonalViewingActivities(): Flow<List<PersonalViewingActivityRow>>
 
     @Query(
         """

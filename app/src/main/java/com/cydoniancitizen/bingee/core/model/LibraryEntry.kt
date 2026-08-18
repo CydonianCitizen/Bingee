@@ -36,6 +36,9 @@ data class LibraryEntry(
         } else {
             null
         }
+
+    val navigableDetailsRef: ExternalMediaRef?
+        get() = mediaRef.toNavigableDetailsRef()
 }
 
 fun LibraryEntry.isWatched(): Boolean = when (mediaType) {

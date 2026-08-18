@@ -275,6 +275,19 @@
     <string name="statistics_not_enough_data">Non ci sono ancora abbastanza dati</string>
     <string name="statistics_radar_description">Grafico relativo dei generi. Generi: %1$s</string>
     <string name="statistics_radar_empty_description">Grafico relativo dei generi. Non ci sono ancora abbastanza dati</string>
+    <string name="statistics_ratings">Le tue valutazioni</string>
+    <string name="statistics_rating_average">Voto medio</string>
+    <string name="statistics_rating_count">Titoli valutati</string>
+    <string name="statistics_rating_unavailable">—</string>
+    <string name="statistics_rating_empty">Non hai ancora valutato nessun titolo</string>
+    <string name="statistics_rating_movies">Film</string>
+    <string name="statistics_rating_series">Serie TV</string>
+    <string name="statistics_rating_selected_suffix">, selezionato</string>
+    <string name="statistics_rating_poster_accessibility">%1$s, %2$s</string>
+    <plurals name="statistics_rating_bar_description">
+        <item quantity="one">Voto %1$d, %2$d titolo%3$s</item>
+        <item quantity="other">Voto %1$d, %2$d titoli%3$s</item>
+    </plurals>
     <plurals name="statistics_genre_row_description">
         <item quantity="one">%1$s: %2$d titolo</item>
         <item quantity="other">%1$s: %2$d titoli</item>

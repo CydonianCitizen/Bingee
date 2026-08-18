@@ -11,6 +11,7 @@ import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
+import com.cydoniancitizen.bingee.core.model.resolveTmdbRef
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
 import com.cydoniancitizen.bingee.data.library.local.LibraryItemWithRefs
@@ -36,7 +37,8 @@ internal fun LibraryItemWithRefs.toDomain(
 ): LibraryEntry {
     val refs = externalRefs.map(ExternalRefEntity::toDomain)
     require(refs.isNotEmpty()) { "Persisted library item has no external reference" }
-    val selectedRef = preferredRef?.takeIf(refs::contains)
+    val selectedRef = refs.resolveTmdbRef()
+        ?: preferredRef?.takeIf(refs::contains)
         ?: refs.minWith(compareBy<ExternalMediaRef> { it.source.name }.thenBy { it.externalId })
     val domainProgress = progressRow.toDomainProgress(media.mediaType)
     val domainWatchedDate = progressRow?.let {
@@ -111,6 +113,7 @@ internal fun LibraryDao.PersonalViewingRow.toDomain(
     isFavorite = media.isFavorite,
     isAbandoned = isAbandoned,
     personalRating = ratingValue?.let(::PersonalRating),
+    personalRatingUpdatedAt = ratingUpdatedAt,
     movieWatchedAt = movieWatchedAt,
     watchedRegularEpisodes = watchedRegularEpisodes,
     seriesCompletedAt = seriesCompletedAt,
@@ -124,7 +127,8 @@ internal fun LibraryDao.PersonalViewingRow.toDomain(
     } else {
         null
     },
-    genres = genres
+    genres = genres,
+    releaseDate = media.releaseDate
 )
 
 internal fun LibraryDao.PersonalViewingGenreRow.toDomainOrNull(): Genre? =

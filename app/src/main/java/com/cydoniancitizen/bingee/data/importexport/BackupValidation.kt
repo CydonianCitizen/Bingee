@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.data.importexport
 
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import java.time.LocalDate
 
 internal data class ValidatedBackupPlan(val document: BackupDocument)
 
@@ -30,7 +31,7 @@ internal data class BackupPreview(
 )
 
 internal object BackupValidator {
-    fun validate(document: BackupDocument): BackupValidationResult = try {
+    fun validate(document: BackupDocument, today: LocalDate): BackupValidationResult = try {
         require(document.formatId == BACKUP_FORMAT_ID, BackupFailureKind.WRONG_FORMAT)
         require(
             document.schemaVersion == BACKUP_SCHEMA_VERSION,
@@ -164,7 +165,8 @@ internal object BackupValidator {
             if (progress.watchedDate != null) {
                 val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
                     progress.watchedDate,
-                    media.releaseDate
+                    media.releaseDate,
+                    today
                 )
                 require(
                     validation is com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult.Valid,
@@ -181,7 +183,8 @@ internal object BackupValidator {
             if (progress.watchedDate != null) {
                 val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
                     progress.watchedDate,
-                    media.releaseDate
+                    media.releaseDate,
+                    today
                 )
                 require(
                     validation is com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult.Valid,

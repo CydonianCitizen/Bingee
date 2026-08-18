@@ -10,6 +10,7 @@ import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -27,6 +28,8 @@ class WatchedStatisticsTest {
         assertEquals(0, stats.tvSeriesCompletedCount)
         assertEquals(0, stats.episodesWatchedCount)
         assertNull(stats.averagePersonalRating)
+        assertEquals(0, stats.personalRatingStatistics.ratedTitleCount)
+        assertEquals(List(10) { 0 }, stats.personalRatingStatistics.histogram.map { it.titleCount })
         assertTrue(stats.isEmpty)
     }
 
@@ -84,6 +87,88 @@ class WatchedStatisticsTest {
         assertEquals(7.0, stats.averagePersonalRating!!, 0.01)
         assertEquals(100.0, stats.ratedTitlesPercentage, 0.01)
         assertEquals(MediaTypeDistribution(movieCount = 1, tvSeriesCount = 1), stats.mediaTypeDistribution)
+    }
+
+    @Test
+    fun personalRatingStatisticsKeepTenBucketsPreciseAverageAndRecentOrdering() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie(
+                    "new",
+                    watchedAt = instant("2026-01-01T00:00:00Z"),
+                    rating = 8,
+                    ratingUpdatedAt = instant("2026-08-03T00:00:00Z")
+                ),
+                movie(
+                    "old",
+                    watchedAt = instant("2026-08-02T00:00:00Z"),
+                    rating = 8,
+                    ratingUpdatedAt = instant("2026-08-02T00:00:00Z")
+                ),
+                series(
+                    "series",
+                    watchedEpisodes = 1,
+                    rating = 9,
+                    ratingUpdatedAt = instant("2026-08-01T00:00:00Z")
+                ),
+                movie("legacy-b", watchedAt = Instant.EPOCH, rating = 9),
+                movie("legacy-a", watchedAt = instant("2026-08-04T00:00:00Z"), rating = 8)
+            ),
+            zone
+        )
+
+        val ratingStats = stats.personalRatingStatistics
+        assertEquals(8.4, ratingStats.averageRating!!, 0.001)
+        assertEquals(5, ratingStats.ratedTitleCount)
+        assertEquals((1..10).toList(), ratingStats.histogram.map { it.rating })
+        assertEquals(listOf(0, 0, 0, 0, 0, 0, 0, 3, 2, 0), ratingStats.histogram.map { it.titleCount })
+        assertEquals(
+            listOf("new", "old", "series", "legacy-a", "legacy-b"),
+            ratingStats.ratedTitles.map {
+                it.mediaRef.externalId
+            }
+        )
+    }
+
+    @Test
+    fun personalRatingDisplayRoundsOnlyAtOneLocalizedDecimal() {
+        val stats = calculateWatchedStatistics(
+            listOf(
+                movie("a", watchedAt = Instant.EPOCH, rating = 8),
+                movie("b", watchedAt = Instant.EPOCH, rating = 8),
+                movie("c", watchedAt = Instant.EPOCH, rating = 9),
+                movie("d", watchedAt = Instant.EPOCH, rating = 6)
+            ),
+            zone
+        )
+
+        assertEquals(7.75, stats.personalRatingStatistics.averageRating!!, 0.001)
+        assertEquals("7.8", formatPersonalRatingAverage(7.75, Locale.US))
+        assertEquals("7,8", formatPersonalRatingAverage(7.75, Locale.ITALY))
+    }
+
+    @Test
+    fun ratingNormalizationHandlesAllZeroAndExactRatios() {
+        val buckets = (1..10).map { rating ->
+            RatingHistogramBucket(
+                rating,
+                when (rating) {
+                    8 -> 20
+                    9 -> 10
+                    7 -> 5
+                    else -> 0
+                }
+            )
+        }
+
+        assertEquals(
+            listOf(0f, 0f, 0f, 0f, 0f, 0f, 0.25f, 1f, 0.5f, 0f),
+            relativeRatingNormalization(buckets)
+        )
+        assertEquals(
+            List(10) { 0f },
+            relativeRatingNormalization((1..10).map { RatingHistogramBucket(it, 0) })
+        )
     }
 
     @Test
@@ -383,6 +468,7 @@ class WatchedStatisticsTest {
         addedAt: Instant = Instant.EPOCH,
         inLibrary: Boolean = true,
         runtimeMinutes: Int? = null,
+        ratingUpdatedAt: Instant? = null,
         genres: List<Genre> = emptyList()
     ) = entry(
         id = id,
@@ -393,6 +479,7 @@ class WatchedStatisticsTest {
         movieWatchedAt = watchedAt,
         watchedDate = watchedDate,
         movieRuntimeMinutes = runtimeMinutes,
+        ratingUpdatedAt = ratingUpdatedAt,
         genres = genres
     )
 
@@ -407,6 +494,7 @@ class WatchedStatisticsTest {
         missingRuntimeEpisodes: Int = 0,
         seriesIsCurrentlyComplete: Boolean? = null,
         activities: List<WatchedEpisodeActivity> = emptyList(),
+        ratingUpdatedAt: Instant? = null,
         genres: List<Genre> = emptyList()
     ) = entry(
         id = id,
@@ -420,6 +508,7 @@ class WatchedStatisticsTest {
         watchedRegularEpisodesWithoutRuntime = missingRuntimeEpisodes,
         watchedRegularEpisodeActivities = activities,
         seriesIsCurrentlyComplete = seriesIsCurrentlyComplete,
+        ratingUpdatedAt = ratingUpdatedAt,
         genres = genres
     )
 
@@ -439,6 +528,7 @@ class WatchedStatisticsTest {
         watchedRegularEpisodesWithoutRuntime: Int = 0,
         watchedRegularEpisodeActivities: List<WatchedEpisodeActivity> = emptyList(),
         seriesIsCurrentlyComplete: Boolean? = null,
+        ratingUpdatedAt: Instant? = null,
         genres: List<Genre> = emptyList()
     ) = PersonalViewingEntry(
         mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
@@ -458,6 +548,7 @@ class WatchedStatisticsTest {
         watchedRegularEpisodesWithoutRuntime = watchedRegularEpisodesWithoutRuntime,
         watchedRegularEpisodeActivities = watchedRegularEpisodeActivities,
         seriesIsCurrentlyComplete = seriesIsCurrentlyComplete,
+        personalRatingUpdatedAt = ratingUpdatedAt,
         genres = genres
     )
 

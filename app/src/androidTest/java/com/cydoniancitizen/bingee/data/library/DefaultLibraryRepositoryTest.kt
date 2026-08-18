@@ -1,9 +1,14 @@
 package com.cydoniancitizen.bingee.data.library
 
 import android.content.Context
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
@@ -23,37 +28,52 @@ import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.domain.model.TasteStatistics
+import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
+import com.cydoniancitizen.bingee.feature.profile.StatisticsContent
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class DefaultLibraryRepositoryTest {
+    @get:Rule
+    val composeRule = createComposeRule()
+
     private lateinit var database: BingeeDatabase
     private lateinit var repository: DefaultLibraryRepository
+    private lateinit var dateSource: TestCalendarDateSource
     private val now = Instant.parse("2026-08-01T10:00:00Z")
 
     @Before
     fun createRepository() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         database = Room.inMemoryDatabaseBuilder(context, BingeeDatabase::class.java).build()
+        dateSource = TestCalendarDateSource(today())
         repository =
             DefaultLibraryRepository(
                 database.libraryDao(),
                 database.watchProgressDao(),
                 database.ratingDao(),
-                Clock.fixed(now, ZoneOffset.UTC)
+                Clock.fixed(now, ZoneOffset.UTC),
+                dateSource
             )
     }
 
@@ -284,6 +304,8 @@ class DefaultLibraryRepositoryTest {
         assertEquals(now, history.completionTimestamp)
         assertEquals(watchedDate, history.watchedDate)
         assertEquals(PersonalRating(9), history.personalRating)
+        assertEquals(now, history.personalRatingUpdatedAt)
+        assertEquals(result.releaseDate, history.releaseDate)
         assertFalse(history.inLibrary)
         assertTrue(history.isCompletedTitle)
         assertTrue(history.isViewingTasteEligible)
@@ -307,12 +329,35 @@ class DefaultLibraryRepositoryTest {
         val entries = (repository.observePersonalViewing().first() as AppResult.Success).value
         val entry = entries.single()
         assertEquals(1, entries.size)
-        assertEquals(ExternalMediaRef(MediaSource.IMDB, "tt2543164"), entry.mediaRef)
+        assertEquals(ExternalMediaRef(MediaSource.TMDB, "42"), entry.mediaRef)
+        assertEquals(ExternalMediaRef(MediaSource.TMDB, "42"), entry.navigableDetailsRef)
         assertTrue(entry.isFavorite)
         assertEquals(PersonalRating(8), entry.personalRating)
+        assertEquals(now, entry.personalRatingUpdatedAt)
         assertEquals(now, entry.movieWatchedAt)
         assertTrue(entry.isViewingTasteEligible)
         assertFalse(entry.inLibrary)
+
+        var opened: ExternalMediaRef? = null
+        composeRule.setContent {
+            BingeeTheme {
+                StatisticsContent(
+                    statistics = calculateWatchedStatistics(listOf(entry)),
+                    tasteStatistics = TasteStatistics(),
+                    onScopeChanged = {},
+                    onOpenDetails = { reference, _ -> opened = reference }
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Rating 8, 1 title")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithContentDescription("Arrival, Movie · 2016")
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(ExternalMediaRef(MediaSource.TMDB, "42"), opened)
     }
 
     @Test
@@ -412,6 +457,68 @@ class DefaultLibraryRepositoryTest {
     }
 
     @Test
+    fun unwatchedSpecialDoesNotMakeCaughtUpRegularSeriesActionable() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Regularly Caught Up"
+        )
+        repository.add(series)
+        storeSeries("100", 2)
+        (1..2).forEach { number ->
+            database.watchProgressDao().markEpisodeWatched(
+                MediaSource.TMDB,
+                "100-episode-$number",
+                today(),
+                now
+            )
+        }
+        database.seriesDao().storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            SeasonEntity(
+                localMediaId = 0,
+                source = MediaSource.TMDB,
+                externalId = "caught-up-specials",
+                seasonNumber = 0,
+                name = "Specials",
+                overview = null,
+                posterUrl = null,
+                airDate = null,
+                episodeCount = 1,
+                metadataUpdatedAt = now,
+                episodesFetchedAt = null
+            ),
+            listOf(
+                EpisodeEntity(
+                    localSeasonId = 0,
+                    source = MediaSource.TMDB,
+                    externalId = "caught-up-special-1",
+                    episodeNumber = 1,
+                    title = "Special",
+                    overview = null,
+                    airDate = null,
+                    runtimeMinutes = null,
+                    stillUrl = null,
+                    metadataUpdatedAt = now
+                )
+            ),
+            now
+        )
+
+        val entry = (repository.observeEntries().first() as AppResult.Success).value.single()
+        val progress = (entry.progress as LibraryProgress.Series).progress
+        assertEquals(2, progress.watchedEpisodes)
+        assertEquals(2, progress.trackableEpisodes)
+        assertTrue((repository.observeContinueWatching().first() as AppResult.Success).value.isEmpty())
+        assertEquals(
+            2,
+            (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+                .watchedRegularEpisodes
+        )
+    }
+
+    @Test
     fun personalViewingProjectsPersistedRuntimeAndCanonicalGenres() = runBlocking {
         val movie = mediaResult()
         repository.add(movie)
@@ -467,6 +574,193 @@ class DefaultLibraryRepositoryTest {
         assertEquals(2, history.watchedRegularEpisodes)
     }
 
+    @Test
+    fun currentAvailabilityReevaluatesOnLiveLocalDateRollover() = runBlocking {
+        val initialDate = LocalDate.of(2026, 8, 18)
+        val nextDate = initialDate.plusDays(1)
+        dateSource.advanceTo(initialDate)
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Midnight Series"
+        )
+        repository.add(series)
+        storeSeries(
+            seriesId = "100",
+            episodeCount = 11,
+            airDates = List<LocalDate?>(10) { null } + nextDate
+        )
+        (1..10).forEach { number ->
+            database.watchProgressDao().markEpisodeWatched(
+                MediaSource.TMDB,
+                "100-episode-$number",
+                initialDate,
+                now
+            )
+        }
+
+        val entries = repository.observeEntries().produceIn(this)
+        val continueWatching = repository.observeContinueWatching().produceIn(this)
+        val personalViewing = repository.observePersonalViewing().produceIn(this)
+
+        val initialEntry = entries.nextMatching { result ->
+            result is AppResult.Success && result.value.singleOrNull()?.progress is LibraryProgress.Series
+        }
+        val initialProgress = (
+            (initialEntry as AppResult.Success).value.single().progress as LibraryProgress.Series
+            ).progress
+        assertEquals(10, initialProgress.trackableEpisodes)
+        assertEquals(10, initialProgress.watchedEpisodes)
+        assertTrue(initialProgress.isComplete)
+        val initialContinueWatching = continueWatching.nextMatching { it is AppResult.Success }
+        assertTrue(initialContinueWatching is AppResult.Success && initialContinueWatching.value.isEmpty())
+        val initialViewing = personalViewing.nextMatching { it is AppResult.Success } as AppResult.Success
+        assertTrue(initialViewing.value.single().seriesIsCurrentlyComplete == true)
+
+        dateSource.advanceTo(nextDate)
+
+        val rolledEntry = entries.nextMatching { result ->
+            result is AppResult.Success && result.value.singleOrNull()?.let { entry ->
+                (entry.progress as? LibraryProgress.Series)?.progress?.let { progress ->
+                    progress.trackableEpisodes == 11 && progress.watchedEpisodes == 10 && !progress.isComplete
+                } == true
+            } == true
+        }
+        assertTrue(rolledEntry is AppResult.Success)
+        val rolledContinueWatching = continueWatching.nextMatching { result ->
+            result is AppResult.Success && result.value.any { it.mediaRef == series.externalRef }
+        }
+        assertTrue(rolledContinueWatching is AppResult.Success)
+        val rolledViewing = personalViewing.nextMatching { result ->
+            result is AppResult.Success && result.value.single().seriesIsCurrentlyComplete == false
+        }
+        assertTrue(rolledViewing is AppResult.Success)
+
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "100-episode-11",
+            nextDate,
+            now.plusSeconds(1)
+        )
+
+        val completedEntry = entries.nextMatching { result ->
+            result is AppResult.Success && result.value.singleOrNull()?.let { entry ->
+                (entry.progress as? LibraryProgress.Series)?.progress?.let { progress ->
+                    progress.trackableEpisodes == 11 && progress.watchedEpisodes == 11 && progress.isComplete
+                } == true
+            } == true
+        }
+        assertTrue(completedEntry is AppResult.Success)
+        val completedContinueWatching = continueWatching.nextMatching { it is AppResult.Success }
+        assertTrue(completedContinueWatching is AppResult.Success && completedContinueWatching.value.isEmpty())
+        val completedViewing = personalViewing.nextMatching { result ->
+            result is AppResult.Success && result.value.single().seriesIsCurrentlyComplete == true
+        }
+        assertTrue(completedViewing is AppResult.Success)
+
+        entries.cancel()
+        continueWatching.cancel()
+        personalViewing.cancel()
+    }
+
+    @Test
+    fun historicalEpisodeActivitySurvivesFutureAirDateCorrectionAndKeepsAvailabilitySeparate() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "100"),
+            mediaType = MediaType.SERIES,
+            title = "Corrected History Series"
+        )
+        repository.add(series)
+
+        val futureDate = today().plusDays(30)
+        val firstWatchedAt = Instant.parse("2026-03-10T10:00:00Z")
+        val secondWatchedAt = Instant.parse("2026-03-11T10:00:00Z")
+        storeSeries(
+            seriesId = "100",
+            episodeCount = 3,
+            runtimes = listOf(42, 48, 60),
+            airDates = listOf(today().minusDays(1), null, futureDate)
+        )
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "100-episode-1",
+            today(),
+            firstWatchedAt
+        )
+        database.watchProgressDao().markEpisodeWatched(
+            MediaSource.TMDB,
+            "100-episode-2",
+            today(),
+            secondWatchedAt
+        )
+
+        database.seriesDao().storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            SeasonEntity(
+                localMediaId = 0,
+                source = MediaSource.TMDB,
+                externalId = "100-season-0",
+                seasonNumber = 0,
+                name = "Specials",
+                overview = null,
+                posterUrl = null,
+                airDate = null,
+                episodeCount = 1,
+                metadataUpdatedAt = now,
+                episodesFetchedAt = null
+            ),
+            listOf(
+                EpisodeEntity(
+                    localSeasonId = 0,
+                    source = MediaSource.TMDB,
+                    externalId = "100-special-1",
+                    episodeNumber = 1,
+                    title = "Special",
+                    overview = null,
+                    airDate = null,
+                    runtimeMinutes = 30,
+                    stillUrl = null,
+                    metadataUpdatedAt = now
+                )
+            ),
+            now
+        )
+        database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-special-1", today(), now)
+
+        storeSeries(
+            seriesId = "100",
+            episodeCount = 3,
+            runtimes = listOf(42, 48, 60),
+            airDates = listOf(futureDate, null, futureDate)
+        )
+
+        val refreshed = database.seriesDao().observeSeason(MediaSource.TMDB, "100", "100-season-1").first()!!
+        assertEquals(futureDate, refreshed.episodes[0].episode.airDate)
+        assertNull(refreshed.episodes[1].episode.airDate)
+        assertEquals(firstWatchedAt, refreshed.episodes[0].progress?.watchedAt)
+
+        val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        assertEquals(2, history.watchedRegularEpisodes)
+        assertEquals(90L, history.watchedRegularRuntimeMinutes)
+        assertEquals(
+            listOf(firstWatchedAt, secondWatchedAt),
+            history.watchedRegularEpisodeActivities.map { it.watchedAt }
+        )
+        assertTrue(history.isViewingTasteEligible)
+
+        val statistics = calculateWatchedStatistics(listOf(history), ZoneOffset.UTC, today(), 2026)
+        assertEquals(2, statistics.episodesWatchedCount)
+        assertEquals(90L, statistics.seriesWatchTimeMinutes)
+        assertEquals(90L, statistics.monthlyViewing.months[2].seriesMinutes)
+
+        val localMediaId = database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, "100")!!.localMediaId
+        val currentProgress = database.libraryDao().observeLibraryProgress(today()).first()
+            .single { it.localMediaId == localMediaId }
+        assertEquals(1, currentProgress.trackableEpisodes)
+        assertEquals(1, currentProgress.watchedEpisodes)
+    }
+
     private fun mediaResult() = MediaSearchResult(
         externalRef = ExternalMediaRef(MediaSource.TMDB, "42"),
         mediaType = MediaType.MOVIE,
@@ -480,7 +774,8 @@ class DefaultLibraryRepositoryTest {
     private suspend fun storeSeries(
         seriesId: String,
         episodeCount: Int,
-        runtimes: List<Int?> = List(episodeCount) { null }
+        runtimes: List<Int?> = List(episodeCount) { null },
+        airDates: List<LocalDate?> = List(episodeCount) { null }
     ) {
         database.seriesDao().storeSeasonEpisodes(
             MediaSource.TMDB,
@@ -506,7 +801,7 @@ class DefaultLibraryRepositoryTest {
                     episodeNumber = number,
                     title = "Episode $number",
                     overview = null,
-                    airDate = null,
+                    airDate = airDates.getOrNull(number - 1),
                     runtimeMinutes = runtimes.getOrNull(number - 1),
                     stillUrl = null,
                     metadataUpdatedAt = now
@@ -517,4 +812,7 @@ class DefaultLibraryRepositoryTest {
     }
 
     private fun today(): LocalDate = LocalDate.of(2026, 8, 1)
+
+    private suspend fun <T> ReceiveChannel<T>.nextMatching(predicate: (T) -> Boolean): T =
+        withTimeout(2_000) { receiveAsFlow().first(predicate) }
 }

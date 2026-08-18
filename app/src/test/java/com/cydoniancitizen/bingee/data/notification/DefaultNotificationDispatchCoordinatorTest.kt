@@ -21,6 +21,7 @@ import com.cydoniancitizen.bingee.domain.notification.ReleaseNotifier
 import com.cydoniancitizen.bingee.domain.repository.NotificationDeliveryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -182,7 +183,8 @@ class DefaultNotificationDispatchCoordinatorTest {
         delivery,
         contentMapper,
         notifier,
-        clock
+        clock,
+        TestCalendarDateSource(today)
     )
 
     private fun event(subjectId: String, type: ReleaseEventType, date: LocalDate): ReleaseEvent {

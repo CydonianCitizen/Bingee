@@ -32,7 +32,9 @@ data class PersonalViewingEntry(
     val watchedRegularEpisodesWithoutRuntime: Int = 0,
     val watchedRegularEpisodeActivities: List<WatchedEpisodeActivity> = emptyList(),
     val seriesIsCurrentlyComplete: Boolean? = null,
-    val genres: List<Genre> = emptyList()
+    val genres: List<Genre> = emptyList(),
+    val releaseDate: LocalDate? = null,
+    val personalRatingUpdatedAt: Instant? = null
 ) {
     init {
         require(title.isNotBlank()) { "Viewing-history title must not be blank" }
@@ -69,6 +71,9 @@ data class PersonalViewingEntry(
             MediaType.MOVIE -> movieWatchedAt != null
             MediaType.SERIES -> watchedRegularEpisodes > 0
         }
+
+    val navigableDetailsRef: ExternalMediaRef?
+        get() = mediaRef.toNavigableDetailsRef()
 
     fun displayWatchedDate(zoneId: ZoneId): LocalDate? =
         watchedDate ?: completionTimestamp?.atZone(zoneId)?.toLocalDate()

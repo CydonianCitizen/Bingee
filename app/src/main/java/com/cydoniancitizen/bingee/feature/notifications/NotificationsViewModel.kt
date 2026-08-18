@@ -55,7 +55,7 @@ enum class NotificationRefreshState {
 data class NotificationsUiState(
     val contentState: NotificationsContentState = NotificationsContentState.Loading,
     val refreshState: NotificationRefreshState = NotificationRefreshState.Idle,
-    val today: LocalDate = LocalDate.now(),
+    val today: LocalDate,
     val error: AppError? = null
 )
 

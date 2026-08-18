@@ -132,7 +132,12 @@ class MediaDetailsScreenTest {
     fun loadingFullErrorRetryAndUnauthorizedSettingsAreActionable() {
         val retried = AtomicBoolean(false)
         val settings = AtomicBoolean(false)
-        var state by mutableStateOf(MediaDetailsUiState(content = DetailContentState.Loading))
+        var state by mutableStateOf(
+            MediaDetailsUiState(
+                today = LocalDate.of(2026, 8, 18),
+                content = DetailContentState.Loading
+            )
+        )
         setDetailsState(
             state = { state },
             onRetry = { retried.set(true) },
@@ -141,13 +146,19 @@ class MediaDetailsScreenTest {
         composeRule.onNodeWithText("Loading title details").assertIsDisplayed()
 
         composeRule.runOnIdle {
-            state = MediaDetailsUiState(content = DetailContentState.Error(AppError.NetworkUnavailable))
+            state = MediaDetailsUiState(
+                today = LocalDate.of(2026, 8, 18),
+                content = DetailContentState.Error(AppError.NetworkUnavailable)
+            )
         }
         composeRule.onNodeWithText("Retry").performClick()
         assertTrue(retried.get())
 
         composeRule.runOnIdle {
-            state = MediaDetailsUiState(content = DetailContentState.Error(AppError.Unauthorized))
+            state = MediaDetailsUiState(
+                today = LocalDate.of(2026, 8, 18),
+                content = DetailContentState.Error(AppError.Unauthorized)
+            )
         }
         composeRule.onNodeWithText("Open Settings").performClick()
         assertTrue(settings.get())
@@ -227,6 +238,7 @@ class MediaDetailsScreenTest {
     }
 
     private fun content(details: MediaDetails) = MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
         content = DetailContentState.Content(
             CachedMediaDetails(details, Instant.parse("2026-08-01T10:00:00Z"), CacheFreshness.STALE)
         ),

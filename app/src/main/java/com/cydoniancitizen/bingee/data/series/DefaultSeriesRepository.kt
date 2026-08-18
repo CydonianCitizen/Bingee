@@ -10,17 +10,17 @@ import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import java.time.Clock
-import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -30,18 +30,20 @@ internal class DefaultSeriesRepository @Inject constructor(
     private val metadataStore: MetadataCalendarStore,
     private val remote: TmdbSeasonRemoteDataSource,
     private val freshnessPolicy: SeasonCacheFreshnessPolicy,
-    private val clock: Clock
+    private val clock: Clock,
+    private val dateSource: CalendarDateSource
 ) : SeriesRepository {
     private val inFlightLock = Mutex()
     private val inFlight = mutableMapOf<SeasonRefreshKey, CompletableDeferred<AppResult<Unit>>>()
 
     override fun observeSeasons(tmdbId: Long): Flow<AppResult<List<CachedSeason>>> {
         val seriesRef = tmdbReferenceOrNull(tmdbId) ?: return flowOf(AppResult.Failure(AppError.InvalidInput))
-        return seriesDao.observeSeriesSeasons(seriesRef.source, seriesRef.externalId)
-            .map { rows ->
-                val today = LocalDate.now(clock)
-                AppResult.Success(rows.map { it.toDomain(seriesRef, today, freshnessPolicy) })
-            }
+        return combine(
+            seriesDao.observeSeriesSeasons(seriesRef.source, seriesRef.externalId),
+            dateSource.observeDate()
+        ) { rows, today ->
+            AppResult.Success(rows.map { it.toDomain(seriesRef, today, freshnessPolicy) })
+        }
             .catchPersistence()
     }
 

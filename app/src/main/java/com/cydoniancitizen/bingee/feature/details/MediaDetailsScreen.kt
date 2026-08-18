@@ -167,6 +167,7 @@ internal fun MediaDetailsContent(
                 details = content.cached.details,
                 isStale = content.cached.freshness == CacheFreshness.STALE,
                 refreshError = (state.refresh as? DetailRefreshState.Error)?.error,
+                today = state.today,
                 isInLibrary = state.isInLibrary,
                 isAbandoned = state.isAbandoned,
                 isLibraryUpdating = state.libraryAction == DetailLibraryActionState.UPDATING,
@@ -222,6 +223,7 @@ private fun DetailBody(
     details: MediaDetails,
     isStale: Boolean,
     refreshError: AppError?,
+    today: LocalDate,
     isInLibrary: Boolean?,
     isAbandoned: Boolean,
     isLibraryUpdating: Boolean,
@@ -364,6 +366,7 @@ private fun DetailBody(
             }
             WatchedDateSection(
                 watchedDate = watchedDate,
+                today = today,
                 isUpdating = watchedDateUpdating,
                 releaseDate = details.releaseDate,
                 mediaType = details.mediaType,
@@ -440,6 +443,7 @@ private fun statusString(status: ProductionStatus): Int = when (status) {
 @Composable
 private fun WatchedDateSection(
     watchedDate: LocalDate?,
+    today: LocalDate,
     isUpdating: Boolean,
     releaseDate: LocalDate?,
     mediaType: MediaType,
@@ -481,6 +485,7 @@ private fun WatchedDateSection(
     if (showDialog) {
         WatchedDateDialog(
             currentDate = watchedDate,
+            today = today,
             releaseDate = releaseDate,
             mediaType = mediaType,
             onConfirm = { date ->
@@ -496,12 +501,12 @@ private fun WatchedDateSection(
 @Composable
 internal fun WatchedDateDialog(
     currentDate: LocalDate?,
+    today: LocalDate,
     releaseDate: LocalDate?,
     mediaType: MediaType = MediaType.MOVIE,
     onConfirm: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val today = LocalDate.now()
     var selectedChoice by remember { mutableStateOf(WatchedDateChoice.TODAY) }
     var customDate by remember { mutableStateOf(currentDate ?: today) }
     var showCustomDatePicker by remember { mutableStateOf(false) }

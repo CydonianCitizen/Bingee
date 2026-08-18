@@ -20,6 +20,7 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
 import java.time.Instant
+import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
@@ -38,7 +39,7 @@ class ProfileScreenTest {
         composeRule.setContent {
             BingeeTheme {
                 ProfileContent(
-                    state = ProfileUiState(isLoading = false),
+                    state = ProfileUiState(today = LocalDate.of(2026, 8, 18), isLoading = false),
                     onCollectionSelected = {},
                     onCategorySelected = {},
                     onSortSelected = {},
@@ -65,7 +66,7 @@ class ProfileScreenTest {
         composeRule.setContent {
             BingeeTheme {
                 ProfileContent(
-                    state = ProfileUiState(isLoading = false),
+                    state = ProfileUiState(today = LocalDate.of(2026, 8, 18), isLoading = false),
                     onCollectionSelected = {},
                     onCategorySelected = {},
                     onSortSelected = {},
@@ -94,7 +95,7 @@ class ProfileScreenTest {
         composeRule.setContent {
             BingeeTheme {
                 ProfileContent(
-                    state = ProfileUiState(isLoading = false),
+                    state = ProfileUiState(today = LocalDate.of(2026, 8, 18), isLoading = false),
                     onCollectionSelected = selectedCollection::set,
                     onCategorySelected = selectedCategory::set,
                     onSortSelected = {},
@@ -125,7 +126,11 @@ class ProfileScreenTest {
         composeRule.setContent {
             BingeeTheme {
                 ProfileContent(
-                    state = ProfileUiState(isLoading = false, entries = emptyList()),
+                    state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
+                        isLoading = false,
+                        entries = emptyList()
+                    ),
                     onCollectionSelected = {},
                     onCategorySelected = {},
                     onSortSelected = {},
@@ -165,6 +170,7 @@ class ProfileScreenTest {
             BingeeTheme {
                 ProfileContent(
                     state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
                         isLoading = false,
                         entries = listOf(testEntry)
                     ),
@@ -204,6 +210,7 @@ class ProfileScreenTest {
             BingeeTheme {
                 ProfileContent(
                     state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
                         isLoading = false,
                         entries = listOf(testEntry)
                     ),

@@ -21,8 +21,8 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.toNavigableDetailsRef
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
@@ -129,7 +129,10 @@ fun BingeeNavHost(
             }
             StatisticsScreen(
                 onBack = navController::popBackStack,
-                viewModel = hiltViewModel(profileEntry)
+                viewModel = hiltViewModel(profileEntry),
+                onOpenDetails = { reference, mediaType ->
+                    navController.openDetails(reference, mediaType)
+                }
             )
         }
         composable(AppRoute.SETTINGS) {
@@ -196,8 +199,7 @@ fun BingeeNavHost(
 }
 
 private fun NavHostController.openDetails(reference: ExternalMediaRef, mediaType: MediaType) {
-    val tmdbId = reference.takeIf { it.source == MediaSource.TMDB }
-        ?.externalId?.toLongOrNull()?.takeIf { it > 0 } ?: return
+    val tmdbId = reference.toNavigableDetailsRef()?.externalId?.toLongOrNull() ?: return
     navigate(DetailRoute.create(mediaType, tmdbId))
 }
 

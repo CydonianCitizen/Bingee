@@ -27,6 +27,7 @@ import com.cydoniancitizen.bingee.domain.repository.RatingRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -280,7 +281,8 @@ class MediaDetailsViewModelTest {
         library,
         series,
         progress,
-        rating
+        rating,
+        TestCalendarDateSource(LocalDate.of(2026, 8, 18))
     )
 
     private fun args(mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(

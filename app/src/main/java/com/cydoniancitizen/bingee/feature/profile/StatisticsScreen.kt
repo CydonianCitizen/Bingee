@@ -3,11 +3,14 @@ package com.cydoniancitizen.bingee.feature.profile
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,8 +18,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -48,6 +55,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -65,22 +73,31 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
+import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeChartColors
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import com.cydoniancitizen.bingee.domain.model.GenreStatistic
 import com.cydoniancitizen.bingee.domain.model.MonthlyViewingData
+import com.cydoniancitizen.bingee.domain.model.PersonalRatingStatistics
+import com.cydoniancitizen.bingee.domain.model.RatingHistogramBucket
 import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.model.TasteStatistics
 import com.cydoniancitizen.bingee.domain.model.ViewingDurationLabels
 import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
+import com.cydoniancitizen.bingee.domain.model.formatPersonalRatingAverage
 import com.cydoniancitizen.bingee.domain.model.formatViewingDuration
 import com.cydoniancitizen.bingee.domain.model.relativeGenreNormalization
+import com.cydoniancitizen.bingee.domain.model.relativeRatingNormalization
 import com.cydoniancitizen.bingee.domain.model.relativeViewingNormalization
 import kotlin.math.PI
 import kotlin.math.cos
@@ -89,10 +106,27 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val RADAR_RING_COUNT = 4
+private val CHART_MIN_SLOT_WIDTH = 48.dp
+private val CHART_SLOT_SPACING = 4.dp
+private val CHART_EDGE_PADDING = 4.dp
+
+private fun chartSlotWidth(availableWidth: Dp, itemCount: Int): Dp {
+    if (itemCount == 0) return CHART_MIN_SLOT_WIDTH
+    val spacingWidth = CHART_SLOT_SPACING * (itemCount - 1)
+    return maxOf(
+        CHART_MIN_SLOT_WIDTH,
+        (availableWidth - CHART_EDGE_PADDING * 2 - spacingWidth) / itemCount
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun StatisticsScreen(onBack: () -> Unit, viewModel: ProfileViewModel, modifier: Modifier = Modifier) {
+internal fun StatisticsScreen(
+    onBack: () -> Unit,
+    viewModel: ProfileViewModel,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val statisticsError = state.statisticsError
     Scaffold(
@@ -140,6 +174,7 @@ internal fun StatisticsScreen(onBack: () -> Unit, viewModel: ProfileViewModel, m
                 selectedMonth = state.selectedStatisticsMonth,
                 onYearChanged = viewModel::setStatisticsViewingYear,
                 onMonthSelected = viewModel::setStatisticsViewingMonth,
+                onOpenDetails = onOpenDetails,
                 modifier = Modifier.padding(innerPadding)
             )
         }
@@ -154,10 +189,12 @@ internal fun StatisticsContent(
     selectedMonth: Int? = null,
     onYearChanged: (Int) -> Unit = {},
     onMonthSelected: (Int?) -> Unit = {},
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val radarGenres = tasteStatistics.radarGenres
     val normalizedValues = relativeGenreNormalization(radarGenres.map(GenreStatistic::titleCount))
+    var selectedRating by remember { mutableStateOf<Int?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -210,6 +247,267 @@ internal fun StatisticsContent(
                 }
             }
         }
+        item {
+            val ratingStatistics = statistics.personalRatingStatistics
+            val effectiveSelectedRating = selectedRating?.takeIf { rating ->
+                ratingStatistics.histogram.any { it.rating == rating && it.titleCount > 0 }
+            }
+            RatingSection(
+                statistics = ratingStatistics,
+                selectedRating = effectiveSelectedRating,
+                onRatingSelected = { rating ->
+                    selectedRating = if (selectedRating == rating) null else rating
+                },
+                onOpenDetails = onOpenDetails
+            )
+        }
+    }
+}
+
+@Composable
+private fun RatingSection(
+    statistics: PersonalRatingStatistics,
+    selectedRating: Int?,
+    onRatingSelected: (Int) -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val locale = LocalConfiguration.current.locales[0]
+    val average = statistics.averageRating?.let { formatPersonalRatingAverage(it, locale) }
+        ?: stringResource(R.string.statistics_rating_unavailable)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = stringResource(R.string.statistics_ratings),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.semantics { heading() }
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            ViewingMetric(
+                value = average,
+                label = stringResource(R.string.statistics_rating_average),
+                modifier = Modifier.weight(1f)
+            )
+            ViewingMetric(
+                value = statistics.ratedTitleCount.toString(),
+                label = stringResource(R.string.statistics_rating_count),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        RatingHistogram(
+            histogram = statistics.histogram,
+            selectedRating = selectedRating,
+            onRatingSelected = onRatingSelected
+        )
+        if (statistics.ratedTitleCount == 0) {
+            Text(
+                text = stringResource(R.string.statistics_rating_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        selectedRating?.let { rating ->
+            val selectedTitles = statistics.ratedTitles.filter { it.personalRating?.value == rating }
+            val movies = selectedTitles.filter { it.mediaType == MediaType.MOVIE }
+            val series = selectedTitles.filter { it.mediaType == MediaType.SERIES }
+            if (movies.isNotEmpty()) {
+                RatingShelf(
+                    title = stringResource(R.string.statistics_rating_movies),
+                    entries = movies,
+                    onOpenDetails = onOpenDetails
+                )
+            }
+            if (series.isNotEmpty()) {
+                RatingShelf(
+                    title = stringResource(R.string.statistics_rating_series),
+                    entries = series,
+                    onOpenDetails = onOpenDetails
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RatingHistogram(
+    histogram: List<RatingHistogramBucket>,
+    selectedRating: Int?,
+    onRatingSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val normalized = relativeRatingNormalization(histogram)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(156.dp)) {
+        val slotWidth = chartSlotWidth(maxWidth, histogram.size)
+        val scrollState = rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(CHART_SLOT_SPACING),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Spacer(Modifier.width(CHART_EDGE_PADDING))
+            histogram.forEachIndexed { index, bucket ->
+                RatingHistogramBar(
+                    bucket = bucket,
+                    normalizedValue = normalized.getOrElse(index) { 0f },
+                    isSelected = selectedRating == bucket.rating,
+                    onClick = { onRatingSelected(bucket.rating) },
+                    modifier = Modifier
+                        .width(slotWidth)
+                        .height(156.dp)
+                )
+            }
+            Spacer(Modifier.width(CHART_EDGE_PADDING))
+        }
+    }
+}
+
+@Composable
+private fun RatingHistogramBar(
+    bucket: RatingHistogramBucket,
+    normalizedValue: Float,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val canSelect = bucket.titleCount > 0
+    val selectedSuffix = if (isSelected) {
+        stringResource(R.string.statistics_rating_selected_suffix)
+    } else {
+        ""
+    }
+    val description = pluralStringResource(
+        R.plurals.statistics_rating_bar_description,
+        bucket.titleCount,
+        bucket.rating,
+        bucket.titleCount,
+        selectedSuffix
+    )
+    Column(
+        modifier = modifier
+            .clickable(enabled = canSelect, onClick = onClick)
+            .semantics {
+                contentDescription = description
+                role = Role.Button
+                selected = isSelected
+                if (!canSelect) disabled()
+            },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .width(20.dp)
+                .height(128.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(normalizedValue.coerceIn(0f, 1f))
+                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                    .background(
+                        if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+                        }
+                    )
+            )
+        }
+        Text(
+            text = bucket.rating.toString(),
+            style = if (isSelected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(width = 20.dp, height = 3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+        )
+    }
+}
+
+@Composable
+private fun RatingShelf(
+    title: String,
+    entries: List<PersonalViewingEntry>,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() }
+        )
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 4.dp)
+        ) {
+            items(
+                items = entries,
+                key = { "${it.mediaRef.source.name}:${it.mediaRef.externalId}" }
+            ) { entry ->
+                RatingPosterItem(
+                    entry = entry,
+                    onClick = entry.navigableDetailsRef?.let { reference ->
+                        { onOpenDetails(reference, entry.mediaType) }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RatingPosterItem(entry: PersonalViewingEntry, onClick: (() -> Unit)?) {
+    val (withYear, withoutYear) = when (entry.mediaType) {
+        MediaType.MOVIE -> R.string.profile_media_type_movie to R.string.profile_media_type_movie_no_year
+        MediaType.SERIES -> R.string.profile_media_type_series to R.string.profile_media_type_series_no_year
+    }
+    val mediaMeta = entry.releaseDate?.year?.let { stringResource(withYear, it) }
+        ?: stringResource(withoutYear)
+    val description = stringResource(R.string.statistics_rating_poster_accessibility, entry.title, mediaMeta)
+    Column(
+        modifier = Modifier
+            .width(132.dp)
+            .clickable(enabled = onClick != null, onClick = onClick ?: {})
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                role = Role.Button
+            }
+    ) {
+        MediaPoster(
+            title = entry.title,
+            posterUrl = entry.posterUrl,
+            width = 132.dp,
+            height = 198.dp
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = entry.title,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = mediaMeta,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -462,25 +760,36 @@ private fun ViewingMonthChart(
             },
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(156.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            months.forEachIndexed { index, month ->
-                ViewingMonthBar(
-                    month = month,
-                    monthLabel = shortMonths.getOrElse(index) { "" },
-                    fullMonthLabel = fullMonths.getOrElse(index) { "" },
-                    normalizedValue = normalized.getOrElse(index) { 0f },
-                    isSelected = selectedMonth == month.month,
-                    isFuture = monthly.selectedYear == monthly.currentYear &&
-                        month.month > monthly.currentMonth,
-                    movieColor = movieColor,
-                    seriesColor = seriesColor,
-                    onClick = { onMonthSelected(month.month) },
-                    modifier = Modifier.weight(1f)
-                )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(156.dp)) {
+            val slotWidth = chartSlotWidth(maxWidth, months.size)
+            val scrollState = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .horizontalScroll(scrollState),
+                horizontalArrangement = Arrangement.spacedBy(CHART_SLOT_SPACING),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Spacer(Modifier.width(CHART_EDGE_PADDING))
+                months.forEachIndexed { index, month ->
+                    ViewingMonthBar(
+                        month = month,
+                        monthLabel = shortMonths.getOrElse(index) { "" },
+                        fullMonthLabel = fullMonths.getOrElse(index) { "" },
+                        normalizedValue = normalized.getOrElse(index) { 0f },
+                        isSelected = selectedMonth == month.month,
+                        isFuture = monthly.selectedYear == monthly.currentYear &&
+                            month.month > monthly.currentMonth,
+                        movieColor = movieColor,
+                        seriesColor = seriesColor,
+                        onClick = { onMonthSelected(month.month) },
+                        modifier = Modifier
+                            .width(slotWidth)
+                            .height(156.dp)
+                    )
+                }
+                Spacer(Modifier.width(CHART_EDGE_PADDING))
             }
         }
     }
@@ -548,7 +857,7 @@ private fun ViewingMonthBar(
             val height = 132.dp * normalizedValue.coerceIn(0f, 1f)
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(20.dp)
                     .height(height),
                 verticalArrangement = Arrangement.Bottom
             ) {

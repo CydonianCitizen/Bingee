@@ -37,6 +37,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     private val calendarRepository: ReleaseCalendarRepository,
     private val credentialRepository: TmdbCredentialRepository,
     private val clock: Clock,
+    private val dateSource: CalendarDateSource,
     private val window: ReleaseCalendarWindow
 ) : CalendarRefreshCoordinator {
     override suspend fun refresh(): CalendarRefreshSummary {
@@ -88,7 +89,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         val selected = selectRelevantSeasonNumbers(
             beforeRefresh = before,
             afterRefresh = after,
-            today = LocalDate.now(clock),
+            today = dateSource.currentDate(),
             window = window
         )
         selected.forEach { seasonNumber ->

@@ -20,63 +20,69 @@ import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 internal class DefaultLibraryRepository @Inject constructor(
     private val libraryDao: LibraryDao,
     private val watchProgressDao: WatchProgressDao,
     private val ratingDao: RatingDao,
-    private val clock: Clock
+    private val clock: Clock,
+    private val dateSource: CalendarDateSource
 ) : LibraryRepository {
-    override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> {
-        val items = libraryDao.observeLibraryItems(
-            query.mediaFilter.mediaType,
-            query.searchQuery.toSqlLikePattern()
-        )
-        return combine(
-            items,
-            libraryDao.observeLibraryProgress(LocalDate.now(clock)),
-            ratingDao.observeActiveLibraryRatings()
-        ) { rows, progress, ratings ->
-            val progressByMedia = progress.associateBy { it.localMediaId }
-            val ratingsByMedia = ratings.associateBy { it.localMediaId }
-            val entries = rows.map { row ->
-                val localMediaId = row.media.localMediaId
-                row.toDomain(
-                    progressRow = progressByMedia[localMediaId],
-                    rating = ratingsByMedia[localMediaId]
-                )
+    override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
+        dateSource.observeDate().flatMapLatest { today ->
+            combine(
+                libraryDao.observeLibraryItems(
+                    query.mediaFilter.mediaType,
+                    query.searchQuery.toSqlLikePattern()
+                ),
+                libraryDao.observeLibraryProgress(today),
+                ratingDao.observeActiveLibraryRatings()
+            ) { rows, progress, ratings ->
+                val progressByMedia = progress.associateBy { it.localMediaId }
+                val ratingsByMedia = ratings.associateBy { it.localMediaId }
+                val entries = rows.map { row ->
+                    val localMediaId = row.media.localMediaId
+                    row.toDomain(
+                        progressRow = progressByMedia[localMediaId],
+                        rating = ratingsByMedia[localMediaId]
+                    )
+                }
+                applyLibraryStateAndSort(entries, query)
             }
-            applyLibraryStateAndSort(entries, query)
         }.asPersistenceResult { it }
-    }
 
     override fun observeEntryCount(): Flow<AppResult<Int>> =
         libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
 
     override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> {
         val normalized = ref.normalized()
-        return combine(
-            libraryDao.observeLibraryItem(normalized.source, normalized.externalId),
-            libraryDao.observeLibraryProgress(LocalDate.now(clock))
-        ) { row, progress ->
-            row?.toDomain(
-                preferredRef = normalized,
-                progressRow = progress.firstOrNull { it.localMediaId == row.media.localMediaId }
-            )
+        return dateSource.observeDate().flatMapLatest { today ->
+            combine(
+                libraryDao.observeLibraryItem(normalized.source, normalized.externalId),
+                libraryDao.observeLibraryProgress(today)
+            ) { row, progress ->
+                row?.toDomain(
+                    preferredRef = normalized,
+                    progressRow = progress.firstOrNull { it.localMediaId == row.media.localMediaId }
+                )
+            }
         }.asPersistenceResult { it }
     }
 
@@ -85,34 +91,35 @@ internal class DefaultLibraryRepository @Inject constructor(
             rows.mapTo(linkedSetOf()) { it.toDomain() }
         }
 
-    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> {
-        val today = LocalDate.now(clock.withZone(ZoneId.systemDefault()))
-        return combine(
-            libraryDao.observePersonalViewing(today),
-            libraryDao.observeLibraryProgress(today),
-            libraryDao.observePersonalViewingGenres(),
-            libraryDao.observePersonalViewingActivities(today)
-        ) { rows, progressRows, genreRows, activityRows ->
-            val progressByMedia = progressRows.associateBy { it.localMediaId }
-            val genresByMedia = genreRows.mapNotNull { row ->
-                row.toDomainOrNull()?.let { row.localMediaId to it }
-            }.groupBy({ it.first }, { it.second })
-            val activitiesByMedia = activityRows.groupBy { it.localMediaId }
-            rows.map { row ->
-                row.toDomain(
-                    currentProgress = progressByMedia[row.media.localMediaId],
-                    genres = genresByMedia[row.media.localMediaId].orEmpty(),
-                    watchedRegularEpisodeActivities = activitiesByMedia[row.media.localMediaId]
-                        .orEmpty()
-                        .map { it.toDomain() }
-                )
+    override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> =
+        dateSource.observeDate().flatMapLatest { today ->
+            combine(
+                libraryDao.observePersonalViewing(),
+                libraryDao.observeLibraryProgress(today),
+                libraryDao.observePersonalViewingGenres(),
+                libraryDao.observePersonalViewingActivities()
+            ) { rows, progressRows, genreRows, activityRows ->
+                val progressByMedia = progressRows.associateBy { it.localMediaId }
+                val genresByMedia = genreRows.mapNotNull { row ->
+                    row.toDomainOrNull()?.let { row.localMediaId to it }
+                }.groupBy({ it.first }, { it.second })
+                val activitiesByMedia = activityRows.groupBy { it.localMediaId }
+                rows.map { row ->
+                    row.toDomain(
+                        currentProgress = progressByMedia[row.media.localMediaId],
+                        genres = genresByMedia[row.media.localMediaId].orEmpty(),
+                        watchedRegularEpisodeActivities = activitiesByMedia[row.media.localMediaId]
+                            .orEmpty()
+                            .map { it.toDomain() }
+                    )
+                }
             }
         }.asPersistenceResult { it }
-    }
 
     override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
-        libraryDao.observeContinueWatchingRows(MediaSource.TMDB, LocalDate.now(clock))
-            .asPersistenceResult { rows -> ContinueWatchingPolicy.select(rows.map { it.toDomain() }) }
+        dateSource.observeDate().flatMapLatest { today ->
+            libraryDao.observeContinueWatchingRows(MediaSource.TMDB, today)
+        }.asPersistenceResult { rows -> ContinueWatchingPolicy.select(rows.map { it.toDomain() }) }
 
     override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> {
         val prepared =

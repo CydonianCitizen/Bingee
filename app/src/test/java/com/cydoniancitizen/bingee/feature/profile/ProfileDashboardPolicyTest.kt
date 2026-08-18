@@ -25,10 +25,11 @@ class ProfileDashboardPolicyTest {
     }
 
     @Test
-    fun watchingExcludesNotStartedCaughtUpAbandonedMoviesAndSpecialsOnly() {
+    fun watchingExcludesNotStartedIncompleteCaughtUpAbandonedMoviesAndSpecialsOnly() {
         val entries = listOf(
             series("watching", 6, 10),
             series("not-started", 0, 10),
+            series("incomplete-coverage", 3, 3, complete = false),
             series("caught-up", 10, 10, complete = true),
             series("abandoned", 2, 10, abandoned = true),
             series("specials-only", 0, 0),
@@ -41,6 +42,7 @@ class ProfileDashboardPolicyTest {
     @Test
     fun newlyAvailableEpisodeMakesCaughtUpSeriesEligibleAgain() {
         assertTrue(selectWatchingPreview(listOf(series("series", 10, 11))).single().progress.fraction > 0.9f)
+        assertTrue(selectWatchingPreview(listOf(series("incomplete", 3, 3, complete = false))).isEmpty())
         assertTrue(selectWatchingPreview(listOf(series("series", 10, 10, complete = true))).isEmpty())
     }
 

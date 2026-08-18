@@ -411,7 +411,10 @@ internal fun ProfileContent(
                     ) { entry ->
                         ProfileGridItem(
                             entry = entry,
-                            onOpenDetails = { onOpenDetails(entry.mediaRef, entry.mediaType) },
+                            today = state.today,
+                            onOpenDetails = entry.navigableDetailsRef?.let { reference ->
+                                { onOpenDetails(reference, entry.mediaType) }
+                            },
                             onToggleFavorite = onToggleFavorite,
                             onSetWatchedDate = onSetWatchedDate
                         )
@@ -429,9 +432,12 @@ internal fun ProfileContent(
                     ) { entry ->
                         ProfileListItem(
                             entry = entry,
+                            today = state.today,
                             isRemoving = entry.mediaRef in state.pendingRemovals,
                             onRemove = { onRemove(entry) },
-                            onOpenDetails = { onOpenDetails(entry.mediaRef, entry.mediaType) },
+                            onOpenDetails = entry.navigableDetailsRef?.let { reference ->
+                                { onOpenDetails(reference, entry.mediaType) }
+                            },
                             onToggleFavorite = onToggleFavorite,
                             onSetWatchedDate = onSetWatchedDate
                         )
@@ -545,21 +551,23 @@ private fun ProfileEmptyState(
 @Composable
 private fun ProfileGridItem(
     entry: LibraryEntry,
-    onOpenDetails: () -> Unit,
+    today: java.time.LocalDate,
+    onOpenDetails: (() -> Unit)?,
     onToggleFavorite: (LibraryEntry) -> Unit = {},
     onSetWatchedDate: (LibraryEntry, java.time.LocalDate?) -> Unit = { _, _ -> }
 ) {
-    val openDetailsDescription = stringResource(R.string.open_details, entry.title)
+    val openDetailsDescription = onOpenDetails?.let { stringResource(R.string.open_details, entry.title) }
     var showMenu by remember { mutableStateOf(false) }
     var showWatchedDateDialog by remember { mutableStateOf(false) }
 
     Card(
-        onClick = onOpenDetails,
+        onClick = onOpenDetails ?: {},
+        enabled = onOpenDetails != null,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { contentDescription = openDetailsDescription }
+            .semantics { openDetailsDescription?.let { contentDescription = it } }
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -713,6 +721,7 @@ private fun ProfileGridItem(
     if (showWatchedDateDialog) {
         WatchedDateDialog(
             currentDate = entry.watchedDate,
+            today = today,
             releaseDate = entry.releaseDate,
             mediaType = entry.mediaType,
             onConfirm = { date ->
@@ -727,22 +736,24 @@ private fun ProfileGridItem(
 @Composable
 private fun ProfileListItem(
     entry: LibraryEntry,
+    today: java.time.LocalDate,
     isRemoving: Boolean,
     onRemove: () -> Unit,
-    onOpenDetails: () -> Unit,
+    onOpenDetails: (() -> Unit)?,
     onToggleFavorite: (LibraryEntry) -> Unit = {},
     onSetWatchedDate: (LibraryEntry, java.time.LocalDate?) -> Unit = { _, _ -> }
 ) {
-    val openDetailsDescription = stringResource(R.string.open_details, entry.title)
+    val openDetailsDescription = onOpenDetails?.let { stringResource(R.string.open_details, entry.title) }
     var showWatchedDateDialog by remember { mutableStateOf(false) }
 
     Card(
-        onClick = onOpenDetails,
+        onClick = onOpenDetails ?: {},
+        enabled = onOpenDetails != null,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { contentDescription = openDetailsDescription }
+            .semantics { openDetailsDescription?.let { contentDescription = it } }
     ) {
         Row(
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
@@ -841,6 +852,7 @@ private fun ProfileListItem(
     if (showWatchedDateDialog) {
         WatchedDateDialog(
             currentDate = entry.watchedDate,
+            today = today,
             releaseDate = entry.releaseDate,
             mediaType = entry.mediaType,
             onConfirm = { date ->

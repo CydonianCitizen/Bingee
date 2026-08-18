@@ -6,8 +6,11 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
+import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
+import com.cydoniancitizen.bingee.core.model.resolveSeriesTrackingState
 import java.time.Instant
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,6 +32,30 @@ class ContinueWatchingPolicyTest {
     @Test
     fun completedSeriesIsExcluded() {
         assertTrue(ContinueWatchingPolicy.select(listOf(item(watched = 8, total = 8))).isEmpty())
+    }
+
+    @Test
+    fun incompleteCoverageStaysWatchingButIsExcludedWithoutActionableEpisode() {
+        val candidate = item(watched = 3, total = 3, complete = false, nextEpisode = null)
+
+        assertEquals(
+            SeriesTrackingState.WATCHING,
+            resolveSeriesTrackingState(candidate.inLibrary, candidate.progress, candidate.isAbandoned)
+        )
+        assertFalse(ContinueWatchingPolicy.isContinueWatching(candidate))
+        assertTrue(ContinueWatchingPolicy.select(listOf(candidate)).isEmpty())
+    }
+
+    @Test
+    fun newRegularEpisodeRolloverMakesSeriesActionableUntilWatched() {
+        assertTrue(ContinueWatchingPolicy.select(listOf(item(watched = 10, total = 10))).isEmpty())
+        assertEquals(
+            1,
+            ContinueWatchingPolicy.select(
+                listOf(item(watched = 10, total = 11, complete = false, nextEpisode = null))
+            ).size
+        )
+        assertTrue(ContinueWatchingPolicy.select(listOf(item(watched = 11, total = 11))).isEmpty())
     }
 
     @Test
@@ -76,14 +103,16 @@ class ContinueWatchingPolicyTest {
         watched: Int = 3,
         total: Int = 8,
         updatedAt: Instant? = Instant.EPOCH,
-        inLibrary: Boolean = true
+        inLibrary: Boolean = true,
+        complete: Boolean = watched == total,
+        nextEpisode: EpisodePosition? = EpisodePosition(2, 5)
     ) = ContinueWatchingItem(
         mediaRef = ExternalMediaRef(MediaSource.TMDB, id),
         mediaType = mediaType,
         title = title,
         posterUrl = null,
-        progress = SeriesProgress(watched, total, 0, 1, watched == total),
-        nextEpisode = EpisodePosition(2, 5),
+        progress = SeriesProgress(watched, total, 0, 1, complete),
+        nextEpisode = nextEpisode,
         updatedAt = updatedAt,
         inLibrary = inLibrary
     )

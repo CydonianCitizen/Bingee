@@ -3,11 +3,14 @@ package com.cydoniancitizen.bingee.data.importexport
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackupValidatorTest {
+    private val today = LocalDate.of(2026, 8, 18)
+
     @Test
     fun acceptsSeasonZeroAndCrossReferenceGraph() {
         val data = baseData().copy(
@@ -16,13 +19,13 @@ class BackupValidatorTest {
             episodes = listOf(episode()),
             episodeProgress = listOf(BackupEpisodeProgress(ref("20001"), instant))
         )
-        assertTrue(BackupValidator.validate(document(data)) is BackupValidationResult.Success)
+        assertTrue(validate(document(data)) is BackupValidationResult.Success)
     }
 
     @Test
     fun acceptsPositiveTmdbId() {
         assertTrue(
-            BackupValidator.validate(
+            validate(
                 document(baseData().copy(media = listOf(movieWithId("550"))))
             ) is BackupValidationResult.Success
         )
@@ -96,7 +99,7 @@ class BackupValidatorTest {
     @Test
     fun previewContainsIncomingAndCurrentCountsWithoutSensitiveState() {
         val plan = (
-            BackupValidator.validate(
+            validate(
                 document(baseData().copy(media = listOf(movie())))
             ) as BackupValidationResult.Success
             ).plan
@@ -107,7 +110,9 @@ class BackupValidatorTest {
     }
 
     private fun failure(data: BackupData): BackupFailureKind =
-        ((BackupValidator.validate(document(data)) as BackupValidationResult.Failure).failure.kind)
+        ((validate(document(data)) as BackupValidationResult.Failure).failure.kind)
+
+    private fun validate(document: BackupDocument) = BackupValidator.validate(document, today)
 
     private fun assertTmdbIdRejected(id: String) {
         assertEquals(BackupFailureKind.VALIDATION, failure(baseData().copy(media = listOf(movieWithId(id)))))

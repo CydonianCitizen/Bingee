@@ -20,11 +20,12 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
-import java.time.Clock
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Instant
-import java.time.ZoneOffset
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -83,7 +84,7 @@ class ProfileViewModelTest {
 
         val repo = FakeLibraryRepo(listOf(watchedMovie, unwatchedMovie))
         val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs)
+        val viewModel = createViewModel(repo, prefs)
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -120,7 +121,7 @@ class ProfileViewModelTest {
 
         val repo = FakeLibraryRepo(listOf(movieA, movieB))
         val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs)
+        val viewModel = createViewModel(repo, prefs)
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -143,7 +144,7 @@ class ProfileViewModelTest {
         val watchedMovie = entry("1", MediaType.MOVIE, LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH)))
         val watchedSeries = entry("2", MediaType.SERIES, LibraryProgress.Series(SeriesProgress(1, 10, 0, 1, false)))
         val repo = FakeLibraryRepo(listOf(watchedMovie, watchedSeries))
-        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        val viewModel = createViewModel(repo, FakeDisplayModePrefs())
 
         testDispatcher.scheduler.advanceUntilIdle()
         val statistics = viewModel.uiState.value.statistics
@@ -166,7 +167,7 @@ class ProfileViewModelTest {
     fun statisticsTasteScopeDefaultsToAllAndRecomputesGenres() = runTest {
         val movie = viewing("movie", MediaType.MOVIE, "Drama", 18)
         val series = viewing("series", MediaType.SERIES, "Comedy", 35)
-        val viewModel = ProfileViewModel(
+        val viewModel = createViewModel(
             FakeLibraryRepo(emptyList(), viewing = listOf(movie, series)),
             FakeDisplayModePrefs()
         )
@@ -202,7 +203,7 @@ class ProfileViewModelTest {
             movieWatchedAt = Instant.EPOCH
         )
         val repo = FakeLibraryRepo(listOf(removedLibraryEntry), listOf(removed))
-        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        val viewModel = createViewModel(repo, FakeDisplayModePrefs())
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -236,10 +237,10 @@ class ProfileViewModelTest {
                 WatchedEpisodeActivity(Instant.parse("2025-02-01T10:00:00Z"), 45)
             )
         )
-        val viewModel = ProfileViewModel(
+        val viewModel = createViewModel(
             FakeLibraryRepo(emptyList(), listOf(movie, series)),
             FakeDisplayModePrefs(),
-            Clock.fixed(Instant.parse("2026-08-17T10:00:00Z"), ZoneOffset.UTC)
+            TestCalendarDateSource(LocalDate.of(2026, 8, 17))
         )
 
         testDispatcher.scheduler.advanceUntilIdle()
@@ -256,6 +257,26 @@ class ProfileViewModelTest {
     }
 
     @Test
+    fun statisticsCurrentYearFollowsLiveNewYearRollover() = runTest {
+        val dates = TestCalendarDateSource(LocalDate.of(2026, 12, 31))
+        val viewModel = createViewModel(
+            FakeLibraryRepo(emptyList()),
+            FakeDisplayModePrefs(),
+            dates
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(2026, viewModel.uiState.value.statistics.monthlyViewing.currentYear)
+        assertEquals(2026, viewModel.uiState.value.statistics.monthlyViewing.selectedYear)
+
+        dates.advanceTo(LocalDate.of(2027, 1, 1))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2027, viewModel.uiState.value.statistics.monthlyViewing.currentYear)
+        assertEquals(2027, viewModel.uiState.value.statistics.monthlyViewing.selectedYear)
+    }
+
+    @Test
     fun removedFavoriteMovieStaysFavoriteButNotWatched() = runTest {
         val removed = entry(
             "removed",
@@ -264,7 +285,7 @@ class ProfileViewModelTest {
             favorite = true,
             inLibrary = false
         )
-        val viewModel = ProfileViewModel(FakeLibraryRepo(listOf(removed)), FakeDisplayModePrefs())
+        val viewModel = createViewModel(FakeLibraryRepo(listOf(removed)), FakeDisplayModePrefs())
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -282,7 +303,7 @@ class ProfileViewModelTest {
             favorite = true,
             inLibrary = false
         )
-        val viewModel = ProfileViewModel(FakeLibraryRepo(listOf(removed)), FakeDisplayModePrefs())
+        val viewModel = createViewModel(FakeLibraryRepo(listOf(removed)), FakeDisplayModePrefs())
 
         testDispatcher.scheduler.advanceUntilIdle()
         viewModel.setCategory(ProfileCategory.TV_SERIES)
@@ -303,7 +324,7 @@ class ProfileViewModelTest {
             inLibrary = false
         )
         val repo = FakeLibraryRepo(listOf(removed))
-        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        val viewModel = createViewModel(repo, FakeDisplayModePrefs())
 
         testDispatcher.scheduler.advanceUntilIdle()
         viewModel.setCollection(ProfileCollection.FAVORITES)
@@ -323,7 +344,7 @@ class ProfileViewModelTest {
             LibraryProgress.Movie(MovieWatchState.Watched(Instant.EPOCH))
         )
         val repo = FakeLibraryRepo(listOf(watched))
-        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        val viewModel = createViewModel(repo, FakeDisplayModePrefs())
         testDispatcher.scheduler.advanceUntilIdle()
 
         repo.emitViewingResult(AppResult.Failure(AppError.Unknown))
@@ -346,7 +367,7 @@ class ProfileViewModelTest {
     @Test
     fun collectionFailureDoesNotOverwriteStatisticsError() = runTest {
         val repo = FakeLibraryRepo(emptyList())
-        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        val viewModel = createViewModel(repo, FakeDisplayModePrefs())
         testDispatcher.scheduler.advanceUntilIdle()
 
         repo.emitViewingResult(AppResult.Failure(AppError.Unknown))
@@ -372,7 +393,7 @@ class ProfileViewModelTest {
             title = "Second 2"
         )
         val repo = FakeLibraryRepo(listOf(first))
-        val viewModel = ProfileViewModel(repo, FakeDisplayModePrefs())
+        val viewModel = createViewModel(repo, FakeDisplayModePrefs())
 
         testDispatcher.scheduler.advanceUntilIdle()
         val initialStatistics = viewModel.uiState.value.statistics
@@ -391,7 +412,7 @@ class ProfileViewModelTest {
     fun displayModePersistenceDelegatesToPrefs() = runTest {
         val repo = FakeLibraryRepo(emptyList())
         val prefs = FakeDisplayModePrefs()
-        val viewModel = ProfileViewModel(repo, prefs)
+        val viewModel = createViewModel(repo, prefs)
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -401,6 +422,12 @@ class ProfileViewModelTest {
         assertEquals(ProfileViewMode.GRID, viewModel.uiState.value.currentViewMode)
         assertEquals(ProfileViewMode.GRID, prefs.modes.value.watchedMovies)
     }
+
+    private fun createViewModel(
+        repository: LibraryRepository,
+        preferences: ProfileDisplayModePreferences,
+        dateSource: CalendarDateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 18))
+    ) = ProfileViewModel(repository, preferences, dateSource)
 
     private fun entry(
         id: String,

@@ -496,6 +496,19 @@
     <string name="statistics_not_enough_data">Not enough data yet</string>
     <string name="statistics_radar_description">Relative genre taste chart. Genres: %1$s</string>
     <string name="statistics_radar_empty_description">Relative genre taste chart. Not enough data yet</string>
+    <string name="statistics_ratings">Your ratings</string>
+    <string name="statistics_rating_average">Average rating</string>
+    <string name="statistics_rating_count">Rated titles</string>
+    <string name="statistics_rating_unavailable">—</string>
+    <string name="statistics_rating_empty">You haven\'t rated any titles yet</string>
+    <string name="statistics_rating_movies">Movies</string>
+    <string name="statistics_rating_series">Series</string>
+    <string name="statistics_rating_selected_suffix">, selected</string>
+    <string name="statistics_rating_poster_accessibility">%1$s, %2$s</string>
+    <plurals name="statistics_rating_bar_description">
+        <item quantity="one">Rating %1$d, %2$d title%3$s</item>
+        <item quantity="other">Rating %1$d, %2$d titles%3$s</item>
+    </plurals>
     <plurals name="statistics_genre_row_description">
         <item quantity="one">%1$s: %2$d title</item>
         <item quantity="other">%1$s: %2$d titles</item>

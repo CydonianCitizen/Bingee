@@ -13,8 +13,10 @@ import com.cydoniancitizen.bingee.data.importexport.BackupValidationResult
 import com.cydoniancitizen.bingee.data.importexport.BackupValidator
 import com.cydoniancitizen.bingee.data.importexport.ValidatedBackupPlan
 import com.cydoniancitizen.bingee.domain.background.BackgroundWorkScheduler
+import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +41,7 @@ internal enum class BackupOperation {
 }
 
 internal data class BackupUiState(
+    val today: LocalDate = LocalDate.MIN,
     val operation: BackupOperation = BackupOperation.IDLE,
     val preview: BackupPreview? = null,
     val failure: BackupFailureKind? = null,
@@ -51,12 +54,21 @@ internal class BackupViewModel @Inject constructor(
     private val dataStore: BackupDataStore,
     private val fileGateway: BackupFileGateway,
     private val preferencesRepository: ReleaseNotificationPreferencesRepository,
-    private val scheduler: BackgroundWorkScheduler
+    private val scheduler: BackgroundWorkScheduler,
+    private val dateSource: CalendarDateSource
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(BackupUiState())
+    private val mutableUiState = MutableStateFlow(BackupUiState(today = dateSource.currentDate()))
     val uiState: StateFlow<BackupUiState> = mutableUiState.asStateFlow()
     private val operationLock = Mutex()
     private var pendingPlan: ValidatedBackupPlan? = null
+
+    init {
+        viewModelScope.launch {
+            dateSource.observeDate().collect { today ->
+                mutableUiState.update { it.copy(today = today) }
+            }
+        }
+    }
 
     fun saveTo(uri: Uri) {
         if (!operationLock.tryLock()) return
@@ -121,7 +133,7 @@ internal class BackupViewModel @Inject constructor(
                 }
                 mutableUiState.update { it.copy(operation = BackupOperation.VALIDATING) }
                 val document = (parsed as BackupParseResult.Success).document
-                val validation = BackupValidator.validate(document)
+                val validation = BackupValidator.validate(document, dateSource.currentDate())
                 if (validation is BackupValidationResult.Failure) {
                     fail(validation.failure.kind)
                     return@launch
@@ -144,7 +156,7 @@ internal class BackupViewModel @Inject constructor(
     fun cancelPreview() {
         if (mutableUiState.value.operation == BackupOperation.PREVIEW_READY) {
             pendingPlan = null
-            mutableUiState.value = BackupUiState()
+            mutableUiState.value = BackupUiState(today = dateSource.currentDate())
         }
     }
 
@@ -185,7 +197,7 @@ internal class BackupViewModel @Inject constructor(
 
     fun dismissFeedback() {
         if (mutableUiState.value.operation == BackupOperation.PREVIEW_READY) return
-        mutableUiState.value = BackupUiState()
+        mutableUiState.value = BackupUiState(today = dateSource.currentDate())
     }
 
     private fun fail(kind: BackupFailureKind) {
