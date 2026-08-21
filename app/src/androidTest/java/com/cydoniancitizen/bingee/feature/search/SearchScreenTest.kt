@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -129,9 +130,11 @@ class SearchScreenTest {
         composeRule.onNodeWithText("Fixed Movie").assertIsDisplayed()
         composeRule.onNodeWithText("Original Movie").assertIsDisplayed()
         composeRule.onNodeWithText("Year: 2024").assertIsDisplayed()
+        // The result card owns one description; its poster, placeholder included, stays decorative
+        // so the title is not announced twice.
         composeRule
-            .onNodeWithContentDescription("No poster available for Fixed Movie")
-            .assertIsDisplayed()
+            .onNodeWithContentDescription("Open details for Fixed Movie")
+            .assertContentDescriptionEquals("Open details for Fixed Movie")
         composeRule.onNodeWithText("End of results").assertIsDisplayed()
     }
 

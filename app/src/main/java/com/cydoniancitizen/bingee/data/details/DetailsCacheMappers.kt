@@ -5,6 +5,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
+import com.cydoniancitizen.bingee.core.model.distinctByCanonicalIdentity
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
@@ -92,6 +93,7 @@ private fun CachedDetailsRelation.cachedGenres(): List<Genre> = genres
             Genre(name = name, source = row.source, genreId = row.genreId)
         }
     }
+    .distinctByCanonicalIdentity()
 
 private fun String?.normalizedOptional(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 

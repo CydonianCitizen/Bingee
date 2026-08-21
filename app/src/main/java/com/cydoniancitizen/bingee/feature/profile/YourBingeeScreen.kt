@@ -5,10 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -101,6 +104,8 @@ internal fun YourBingeeContent(
                         )
                     }
                 },
+                // The app shell already applies the status bar inset to the nav host.
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 scrollBehavior = scrollBehavior
             )
         }
@@ -306,7 +311,13 @@ private fun GenrePodium(ranked: List<GenreStatistic>) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Bottom
     ) {
+        // The winner stands in the middle, so the presentation position is not the rank.
         podiumPresentationOrder(ranked).forEachIndexed { index, genre ->
+            val rank = when (index) {
+                0 -> 2
+                1 -> 1
+                else -> 3
+            }
             val (height, background, content) = when (index) {
                 0 -> Triple(70.dp, BingeePodiumColors.silver, BingeePodiumColors.onSilver)
                 1 -> Triple(90.dp, BingeePodiumColors.gold, BingeePodiumColors.onGold)
@@ -314,6 +325,7 @@ private fun GenrePodium(ranked: List<GenreStatistic>) {
             }
             GenrePodiumStep(
                 genre = genre,
+                rank = rank,
                 background = background,
                 content = content,
                 modifier = Modifier
@@ -325,11 +337,34 @@ private fun GenrePodium(ranked: List<GenreStatistic>) {
 }
 
 @Composable
-private fun GenrePodiumStep(genre: GenreStatistic, background: Color, content: Color, modifier: Modifier = Modifier) {
+private fun GenrePodiumStep(
+    genre: GenreStatistic,
+    rank: Int,
+    background: Color,
+    content: Color,
+    modifier: Modifier = Modifier
+) {
+    // Height, position, and the gold/silver/bronze surfaces carry the rank visually; the spoken
+    // description states it instead, so rank never depends on seeing geometry or colour.
+    val rankLabel = stringResource(
+        when (rank) {
+            1 -> R.string.profile_statistics_podium_rank_first
+            2 -> R.string.profile_statistics_podium_rank_second
+            else -> R.string.profile_statistics_podium_rank_third
+        }
+    )
+    val description = pluralStringResource(
+        R.plurals.profile_statistics_podium_accessibility,
+        genre.titleCount,
+        rankLabel,
+        genre.name,
+        genre.titleCount
+    )
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
             .background(background)
+            .semantics(mergeDescendants = true) { contentDescription = description }
             .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -388,8 +423,9 @@ private fun WatchingSection(
 private fun CollectionSection(counts: ProfileCollectionCounts, onOpenCollection: (ProfileCollectionShortcut) -> Unit) {
     SectionHeader(title = stringResource(R.string.profile_collection_title))
     Spacer(Modifier.height(12.dp))
+    val rowModifier = Modifier.fillMaxWidth()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = rowModifier) {
             CollectionShortcut(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Star,
@@ -405,7 +441,7 @@ private fun CollectionSection(counts: ProfileCollectionCounts, onOpenCollection:
                 onClick = { onOpenCollection(ProfileCollectionShortcut.WATCHED) }
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = rowModifier) {
             CollectionShortcut(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Favorite,
@@ -492,13 +528,15 @@ private fun PosterRow(content: @Composable RowScope.() -> Unit) {
 private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: (() -> Unit)?) {
     val position = item.nextEpisode?.let {
         stringResource(R.string.profile_episode_position, it.seasonNumber, it.episodeNumber)
-    } ?: stringResource(
-        R.string.profile_watching_progress_position,
+    } ?: pluralStringResource(
+        R.plurals.profile_watching_progress_position,
+        item.progress.trackableEpisodes,
         item.progress.watchedEpisodes,
         item.progress.trackableEpisodes
     )
-    val description = stringResource(
-        R.string.profile_watching_accessibility,
+    val description = pluralStringResource(
+        R.plurals.profile_watching_accessibility,
+        item.progress.trackableEpisodes,
         item.title,
         item.progress.watchedEpisodes,
         item.progress.trackableEpisodes,
@@ -517,7 +555,9 @@ private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: (() -> Unit)
             title = item.title,
             posterUrl = item.posterUrl,
             width = 132.dp,
-            height = 198.dp
+            height = 198.dp,
+            // The clickable item owns the combined description of this entry.
+            contentDescription = null
         )
         Spacer(Modifier.height(8.dp))
         LinearProgressIndicator(
@@ -575,7 +615,9 @@ private fun FavoritePosterItem(entry: LibraryEntry, onClick: (() -> Unit)?) {
             title = entry.title,
             posterUrl = entry.posterUrl,
             width = 132.dp,
-            height = 198.dp
+            height = 198.dp,
+            // The clickable item owns the combined description of this entry.
+            contentDescription = null
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -602,9 +644,11 @@ private fun CollectionShortcut(
     iconTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
     val text = stringResource(R.string.profile_collection_shortcut, label, count)
+    val separatedCount = stringResource(R.string.profile_collection_shortcut_count, count)
     Row(
         modifier = modifier
-            .height(52.dp)
+            // Italian labels at a large font scale need a second line; the tile grows instead of clipping.
+            .heightIn(min = 52.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick)
@@ -612,17 +656,30 @@ private fun CollectionShortcut(
                 contentDescription = text
                 role = Role.Button
             }
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // Label and count share one line whenever they fit; the count drops below only when a long
+        // Italian label at a large font scale would otherwise be clipped.
+        FlowRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = separatedCount,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
     }
 }
 

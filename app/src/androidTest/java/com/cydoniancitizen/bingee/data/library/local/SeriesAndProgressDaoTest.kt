@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.DefaultLibraryRepository
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
@@ -191,14 +192,17 @@ class SeriesAndProgressDaoTest {
     }
 
     @Test
-    fun partiallyCachedSeriesRemainsInContinueWatching() = runBlocking {
+    fun partiallyCachedCaughtUpSeriesStaysWatchingButLeavesContinueWatching() = runBlocking {
         storeRegularEpisodes()
         progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, now)
         progressDao.markEpisodeWatched(MediaSource.TMDB, "102", today, now)
         seriesDao.upsertSeasonSummaries(MediaSource.TMDB, "100", listOf(season("12", 2)))
 
-        val rows = libraryDao.observeContinueWatchingRows(MediaSource.TMDB, today).first()
-        assertFalse(rows.single { it.externalId == "100" }.hasSufficientCoverage)
+        val row = libraryDao.observeContinueWatchingRows(MediaSource.TMDB, today).first()
+            .single { it.externalId == "100" }
+        assertFalse(row.hasSufficientCoverage)
+        assertEquals(2, row.watchedEpisodes)
+        assertEquals(2, row.trackableEpisodes)
 
         val repository = DefaultLibraryRepository(
             libraryDao,
@@ -207,10 +211,19 @@ class SeriesAndProgressDaoTest {
             Clock.fixed(now, ZoneOffset.UTC),
             dateSource
         )
+
+        // Missing season 2 episodes mean completion cannot be claimed, so the canonical state stays
+        // conservatively WATCHING even though every cached regular episode is watched.
+        val entry = (repository.observeEntries().first() as AppResult.Success).value
+            .single { it.mediaRef.externalId == "100" }
+        assertEquals(SeriesTrackingState.WATCHING, entry.serialState)
+
+        // Continue Watching is the actionable shelf: it needs an unwatched trackable regular episode,
+        // and 2 of 2 leaves nothing to resume.
         val result = repository.observeContinueWatching().first()
 
         assertTrue(result is AppResult.Success)
-        assertEquals("100", (result as AppResult.Success).value.single().mediaRef.externalId)
+        assertTrue((result as AppResult.Success).value.isEmpty())
     }
 
     @Test

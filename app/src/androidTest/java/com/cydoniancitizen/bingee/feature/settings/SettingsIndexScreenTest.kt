@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.feature.settings
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
@@ -25,6 +26,7 @@ class SettingsIndexScreenTest {
         composeRule.setContent {
             BingeeTheme {
                 SettingsIndexScreen(
+                    onBack = {},
                     onNavigateToAppearance = { appearanceClicked.set(true) },
                     onNavigateToNotifications = { notificationsClicked.set(true) },
                     onNavigateToDataBackup = { dataBackupClicked.set(true) },
@@ -55,5 +57,29 @@ class SettingsIndexScreenTest {
 
         composeRule.onNodeWithText("About Bingee").performClick()
         assertTrue(aboutClicked.get())
+    }
+
+    @Test
+    fun exposesVisibleUpNavigationThatCallsBack() {
+        val back = AtomicBoolean(false)
+
+        composeRule.setContent {
+            BingeeTheme {
+                SettingsIndexScreen(
+                    onBack = { back.set(true) },
+                    onNavigateToAppearance = {},
+                    onNavigateToNotifications = {},
+                    onNavigateToDataBackup = {},
+                    onNavigateToPrivacy = {},
+                    onNavigateToAbout = {}
+                )
+            }
+        }
+
+        // Settings is reached from Your Bingee, so system Back alone is not the whole affordance.
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").performClick()
+
+        assertTrue(back.get())
     }
 }

@@ -139,7 +139,6 @@ internal class BackupDataStore @Inject constructor(
                 }, { it.episodeNumber }, { it.externalRef.source.name }, { it.externalRef.externalId })
             )
 
-            val mediaRefById = primaryByMedia
             val episodeRefById = rows.episodes.associate { it.localEpisodeId to BackupRef(it.source, it.externalId) }
             val dataPreferences = rows.preferences?.let {
                 BackupPreferences(
@@ -154,26 +153,26 @@ internal class BackupDataStore @Inject constructor(
                 seasons = seasonRecords,
                 episodes = episodeRecords,
                 library = rows.memberships.filter { it.localMediaId in portableMediaIds }
-                    .map { BackupLibraryEntry(mediaRefById.getValue(it.localMediaId), it.addedAt) }
+                    .map { BackupLibraryEntry(primaryByMedia.getValue(it.localMediaId), it.addedAt) }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 movieProgress = rows.movieProgress.filter { it.localMediaId in portableMediaIds }
-                    .map { BackupMovieProgress(mediaRefById.getValue(it.localMediaId), it.watchedAt, it.watchedDate) }
+                    .map { BackupMovieProgress(primaryByMedia.getValue(it.localMediaId), it.watchedAt, it.watchedDate) }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 seriesProgress = rows.seriesProgress.filter { it.localMediaId in portableMediaIds }
                     .map {
-                        BackupSeriesProgress(mediaRefById.getValue(it.localMediaId), it.completedAt, it.watchedDate)
+                        BackupSeriesProgress(primaryByMedia.getValue(it.localMediaId), it.completedAt, it.watchedDate)
                     }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 abandonedSeries = rows.seriesStateOverrides
                     .filter { it.isAbandoned && it.localMediaId in portableMediaIds }
-                    .map { BackupAbandonedSeries(mediaRefById.getValue(it.localMediaId)) }
+                    .map { BackupAbandonedSeries(primaryByMedia.getValue(it.localMediaId)) }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 episodeProgress = rows.episodeProgress.filter { it.localEpisodeId in episodeRefById }
                     .map { BackupEpisodeProgress(episodeRefById.getValue(it.localEpisodeId), it.watchedAt) }
                     .sortedWith(compareBy({ it.episodeRef.source.name }, { it.episodeRef.externalId })),
                 ratings = rows.ratings.filter { it.localMediaId in portableMediaIds }
                     .map {
-                        BackupRating(mediaRefById.getValue(it.localMediaId), it.ratingValue, it.ratedAt, it.updatedAt)
+                        BackupRating(primaryByMedia.getValue(it.localMediaId), it.ratingValue, it.ratedAt, it.updatedAt)
                     }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 preferences = dataPreferences

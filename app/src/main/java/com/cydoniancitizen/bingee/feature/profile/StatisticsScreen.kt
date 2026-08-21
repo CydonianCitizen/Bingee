@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +57,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -100,12 +103,22 @@ import com.cydoniancitizen.bingee.domain.model.relativeGenreNormalization
 import com.cydoniancitizen.bingee.domain.model.relativeRatingNormalization
 import com.cydoniancitizen.bingee.domain.model.relativeViewingNormalization
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val RADAR_RING_COUNT = 4
+private val RADAR_BASE_HEIGHT = 260.dp
+private val RADAR_LABEL_MIN_WIDTH = 88.dp
+private val RADAR_LABEL_MAX_WIDTH = 112.dp
+private const val RADAR_LABEL_MAX_LINES = 3
+private const val RADAR_MAX_FONT_SCALE = 1.5f
+
+// Below this an axis is close to the centre line, so it needs no gutter on that side.
+private const val RADAR_MIN_AXIS_PROJECTION = 0.2f
 private val CHART_MIN_SLOT_WIDTH = 48.dp
 private val CHART_SLOT_SPACING = 4.dp
 private val CHART_EDGE_PADDING = 4.dp
@@ -146,7 +159,9 @@ internal fun StatisticsScreen(
                             contentDescription = stringResource(R.string.detail_back)
                         )
                     }
-                }
+                },
+                // The app shell already applies the status bar inset to the nav host.
+                windowInsets = WindowInsets(0, 0, 0, 0)
             )
         }
     ) { innerPadding ->
@@ -494,7 +509,9 @@ private fun RatingPosterItem(entry: PersonalViewingEntry, onClick: (() -> Unit)?
             title = entry.title,
             posterUrl = entry.posterUrl,
             width = 132.dp,
-            height = 198.dp
+            height = 198.dp,
+            // The clickable item owns the combined description of this entry.
+            contentDescription = null
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -657,9 +674,10 @@ private fun ViewingSummary(
 
 @Composable
 private fun ViewingMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    val metricDescription = stringResource(R.string.statistics_metric_accessibility, label, value)
     Column(
         modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = "$label: $value"
+            contentDescription = metricDescription
         },
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -1029,10 +1047,20 @@ private fun TasteRadarChart(
     val axisColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
     val accentColor = MaterialTheme.colorScheme.primary
 
+    // Labels are sp-sized, so the frame has to grow with the font scale or they collide with the web.
+    // On a compact screen the width binds the chart first, so the extra height is capped to it rather
+    // than left as dead space above the web.
+    val density = LocalDensity.current
+    val fontScale = density.fontScale.coerceIn(1f, RADAR_MAX_FONT_SCALE)
+    val availableWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() } -
+        BingeeDimensions.screenPadding * 2
+    val chartHeight = (RADAR_BASE_HEIGHT * fontScale).coerceAtMost(
+        availableWidth.coerceAtLeast(RADAR_BASE_HEIGHT)
+    )
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(260.dp)
+            .height(chartHeight)
             .semantics { contentDescription = chartDescription }
     ) {
         drawRadar(
@@ -1057,11 +1085,33 @@ private fun DrawScope.drawRadar(
     accentColor: Color
 ) {
     val axisCount = genres.size
-    val labelWidth = min(104.dp.toPx(), size.width * 0.24f)
     val labelGap = 8.dp.toPx()
+    // A compact screen still owes long genre names a readable gutter, so the fraction has a floor.
+    val labelWidth = min(
+        RADAR_LABEL_MAX_WIDTH.toPx(),
+        max(size.width * 0.24f, RADAR_LABEL_MIN_WIDTH.toPx())
+    )
+    val labels = genres.map { genre ->
+        textMeasurer.measure(
+            text = AnnotatedString(genre.name),
+            style = labelStyle,
+            constraints = Constraints(maxWidth = labelWidth.roundToInt().coerceAtLeast(1)),
+            maxLines = RADAR_LABEL_MAX_LINES,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+    // Only the widest and tallest axis projections actually need clearance, so the radius is bounded
+    // by those instead of by the worst case an axis-aligned layout would imply.
+    val maxAbsCos = (0 until axisCount)
+        .maxOfOrNull { abs(cos(radarAngle(it, axisCount))) }
+        ?.coerceAtLeast(RADAR_MIN_AXIS_PROJECTION) ?: 1f
+    val maxAbsSin = (0 until axisCount)
+        .maxOfOrNull { abs(sin(radarAngle(it, axisCount))) }
+        ?.coerceAtLeast(RADAR_MIN_AXIS_PROJECTION) ?: 1f
+    val labelHeight = labels.maxOfOrNull { it.size.height.toFloat() } ?: 0f
     val radius = min(
-        size.width / 2f - labelWidth - labelGap,
-        size.height / 2f - 30.dp.toPx()
+        (size.width / 2f - labelWidth - labelGap) / maxAbsCos,
+        (size.height / 2f - labelHeight - labelGap) / maxAbsSin
     ).coerceAtLeast(0f)
     val center = Offset(size.width / 2f, size.height / 2f)
 
@@ -1103,18 +1153,12 @@ private fun DrawScope.drawRadar(
     drawPath(polygon, BingeeChartColors.taste.copy(alpha = 0.16f))
     drawPath(path = polygon, color = accentColor, style = Stroke(width = 2.dp.toPx()))
 
-    genres.forEachIndexed { index, genre ->
+    genres.indices.forEach { index ->
         val dataPoint = radarPoint(center, radius * normalizedValues[index].coerceIn(0f, 1f), index, axisCount)
         val axisPoint = radarPoint(center, radius, index, axisCount)
         drawCircle(accentColor, radius = 3.5.dp.toPx(), center = dataPoint)
 
-        val layout = textMeasurer.measure(
-            text = AnnotatedString(genre.name),
-            style = labelStyle,
-            constraints = Constraints(maxWidth = labelWidth.roundToInt().coerceAtLeast(1)),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        val layout = labels[index]
         val angle = radarAngle(index, axisCount)
         val direction = Offset(cos(angle), sin(angle))
         val labelX = when {

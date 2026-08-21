@@ -20,7 +20,7 @@ The user's viewing history remains useful offline and portable because local per
 
 ## Operating Context
 
-The primary workflow is offline-capable Android use with optional TMDB metadata refresh. Profile is the personal dashboard and the existing Profile/Library route is the collection destination.
+The primary workflow is offline-capable Android use with optional TMDB metadata refresh. Your Bingee is the personal dashboard, and its collection views are the destination for the saved library. The destination keeps the internal `profile` route; only its user-facing vocabulary is Your Bingee / Il tuo Bingee.
 
 ## Capabilities and Constraints
 
@@ -32,7 +32,7 @@ Bingee name and existing Material 3 ColorScheme, light/dark themes, edge-to-edge
 
 ## Evidence on Hand
 
-Repository code, Room schema, existing Profile/Library, Details, Search, Settings, and shared poster components. No user accounts or backend are present.
+Repository code, Room schema, the Your Bingee dashboard and its collection views, Details, Search, Settings, Statistics, and shared poster components. No user accounts or backend are present.
 
 ## Product Principles
 

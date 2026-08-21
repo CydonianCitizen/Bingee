@@ -226,11 +226,34 @@ internal abstract class LibraryDao {
     )
     abstract fun observePersonalViewingActivities(): Flow<List<PersonalViewingActivityRow>>
 
+    /**
+     * Genres are cached for every title the user opens, so this is restricted to the same cohort
+     * [observePersonalViewing] returns. Without it the projection also carries genre rows for titles the
+     * user only browsed, which the caller then discards.
+     */
     @Query(
         """
         SELECT local_media_id, source, genre_id, name
         FROM media_genres
         WHERE source IS NOT NULL AND genre_id IS NOT NULL
+          AND (
+              EXISTS (
+                  SELECT 1 FROM movie_watch_progress
+                  WHERE movie_watch_progress.local_media_id = media_genres.local_media_id
+              )
+              OR EXISTS (
+                  SELECT 1 FROM series_watch_progress
+                  WHERE series_watch_progress.local_media_id = media_genres.local_media_id
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM seasons
+                  INNER JOIN episodes USING(local_season_id)
+                  INNER JOIN episode_watch_progress USING(local_episode_id)
+                  WHERE seasons.local_media_id = media_genres.local_media_id
+                    AND seasons.season_number > 0
+              )
+          )
         ORDER BY local_media_id, source, genre_id, genre_order
         """
     )

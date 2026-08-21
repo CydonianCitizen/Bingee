@@ -27,7 +27,6 @@ class WatchedStatisticsTest {
         assertEquals(0, stats.moviesWatchedCount)
         assertEquals(0, stats.tvSeriesCompletedCount)
         assertEquals(0, stats.episodesWatchedCount)
-        assertNull(stats.averagePersonalRating)
         assertEquals(0, stats.personalRatingStatistics.ratedTitleCount)
         assertEquals(List(10) { 0 }, stats.personalRatingStatistics.histogram.map { it.titleCount })
         assertTrue(stats.isEmpty)
@@ -52,7 +51,6 @@ class WatchedStatisticsTest {
 
         assertEquals(1, stats.moviesWatchedCount)
         assertEquals(1, stats.tvSeriesCompletedCount)
-        assertEquals(listOf("complete", "movie"), stats.recentlyCompletedTitles.map { it.mediaRef.externalId })
     }
 
     @Test
@@ -84,9 +82,8 @@ class WatchedStatisticsTest {
 
         val stats = calculateWatchedStatistics(entries, zone)
 
-        assertEquals(7.0, stats.averagePersonalRating!!, 0.01)
-        assertEquals(100.0, stats.ratedTitlesPercentage, 0.01)
-        assertEquals(MediaTypeDistribution(movieCount = 1, tvSeriesCount = 1), stats.mediaTypeDistribution)
+        assertEquals(7.0, stats.personalRatingStatistics.averageRating!!, 0.01)
+        assertEquals(2, stats.personalRatingStatistics.ratedTitleCount)
     }
 
     @Test
@@ -182,28 +179,6 @@ class WatchedStatisticsTest {
         val stats = calculateWatchedStatistics(entries, zone)
 
         assertEquals(9, stats.episodesWatchedCount)
-        assertEquals(3, stats.mediaTypeDistribution.tvSeriesCount)
-    }
-
-    @Test
-    fun completionOrderingNeverUsesAddedAt() {
-        val earlierCompletionAddedLater = movie(
-            "earlier",
-            watchedAt = instant("2026-01-01T12:00:00Z"),
-            addedAt = instant("2026-12-01T12:00:00Z")
-        )
-        val laterCompletionAddedEarlier = movie(
-            "later",
-            watchedAt = instant("2026-02-01T12:00:00Z"),
-            addedAt = instant("2025-01-01T12:00:00Z")
-        )
-
-        val recent = calculateWatchedStatistics(
-            listOf(earlierCompletionAddedLater, laterCompletionAddedEarlier),
-            zone
-        ).recentlyCompletedTitles
-
-        assertEquals(listOf("later", "earlier"), recent.map { it.mediaRef.externalId })
     }
 
     @Test
@@ -212,11 +187,8 @@ class WatchedStatisticsTest {
         val explicit = LocalDate.of(2020, 2, 3)
         val entry = movie("movie", watchedAt = completion, watchedDate = explicit)
 
-        val stats = calculateWatchedStatistics(listOf(entry), zone)
-
         assertEquals(explicit, entry.displayWatchedDate(zone))
         assertEquals(completion, entry.completionTimestamp)
-        assertEquals(listOf(MonthYearCount(2020, 2, 1)), stats.watchedByMonthYear)
     }
 
     @Test
@@ -226,7 +198,6 @@ class WatchedStatisticsTest {
         val stats = calculateWatchedStatistics(listOf(entry), zone)
 
         assertEquals(LocalDate.of(2026, 8, 2), entry.displayWatchedDate(zone))
-        assertEquals(listOf(MonthYearCount(2026, 8, 1)), stats.watchedByMonthYear)
         assertFalse(stats.isEmpty)
     }
 

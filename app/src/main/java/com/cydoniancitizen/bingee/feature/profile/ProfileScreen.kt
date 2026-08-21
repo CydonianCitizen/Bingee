@@ -4,6 +4,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -62,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -192,7 +194,7 @@ internal fun ProfileContent(
                 }
             }
             Text(
-                text = stringResource(R.string.profile_title),
+                text = stringResource(R.string.profile_collection_title),
                 modifier = Modifier
                     .weight(1f)
                     .semantics { heading() },
@@ -578,7 +580,9 @@ private fun ProfileGridItem(
                     posterUrl = entry.posterUrl,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(0.67f)
+                        .aspectRatio(0.67f),
+                    // The card owns the combined description of this item.
+                    contentDescription = null
                 )
                 IconButton(
                     onClick = { onToggleFavorite(entry) },
@@ -661,8 +665,9 @@ private fun ProfileGridItem(
 
                 val subtitleText = when (val p = entry.progress) {
                     is LibraryProgress.Movie -> entry.releaseDate?.year?.toString()
-                    is LibraryProgress.Series -> stringResource(
-                        R.string.library_progress_episodes,
+                    is LibraryProgress.Series -> pluralStringResource(
+                        R.plurals.library_progress_episodes,
+                        p.progress.trackableEpisodes,
                         p.progress.watchedEpisodes,
                         p.progress.trackableEpisodes
                     )
@@ -759,7 +764,8 @@ private fun ProfileListItem(
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
             horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
         ) {
-            MediaPoster(title = entry.title, posterUrl = entry.posterUrl)
+            // The card owns the combined description of this item.
+            MediaPoster(title = entry.title, posterUrl = entry.posterUrl, contentDescription = null)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
@@ -824,7 +830,12 @@ private fun ProfileListItem(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // A long Italian secondary action has no room beside the filled button, so it wraps
+                // to its own line instead of being squeezed to one character per line.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Button(onClick = onRemove, enabled = !isRemoving) {
                         Text(
                             stringResource(
@@ -878,8 +889,9 @@ private fun LibraryProgress.displayText(): String = when (this) {
     is LibraryProgress.Movie -> stringResource(
         if (state is MovieWatchState.Watched) R.string.library_progress_watched else R.string.library_progress_unwatched
     )
-    is LibraryProgress.Series -> stringResource(
-        R.string.library_progress_episodes,
+    is LibraryProgress.Series -> pluralStringResource(
+        R.plurals.library_progress_episodes,
+        progress.trackableEpisodes,
         progress.watchedEpisodes,
         progress.trackableEpisodes
     )

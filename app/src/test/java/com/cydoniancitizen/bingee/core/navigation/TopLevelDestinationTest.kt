@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.core.navigation
 
+import com.cydoniancitizen.bingee.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -12,6 +13,16 @@ class TopLevelDestinationTest {
             listOf("home", "search", "profile"),
             TopLevelDestination.entries.map(TopLevelDestination::route)
         )
+    }
+
+    @Test
+    fun personalDestinationPresentsItselfAsYourBingeeOnTheUnchangedProfileRoute() {
+        val personal = TopLevelDestination.PROFILE
+
+        // The user-facing vocabulary is the dashboard title; the route stays "profile" so saved
+        // navigation state, notification targets, and collection subroutes keep resolving.
+        assertEquals(R.string.profile_title_dashboard, personal.labelRes)
+        assertEquals("profile", personal.route)
     }
 
     @Test

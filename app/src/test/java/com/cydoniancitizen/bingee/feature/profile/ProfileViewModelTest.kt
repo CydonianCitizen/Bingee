@@ -178,9 +178,11 @@ class ProfileViewModelTest {
         assertEquals(listOf(18L, 35L), viewModel.uiState.value.tasteStatistics.rankedGenres.map { it.genreId })
 
         viewModel.setStatisticsMediaScope(StatisticsMediaScope.MOVIES)
+        testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(listOf(18L), viewModel.uiState.value.tasteStatistics.rankedGenres.map { it.genreId })
 
         viewModel.setStatisticsMediaScope(StatisticsMediaScope.SERIES)
+        testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(listOf(35L), viewModel.uiState.value.tasteStatistics.rankedGenres.map { it.genreId })
     }
 
@@ -209,7 +211,6 @@ class ProfileViewModelTest {
 
         assertTrue(viewModel.uiState.value.entries.isEmpty())
         assertEquals(1, viewModel.uiState.value.statistics.moviesWatchedCount)
-        assertEquals("removed", viewModel.uiState.value.statistics.recentlyCompletedTitles.single().mediaRef.externalId)
     }
 
     @Test
@@ -247,6 +248,7 @@ class ProfileViewModelTest {
         val initial = viewModel.uiState.value.statistics
         viewModel.setStatisticsViewingMonth(3)
         viewModel.setStatisticsViewingYear(2025)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         val updated = viewModel.uiState.value
         assertEquals(2025, updated.statistics.monthlyViewing.selectedYear)
@@ -427,7 +429,7 @@ class ProfileViewModelTest {
         repository: LibraryRepository,
         preferences: ProfileDisplayModePreferences,
         dateSource: CalendarDateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 18))
-    ) = ProfileViewModel(repository, preferences, dateSource)
+    ) = ProfileViewModel(repository, preferences, dateSource, testDispatcher)
 
     private fun entry(
         id: String,

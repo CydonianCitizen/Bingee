@@ -4,10 +4,10 @@ import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
-import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
+import com.cydoniancitizen.bingee.core.model.toContinueWatchingItem
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import java.time.LocalDate
@@ -51,18 +51,4 @@ interface LibraryRepository {
 
     suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
         AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.UnsupportedData)
-}
-
-private fun LibraryEntry.toContinueWatchingItem(): ContinueWatchingItem? = (progress as? LibraryProgress.Series)?.let {
-    ContinueWatchingItem(
-        mediaRef = mediaRef,
-        mediaType = mediaType,
-        title = title,
-        posterUrl = posterUrl,
-        progress = it.progress,
-        nextEpisode = it.progress.nextEpisode,
-        updatedAt = it.progress.lastWatchedAt,
-        isAbandoned = isAbandoned,
-        inLibrary = inLibrary
-    )
 }

@@ -1,6 +1,6 @@
 # Bingee backup format v1
 
-This is the current portable data contract for Room v4. The Android app exposes it under Profile → Settings → Data & backup; save, share, and restore work without a Bingee account or backend.
+This is the current portable data contract for Room v4. The Android app exposes it under Your Bingee → Settings → Data & backup; save, share, and restore work without a Bingee account or backend.
 
 ## Contract
 

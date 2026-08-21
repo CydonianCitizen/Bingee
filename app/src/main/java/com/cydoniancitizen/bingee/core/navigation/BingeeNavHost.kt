@@ -137,6 +137,7 @@ fun BingeeNavHost(
         }
         composable(AppRoute.SETTINGS) {
             SettingsIndexScreen(
+                onBack = navController::popBackStack,
                 onNavigateToAppearance = { navController.navigate(AppRoute.SETTINGS_APPEARANCE) },
                 onNavigateToNotifications = { navController.navigate(AppRoute.SETTINGS_NOTIFICATIONS) },
                 onNavigateToDataBackup = { navController.navigate(AppRoute.SETTINGS_DATA_BACKUP) },

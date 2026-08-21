@@ -82,6 +82,8 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.work.testing)
+    // Pins the kotlinx-serialization runtime that Room's MigrationTestHelper needs to read the
+    // exported schema JSON; without it the migration tests fail with AbstractMethodError.
     debugImplementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)

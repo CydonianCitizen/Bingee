@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -234,7 +235,9 @@ private fun ContinueWatchingCard(item: ContinueWatchingItem, onClick: () -> Unit
             MediaPoster(
                 title = item.title,
                 posterUrl = item.posterUrl,
-                modifier = Modifier.size(width = 88.dp, height = 132.dp)
+                modifier = Modifier.size(width = 88.dp, height = 132.dp),
+                // The card owns the combined description of this item.
+                contentDescription = null
             )
             Column(
                 modifier = Modifier.weight(1f),
@@ -247,8 +250,9 @@ private fun ContinueWatchingCard(item: ContinueWatchingItem, onClick: () -> Unit
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = stringResource(
-                        R.string.home_continue_watching_progress,
+                    text = pluralStringResource(
+                        R.plurals.home_continue_watching_progress,
+                        item.progress.trackableEpisodes,
                         item.progress.watchedEpisodes,
                         item.progress.trackableEpisodes
                     ),
@@ -296,7 +300,9 @@ private fun FeaturedReleaseCard(
                 posterUrl = item.posterUrl,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .weight(1f),
+                // The card owns the combined description of this item.
+                contentDescription = null
             )
             Text(
                 text = item.title,
@@ -412,7 +418,8 @@ private fun ReleaseEventCard(event: ReleaseEvent, category: ReleaseDateCategory,
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
             horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
         ) {
-            MediaPoster(event.title, event.posterUrl)
+            // The card owns the combined description of this item.
+            MediaPoster(event.title, event.posterUrl, contentDescription = null)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)

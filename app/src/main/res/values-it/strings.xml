@@ -2,7 +2,6 @@
     <string name="app_name">Bingee</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Cerca</string>
-    <string name="nav_profile">Profilo</string>
     <string name="nav_settings">Impostazioni</string>
     <string name="startup_checking">Verifica configurazione locale</string>
     <string name="error_network_unavailable">Nessuna connessione di rete. Controlla la connessione e riprova.</string>
@@ -77,7 +76,6 @@
     <string name="series_tracking_restore">Riprendi tracciamento serie</string>
     <string name="search_action_add_watch_later">Aggiungi a Da vedere</string>
     <string name="search_action_in_watch_later">In Da vedere</string>
-    <string name="profile_title">Profilo</string>
     <string name="profile_title_dashboard">Il tuo Bingee</string>
     <string name="profile_watching_title">In visione</string>
     <string name="profile_view_all">Vedi tutti</string>
@@ -90,11 +88,23 @@
     <string name="profile_statistics_series_watched">Serie viste</string>
     <string name="profile_statistics_watch_time">Tempo di visione</string>
     <string name="profile_statistics_genres">I tuoi generi</string>
+    <string name="profile_statistics_podium_rank_first">1° posto</string>
+    <string name="profile_statistics_podium_rank_second">2° posto</string>
+    <string name="profile_statistics_podium_rank_third">3° posto</string>
+    <plurals name="profile_statistics_podium_accessibility">
+        <item quantity="one">%1$s, %2$s, %3$d titolo</item>
+        <item quantity="other">%1$s, %2$s, %3$d titoli</item>
+        <item quantity="many">%1$s, %2$s, %3$d titoli</item>
+    </plurals>
     <string name="profile_statistics_not_enough_data">Non ci sono ancora abbastanza dati</string>
     <string name="profile_statistics_view_all">Vedi tutte le statistiche</string>
     <string name="profile_watching_empty_title">Non hai serie in visione</string>
     <string name="profile_watching_empty_body">Qui appariranno le serie con episodi ancora da vedere.</string>
-    <string name="profile_watching_accessibility">Apri %1$s. Hai visto %2$d di %3$d episodi. Prossima posizione %4$s.</string>
+    <plurals name="profile_watching_accessibility">
+        <item quantity="one">Apri %1$s. Hai visto %2$d di %3$d episodio. Prossima posizione %4$s.</item>
+        <item quantity="many">Apri %1$s. Hai visto %2$d di %3$d episodi. Prossima posizione %4$s.</item>
+        <item quantity="other">Apri %1$s. Hai visto %2$d di %3$d episodi. Prossima posizione %4$s.</item>
+    </plurals>
     <string name="profile_favorites_empty_title">Non hai ancora aggiunto preferiti.</string>
     <string name="profile_favorite_accessibility">Apri %1$s. %2$s.</string>
     <string name="profile_collection_watch_later">Da vedere</string>
@@ -102,8 +112,13 @@
     <string name="profile_collection_favorites">Preferiti</string>
     <string name="profile_collection_abandoned">Abbandonati</string>
     <string name="profile_collection_shortcut">%1$s · %2$d</string>
+    <string name="profile_collection_shortcut_count">· %1$d</string>
     <string name="profile_episode_position">S%1$d E%2$d</string>
-    <string name="profile_watching_progress_position">%1$d/%2$d episodi</string>
+    <plurals name="profile_watching_progress_position">
+        <item quantity="one">%1$d/%2$d episodio</item>
+        <item quantity="many">%1$d/%2$d episodi</item>
+        <item quantity="other">%1$d/%2$d episodi</item>
+    </plurals>
     <string name="profile_media_type_movie">Film · %1$d</string>
     <string name="profile_media_type_series">Serie · %1$d</string>
     <string name="profile_media_type_movie_no_year">Film</string>
@@ -116,7 +131,7 @@
     <string name="profile_view_list">Vista elenco</string>
     <string name="profile_view_grid">Vista griglia</string>
     <string name="profile_more_actions">Altre azioni</string>
-    <string name="profile_search_placeholder">Cerca nel tuo profilo</string>
+    <string name="profile_search_placeholder">Cerca nella tua raccolta</string>
     <string name="profile_sort_label">Ordina: %1$s</string>
     <string name="profile_empty_watched_movies_title">Nessun film visto</string>
     <string name="profile_empty_watched_movies_body">I film segnati come visti appariranno qui.</string>
@@ -133,12 +148,16 @@
     <string name="profile_empty_favorites_tv_title">Nessuna serie TV preferita</string>
     <string name="profile_empty_favorites_tv_body">Aggiungi serie TV ai preferiti per trovarle facilmente.</string>
     <string name="profile_empty_search_title">Nessun titolo corrispondente</string>
-    <string name="profile_empty_search_body">Nessun titolo corrisponde a \"%1$s\" nel tuo profilo.</string>
+    <string name="profile_empty_search_body">Nessun titolo corrisponde a \"%1$s\" nella tua raccolta.</string>
     <string name="profile_empty_action_search">Esplora in Cerca</string>
     <string name="profile_empty_action_clear">Cancella ricerca</string>
     <string name="home_featured_releases">Uscite in evidenza</string>
     <string name="home_continue_watching">Continua a vedere</string>
-    <string name="home_continue_watching_progress">%1$d di %2$d episodi</string>
+    <plurals name="home_continue_watching_progress">
+        <item quantity="one">%1$d di %2$d episodio</item>
+        <item quantity="many">%1$d di %2$d episodi</item>
+        <item quantity="other">%1$d di %2$d episodi</item>
+    </plurals>
     <string name="home_continue_watching_next_episode">Prossimo: Stagione %1$d • Episodio %2$d</string>
     <string name="home_open_continue_details">Apri dettagli per %1$s</string>
     <string name="action_add_to_watchlist">Aggiungi alla lista</string>
@@ -165,7 +184,11 @@
     <string name="library_progress_watched">Visto</string>
     <string name="library_progress_unwatched">Non visto</string>
     <string name="library_progress_unavailable">Progresso non disponibile</string>
-    <string name="library_progress_episodes">%1$d di %2$d episodi visti</string>
+    <plurals name="library_progress_episodes">
+        <item quantity="one">%1$d di %2$d episodio visto</item>
+        <item quantity="many">%1$d di %2$d episodi visti</item>
+        <item quantity="other">%1$d di %2$d episodi visti</item>
+    </plurals>
     <string name="library_search_clear">Cancella ricerca libreria</string>
     <string name="library_sort">Ordina per</string>
     <string name="library_sort_recent">Aggiunti di recente</string>
@@ -284,28 +307,20 @@
     <string name="statistics_rating_series">Serie TV</string>
     <string name="statistics_rating_selected_suffix">, selezionato</string>
     <string name="statistics_rating_poster_accessibility">%1$s, %2$s</string>
+    <string name="statistics_metric_accessibility">%1$s: %2$s</string>
     <plurals name="statistics_rating_bar_description">
         <item quantity="one">Voto %1$d, %2$d titolo%3$s</item>
         <item quantity="other">Voto %1$d, %2$d titoli%3$s</item>
+        <item quantity="many">Voto %1$d, %2$d titoli%3$s</item>
     </plurals>
     <plurals name="statistics_genre_row_description">
         <item quantity="one">%1$s: %2$d titolo</item>
         <item quantity="other">%1$s: %2$d titoli</item>
+        <item quantity="many">%1$s: %2$d titoli</item>
     </plurals>
     <string name="statistics_movies_watched">Film visti</string>
-    <string name="statistics_tv_completed">Serie TV completate</string>
     <string name="statistics_episodes_watched">Episodi visti</string>
-    <string name="statistics_watch_time">Tempo di visione</string>
     <string name="statistics_watch_time_unavailable">Non disponibile</string>
-    <string name="statistics_watch_time_incomplete">Alcune durate non sono disponibili</string>
-    <string name="statistics_avg_rating">Media voto personale</string>
-    <string name="statistics_rated_percentage">Titoli votati</string>
-    <string name="statistics_distribution">Distribuzione Film / Serie TV</string>
-    <string name="statistics_distribution_item">%1$s: %2$d (%3$s)</string>
-    <string name="statistics_by_month">Visti per mese</string>
-    <string name="statistics_recently_completed">Completati di recente</string>
-    <string name="statistics_empty_title">Nessuna statistica disponibile</string>
-    <string name="statistics_empty_subtitle">Segna film o serie TV come visti per generare le statistiche.</string>
     <string name="statistics_duration_day_short">g</string>
     <string name="statistics_duration_hour_short">h</string>
     <string name="statistics_duration_minute_short">m</string>

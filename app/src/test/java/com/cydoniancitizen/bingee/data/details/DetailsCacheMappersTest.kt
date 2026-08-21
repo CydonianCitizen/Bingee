@@ -70,6 +70,35 @@ class DetailsCacheMappersTest {
     }
 
     @Test
+    fun cachedGenresCollapseLocalisedAliasesOfOneCanonicalIdentity() {
+        val cached = requireNotNull(
+            relation(
+                details = detailEntity(status = ProductionStatus.RELEASED.name),
+                genres = listOf(
+                    // Rows persisted under different locales for the same TMDB genre.
+                    MediaGenreEntity(1, 0, "Drama", MediaSource.TMDB, 18),
+                    MediaGenreEntity(1, 1, "Dramma", MediaSource.TMDB, 18),
+                    MediaGenreEntity(1, 2, "Commedia", MediaSource.TMDB, 35),
+                    // Same localised name, different identity: two genres, not one.
+                    MediaGenreEntity(1, 3, "Commedia", MediaSource.TMDB, 10751),
+                    // Legacy rows have no identity, so each keeps its own.
+                    MediaGenreEntity(1, 4, "Azione"),
+                    MediaGenreEntity(1, 5, "Avventura")
+                )
+            ).toDomain(ref, policy)
+        )
+
+        assertEquals(
+            listOf("Drama", "Commedia", "Commedia", "Azione", "Avventura"),
+            cached.details.genres.map { it.name }
+        )
+        assertEquals(
+            listOf(18L, 35L, 10751L, null, null),
+            cached.details.genres.map { it.genreId }
+        )
+    }
+
+    @Test
     fun malformedPersistedStatusAndCountsDegradeSafely() {
         val cached = requireNotNull(
             relation(

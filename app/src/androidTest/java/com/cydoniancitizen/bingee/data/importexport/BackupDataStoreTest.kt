@@ -17,6 +17,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -119,6 +120,75 @@ class BackupDataStoreTest {
         val second = exportedDocument(secondBytes)
         assertEquals(first.data, second.data)
         assertArrayEquals(BackupJsonCodec.encode(first), secondBytes)
+    }
+
+    @Test
+    fun favoriteAndRatingChronologySurviveExportAndRestoreUnchanged() = runBlocking {
+        val dated = BackupRef(MediaSource.TMDB, "700")
+        val legacyFavorite = BackupRef(MediaSource.TMDB, "701")
+        val favoriteAddedAt = Instant.parse("2026-05-06T07:08:09Z")
+        val ratedAt = Instant.parse("2026-03-01T09:00:00Z")
+        val ratingUpdatedAt = Instant.parse("2026-06-12T18:30:00Z")
+        val data = BackupData(
+            media = listOf(
+                BackupMedia(
+                    dated,
+                    listOf(dated),
+                    MediaType.MOVIE,
+                    "Favorite with chronology",
+                    null,
+                    null,
+                    null,
+                    null,
+                    isFavorite = true,
+                    favoriteAddedAt = favoriteAddedAt
+                ),
+                // A backup produced before v4 recorded chronology: the flag without the timestamp.
+                BackupMedia(
+                    legacyFavorite,
+                    listOf(legacyFavorite),
+                    MediaType.MOVIE,
+                    "Legacy favorite",
+                    null,
+                    null,
+                    null,
+                    null,
+                    isFavorite = true
+                )
+            ),
+            seasons = emptyList(),
+            episodes = emptyList(),
+            library = listOf(BackupLibraryEntry(dated, exportedAt)),
+            movieProgress = emptyList(),
+            episodeProgress = emptyList(),
+            // Rating chronology is two independent instants: when the title was first rated and when
+            // that rating last changed.
+            ratings = listOf(BackupRating(dated, 7, ratedAt, ratingUpdatedAt)),
+            preferences = BackupPreferences(3, true, false, true)
+        )
+        val plan = (
+            validate(BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, data))
+                as BackupValidationResult.Success
+            ).plan
+
+        store.restore(plan)
+        val exported = exportedDocument(BackupExporter(store, Clock.fixed(exportedAt, ZoneOffset.UTC)).export().bytes)
+        val reimported = (validate(exported) as BackupValidationResult.Success).plan
+        store.restore(reimported)
+
+        val snapshot = database.portableSnapshotDao().readSnapshot()
+        val refsByMedia = snapshot.refs.associate { it.localMediaId to it.externalId }
+        val restoredDated = snapshot.media.single { refsByMedia[it.localMediaId] == "700" }
+        val restoredLegacy = snapshot.media.single { refsByMedia[it.localMediaId] == "701" }
+
+        assertTrue(restoredDated.isFavorite)
+        assertEquals(favoriteAddedAt, restoredDated.favoriteAddedAt)
+        assertTrue(restoredLegacy.isFavorite)
+        assertNull(restoredLegacy.favoriteAddedAt)
+
+        val rating = snapshot.ratings.single()
+        assertEquals(ratedAt, rating.ratedAt)
+        assertEquals(ratingUpdatedAt, rating.updatedAt)
     }
 
     private fun exportedDocument(bytes: ByteArray): BackupDocument =

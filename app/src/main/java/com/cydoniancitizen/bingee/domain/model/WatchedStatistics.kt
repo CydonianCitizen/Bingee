@@ -13,14 +13,6 @@ import java.util.Locale
 
 const val TASTE_RADAR_GENRE_LIMIT = 6
 
-data class MediaTypeDistribution(val movieCount: Int, val tvSeriesCount: Int) {
-    val total: Int get() = movieCount + tvSeriesCount
-    val moviePercentage: Double get() = if (total == 0) 0.0 else (movieCount.toDouble() / total) * 100.0
-    val tvSeriesPercentage: Double get() = if (total == 0) 0.0 else (tvSeriesCount.toDouble() / total) * 100.0
-}
-
-data class MonthYearCount(val year: Int, val month: Int, val count: Int)
-
 data class MonthlyViewingData(
     val year: Int,
     val month: Int,
@@ -105,12 +97,7 @@ data class WatchedStatistics(
     val seriesWatchTimeMinutes: Long = 0L,
     val movieWatchTimeIncomplete: Boolean = false,
     val seriesWatchTimeIncomplete: Boolean = false,
-    val averagePersonalRating: Double? = null,
-    val ratedTitlesPercentage: Double = 0.0,
     val personalRatingStatistics: PersonalRatingStatistics = PersonalRatingStatistics(),
-    val mediaTypeDistribution: MediaTypeDistribution = MediaTypeDistribution(0, 0),
-    val watchedByMonthYear: List<MonthYearCount> = emptyList(),
-    val recentlyCompletedTitles: List<PersonalViewingEntry> = emptyList(),
     val movieGenres: List<GenreStatistic> = emptyList(),
     val seriesGenres: List<GenreStatistic> = emptyList(),
     val monthlyViewing: MonthlyViewingStatistics = MonthlyViewingStatistics()
@@ -151,25 +138,6 @@ fun calculateWatchedStatistics(
     val movieWatchTimeMinutes = movieTitles.sumOf { it.movieRuntimeMinutes?.toLong() ?: 0L }
     val seriesWatchTimeMinutes = seriesTitles.sumOf { it.watchedRegularRuntimeMinutes }
     val personalRatingStatistics = calculatePersonalRatingStatistics(viewedTitles)
-    val ratedTitlesPercentage = if (viewedTitles.isEmpty()) {
-        0.0
-    } else {
-        personalRatingStatistics.ratedTitleCount.toDouble() / viewedTitles.size * 100.0
-    }
-
-    val watchedByMonthYear = completedTitles
-        .mapNotNull { it.displayWatchedDate(zoneId)?.let { date -> date.year to date.monthValue } }
-        .groupingBy { it }
-        .eachCount()
-        .map { (yearMonth, count) -> MonthYearCount(yearMonth.first, yearMonth.second, count) }
-        .sortedWith(compareByDescending<MonthYearCount> { it.year }.thenByDescending { it.month })
-
-    val recentlyCompletedTitles = completedTitles.sortedWith(
-        compareByDescending<PersonalViewingEntry> { it.displayWatchedDate(zoneId) }
-            .thenByDescending { it.completionTimestamp }
-            .thenBy { it.mediaRef.source.name }
-            .thenBy { it.mediaRef.externalId }
-    ).take(10)
 
     return WatchedStatistics(
         moviesWatchedCount = moviesWatchedCount,
@@ -179,15 +147,7 @@ fun calculateWatchedStatistics(
         seriesWatchTimeMinutes = seriesWatchTimeMinutes,
         movieWatchTimeIncomplete = movieTitles.any { it.movieRuntimeMinutes == null },
         seriesWatchTimeIncomplete = seriesTitles.any { it.watchedRegularEpisodesWithoutRuntime > 0 },
-        averagePersonalRating = personalRatingStatistics.averageRating,
-        ratedTitlesPercentage = ratedTitlesPercentage,
         personalRatingStatistics = personalRatingStatistics,
-        mediaTypeDistribution = MediaTypeDistribution(
-            movieCount = viewedTitles.count { it.mediaType == MediaType.MOVIE },
-            tvSeriesCount = viewedTitles.count { it.mediaType == MediaType.SERIES }
-        ),
-        watchedByMonthYear = watchedByMonthYear,
-        recentlyCompletedTitles = recentlyCompletedTitles,
         movieGenres = topGenreStatistics(movieTitles),
         seriesGenres = topGenreStatistics(seriesTitles),
         monthlyViewing = calculateMonthlyViewing(

@@ -1,10 +1,9 @@
 package com.cydoniancitizen.bingee.data.library
 
 import android.content.Context
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.v2.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,7 +30,10 @@ import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.domain.model.TasteStatistics
 import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
 import com.cydoniancitizen.bingee.feature.profile.StatisticsContent
+import com.cydoniancitizen.bingee.testutil.STATISTICS_RATINGS_ITEM
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
+import com.cydoniancitizen.bingee.testutil.scrollListTo
+import com.cydoniancitizen.bingee.testutil.scrollListToItem
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -350,12 +352,9 @@ class DefaultLibraryRepositoryTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Rating 8, 1 title")
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithContentDescription("Arrival, Movie · 2016")
-            .performScrollTo()
-            .performClick()
+        composeRule.scrollListTo(hasContentDescription("Rating 8, 1 title")).performClick()
+        composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
+        composeRule.scrollListTo(hasContentDescription("Arrival, Movie · 2016")).performClick()
 
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "42"), opened)
     }
@@ -548,7 +547,10 @@ class DefaultLibraryRepositoryTest {
 
         assertEquals(137, history.movieRuntimeMinutes)
         assertEquals(0L, history.watchedRegularRuntimeMinutes)
+        // "Drama" and "Dramma" are one canonical genre (TMDB, 18), so the title carries it once and
+        // keeps the first persisted localisation rather than projecting a second row for the alias.
         assertEquals(listOf(18L), history.genres.mapNotNull { it.genreId })
+        assertEquals(listOf("Drama"), history.genres.map { it.name })
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
 import com.cydoniancitizen.bingee.core.model.isWatched
+import com.cydoniancitizen.bingee.core.model.toContinueWatchingItem
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
@@ -19,6 +20,7 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.di.DefaultDispatcher
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.model.TasteStatistics
@@ -33,14 +35,30 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private sealed interface StatisticsUpdate {
+    data class Ready(
+        val today: LocalDate,
+        val entries: List<PersonalViewingEntry>,
+        val statistics: WatchedStatistics,
+        val tasteStatistics: TasteStatistics
+    ) : StatisticsUpdate
+
+    data class Failed(val today: LocalDate, val error: AppError) : StatisticsUpdate
+}
 
 enum class ProfileSortOption {
     RECENTLY_ADDED,
@@ -100,17 +118,19 @@ fun LibraryEntry.progressSortMetric(): Double = when (val p = progress) {
     LibraryProgress.Unavailable -> 0.0
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 internal class ProfileViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val displayModePreferences: ProfileDisplayModePreferences,
-    private val dateSource: CalendarDateSource
+    private val dateSource: CalendarDateSource,
+    @param:DefaultDispatcher private val statisticsDispatcher: CoroutineDispatcher
 ) : ViewModel() {
 
     private val mutableUiState = MutableStateFlow(ProfileUiState(today = dateSource.currentDate()))
     val uiState: StateFlow<ProfileUiState> = mutableUiState.asStateFlow()
 
-    private val rawEntries = MutableStateFlow<List<LibraryEntry>>(emptyList())
+    private var rawEntries: List<LibraryEntry> = emptyList()
     private var personalViewingEntries: List<PersonalViewingEntry> = emptyList()
     private var libraryEntriesJob: Job? = null
     private var personalViewingJob: Job? = null
@@ -237,11 +257,10 @@ internal class ProfileViewModel @Inject constructor(
     }
 
     fun setStatisticsMediaScope(scope: StatisticsMediaScope) {
-        mutableUiState.update {
-            it.copy(
-                statisticsMediaScope = scope,
-                tasteStatistics = calculateTasteStatistics(personalViewingEntries, scope)
-            )
+        val entries = personalViewingEntries
+        viewModelScope.launch {
+            val taste = withContext(statisticsDispatcher) { calculateTasteStatistics(entries, scope) }
+            mutableUiState.update { it.copy(statisticsMediaScope = scope, tasteStatistics = taste) }
         }
     }
 
@@ -251,16 +270,12 @@ internal class ProfileViewModel @Inject constructor(
         if (availableYears.isNotEmpty() && year !in availableYears) return
         val currentDate = dateSource.currentDate()
         val localZone = ZoneId.systemDefault()
-        mutableUiState.update {
-            it.copy(
-                statistics = calculateWatchedStatistics(
-                    entries = personalViewingEntries,
-                    zoneId = localZone,
-                    currentDate = currentDate,
-                    selectedYear = year
-                ),
-                selectedStatisticsMonth = null
-            )
+        val entries = personalViewingEntries
+        viewModelScope.launch {
+            val statistics = withContext(statisticsDispatcher) {
+                calculateWatchedStatistics(entries, localZone, currentDate, year)
+            }
+            mutableUiState.update { it.copy(statistics = statistics, selectedStatisticsMonth = null) }
         }
     }
 
@@ -287,7 +302,7 @@ internal class ProfileViewModel @Inject constructor(
             libraryRepository.observeEntries(LibraryQuery()).collectLatest { result ->
                 when (result) {
                     is AppResult.Success -> {
-                        rawEntries.value = result.value
+                        rawEntries = result.value
                         mutableUiState.update {
                             it.copy(
                                 isLoading = false,
@@ -311,46 +326,70 @@ internal class ProfileViewModel @Inject constructor(
             combine(
                 libraryRepository.observePersonalViewing(),
                 dateSource.observeDate()
-            ) { result, currentDate -> result to currentDate }.collectLatest { (result, currentDate) ->
-                when (result) {
-                    is AppResult.Success -> {
-                        personalViewingEntries = result.value
-                        val scope = mutableUiState.value.statisticsMediaScope
-                        val previousMonthly = mutableUiState.value.statistics.monthlyViewing
-                        val selectedYear = previousMonthly.selectedYear
-                            .takeIf { it > 0 && it != previousMonthly.currentYear }
-                            ?: currentDate.year
-                        val localZone = ZoneId.systemDefault()
-                        mutableUiState.update {
+            ) { result, currentDate -> result to currentDate }
+                // Aggregation walks the whole personal history, so it stays off the main thread, and
+                // mapLatest drops half-finished work when Room invalidates again mid-calculation.
+                .mapLatest { (result, currentDate) ->
+                    when (result) {
+                        is AppResult.Success -> aggregate(result.value, currentDate)
+                        is AppResult.Failure -> StatisticsUpdate.Failed(currentDate, result.error)
+                    }
+                }
+                .flowOn(statisticsDispatcher)
+                .collectLatest { update ->
+                    when (update) {
+                        is StatisticsUpdate.Ready -> {
+                            personalViewingEntries = update.entries
+                            mutableUiState.update {
+                                it.copy(
+                                    today = update.today,
+                                    statistics = update.statistics,
+                                    tasteStatistics = update.tasteStatistics,
+                                    isStatisticsLoading = false,
+                                    statisticsError = null
+                                )
+                            }
+                        }
+                        is StatisticsUpdate.Failed -> mutableUiState.update {
                             it.copy(
-                                today = currentDate,
-                                statistics = calculateWatchedStatistics(
-                                    entries = result.value,
-                                    zoneId = localZone,
-                                    currentDate = currentDate,
-                                    selectedYear = selectedYear
-                                ),
-                                tasteStatistics = calculateTasteStatistics(result.value, scope),
+                                today = update.today,
                                 isStatisticsLoading = false,
-                                statisticsError = null
+                                statisticsError = update.error
                             )
                         }
                     }
-                    is AppResult.Failure -> mutableUiState.update {
-                        it.copy(today = currentDate, isStatisticsLoading = false, statisticsError = result.error)
-                    }
                 }
-            }
         }
+    }
+
+    private fun aggregate(entries: List<PersonalViewingEntry>, currentDate: LocalDate): StatisticsUpdate.Ready {
+        val previousMonthly = mutableUiState.value.statistics.monthlyViewing
+        val selectedYear = previousMonthly.selectedYear
+            .takeIf { it > 0 && it != previousMonthly.currentYear }
+            ?: currentDate.year
+        return StatisticsUpdate.Ready(
+            today = currentDate,
+            entries = entries,
+            statistics = calculateWatchedStatistics(
+                entries = entries,
+                zoneId = ZoneId.systemDefault(),
+                currentDate = currentDate,
+                selectedYear = selectedYear
+            ),
+            tasteStatistics = calculateTasteStatistics(
+                entries,
+                mutableUiState.value.statisticsMediaScope
+            )
+        )
     }
 
     private fun refilter() {
         val state = mutableUiState.value
-        val allRaw = rawEntries.value
+        val allRaw = rawEntries
 
         val filtered = allRaw.filter { entry ->
             val matchesCollection = if (state.isWatchingCollection) {
-                entry.toDashboardContinueWatchingItem()?.let(ContinueWatchingPolicy::isContinueWatching) == true
+                entry.toContinueWatchingItem()?.let(ContinueWatchingPolicy::isContinueWatching) == true
             } else {
                 when (state.collection) {
                     ProfileCollection.WATCHED -> if (state.isAbandonedCollection) {
@@ -421,23 +460,8 @@ internal fun selectWatchingPreview(
     entries: Iterable<LibraryEntry>,
     limit: Int = PROFILE_PREVIEW_LIMIT
 ): List<ContinueWatchingItem> = ContinueWatchingPolicy.select(
-    entries.mapNotNull(LibraryEntry::toDashboardContinueWatchingItem)
+    entries.mapNotNull(LibraryEntry::toContinueWatchingItem)
 ).take(limit.coerceAtLeast(0))
-
-internal fun LibraryEntry.toDashboardContinueWatchingItem(): ContinueWatchingItem? {
-    val seriesProgress = (progress as? LibraryProgress.Series)?.progress ?: return null
-    return ContinueWatchingItem(
-        mediaRef = mediaRef,
-        mediaType = mediaType,
-        title = title,
-        posterUrl = posterUrl,
-        progress = seriesProgress,
-        nextEpisode = seriesProgress.nextEpisode,
-        updatedAt = seriesProgress.lastWatchedAt,
-        isAbandoned = isAbandoned,
-        inLibrary = inLibrary
-    )
-}
 
 internal fun selectFavoritePreview(
     entries: Iterable<LibraryEntry>,

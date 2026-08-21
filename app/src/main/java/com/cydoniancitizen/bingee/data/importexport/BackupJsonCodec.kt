@@ -484,17 +484,6 @@ internal object BackupJsonCodec {
         return elem.exactIntOrProblem()
     }
 
-    private fun nullableDouble(obj: JsonObject, key: String): Double? {
-        val elem = obj.get(key)
-        if (elem == null || elem.isJsonNull) return null
-        if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
-        return try {
-            elem.asDouble
-        } catch (_: Exception) {
-            problem(BackupFailureKind.INVALID_STRUCTURE)
-        }
-    }
-
     private fun nullableDate(obj: JsonObject, key: String): LocalDate? = nullableString(obj, key)?.let { raw ->
         try {
             LocalDate.parse(raw)

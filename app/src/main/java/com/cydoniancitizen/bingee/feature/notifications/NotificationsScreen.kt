@@ -275,7 +275,9 @@ private fun NotificationItemCard(
                 posterUrl = event.posterUrl,
                 modifier = Modifier
                     .size(width = 48.dp, height = 72.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp)),
+                // The card owns the combined description of this item.
+                contentDescription = null
             )
 
             Spacer(modifier = Modifier.width(BingeeDimensions.elementSpacing))

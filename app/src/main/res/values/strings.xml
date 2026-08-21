@@ -2,7 +2,6 @@
     <string name="app_name">Bingee</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
-    <string name="nav_profile">Profile</string>
     <string name="nav_settings">Settings</string>
     <string name="startup_checking">Checking local configuration</string>
     <string name="error_network_unavailable">No network connection. Check your connection and try again.</string>
@@ -77,7 +76,6 @@
     <string name="series_tracking_restore">Resume series tracking</string>
     <string name="search_action_add_watch_later">Add to Watch Later</string>
     <string name="search_action_in_watch_later">In Watch Later</string>
-    <string name="profile_title">Profile</string>
     <string name="profile_title_dashboard">Your Bingee</string>
     <string name="profile_watching_title">Watching</string>
     <string name="profile_view_all">See all</string>
@@ -90,11 +88,21 @@
     <string name="profile_statistics_series_watched">Series watched</string>
     <string name="profile_statistics_watch_time">Watch time</string>
     <string name="profile_statistics_genres">Your genres</string>
+    <string name="profile_statistics_podium_rank_first">1st place</string>
+    <string name="profile_statistics_podium_rank_second">2nd place</string>
+    <string name="profile_statistics_podium_rank_third">3rd place</string>
+    <plurals name="profile_statistics_podium_accessibility">
+        <item quantity="one">%1$s, %2$s, %3$d title</item>
+        <item quantity="other">%1$s, %2$s, %3$d titles</item>
+    </plurals>
     <string name="profile_statistics_not_enough_data">Not enough data yet</string>
     <string name="profile_statistics_view_all">View all statistics</string>
     <string name="profile_watching_empty_title">No series in progress</string>
     <string name="profile_watching_empty_body">Series with episodes left to watch will appear here.</string>
-    <string name="profile_watching_accessibility">Open %1$s. %2$d of %3$d episodes watched. Next position %4$s.</string>
+    <plurals name="profile_watching_accessibility">
+        <item quantity="one">Open %1$s. %2$d of %3$d episode watched. Next position %4$s.</item>
+        <item quantity="other">Open %1$s. %2$d of %3$d episodes watched. Next position %4$s.</item>
+    </plurals>
     <string name="profile_favorites_empty_title">You have not added any favorites yet.</string>
     <string name="profile_favorite_accessibility">Open %1$s. %2$s.</string>
     <string name="profile_collection_watch_later">Watch later</string>
@@ -102,8 +110,12 @@
     <string name="profile_collection_favorites">Favorites</string>
     <string name="profile_collection_abandoned">Abandoned</string>
     <string name="profile_collection_shortcut">%1$s · %2$d</string>
+    <string name="profile_collection_shortcut_count">· %1$d</string>
     <string name="profile_episode_position">S%1$d E%2$d</string>
-    <string name="profile_watching_progress_position">%1$d/%2$d episodes</string>
+    <plurals name="profile_watching_progress_position">
+        <item quantity="one">%1$d/%2$d episode</item>
+        <item quantity="other">%1$d/%2$d episodes</item>
+    </plurals>
     <string name="profile_media_type_movie">Movie · %1$d</string>
     <string name="profile_media_type_series">Series · %1$d</string>
     <string name="profile_media_type_movie_no_year">Movie</string>
@@ -115,7 +127,7 @@
     <string name="profile_view_list">List view</string>
     <string name="profile_view_grid">Grid view</string>
     <string name="profile_more_actions">More actions</string>
-    <string name="profile_search_placeholder">Search your profile</string>
+    <string name="profile_search_placeholder">Search your collection</string>
     <string name="profile_sort_label">Sort: %1$s</string>
     <string name="profile_empty_watched_movies_title">No watched movies</string>
     <string name="profile_empty_watched_movies_body">Movies you mark as watched will appear here.</string>
@@ -128,12 +140,15 @@
     <string name="profile_empty_watch_later_tv_title">No TV series in Watch Later</string>
     <string name="profile_empty_watch_later_tv_body">Save TV series to watch later.</string>
     <string name="profile_empty_search_title">No matching titles</string>
-    <string name="profile_empty_search_body">No titles match \"%1$s\" in your profile.</string>
+    <string name="profile_empty_search_body">No titles match \"%1$s\" in your collection.</string>
     <string name="profile_empty_action_search">Explore in Search</string>
     <string name="profile_empty_action_clear">Clear search</string>
     <string name="home_featured_releases">Featured Releases</string>
     <string name="home_continue_watching">Continue Watching</string>
-    <string name="home_continue_watching_progress">%1$d of %2$d episodes</string>
+    <plurals name="home_continue_watching_progress">
+        <item quantity="one">%1$d of %2$d episode</item>
+        <item quantity="other">%1$d of %2$d episodes</item>
+    </plurals>
     <string name="home_continue_watching_next_episode">Next: Season %1$d • Episode %2$d</string>
     <string name="home_open_continue_details">Open details for %1$s</string>
     <string name="action_add_to_watchlist">Add to Watchlist</string>
@@ -160,7 +175,10 @@
     <string name="library_progress_watched">Watched</string>
     <string name="library_progress_unwatched">Unwatched</string>
     <string name="library_progress_unavailable">Progress unavailable</string>
-    <string name="library_progress_episodes">%1$d of %2$d episodes watched</string>
+    <plurals name="library_progress_episodes">
+        <item quantity="one">%1$d of %2$d episode watched</item>
+        <item quantity="other">%1$d of %2$d episodes watched</item>
+    </plurals>
     <string name="library_search_clear">Clear library search</string>
     <string name="library_sort">Sort by</string>
     <string name="library_sort_recent">Recently added</string>
@@ -505,6 +523,7 @@
     <string name="statistics_rating_series">Series</string>
     <string name="statistics_rating_selected_suffix">, selected</string>
     <string name="statistics_rating_poster_accessibility">%1$s, %2$s</string>
+    <string name="statistics_metric_accessibility">%1$s: %2$s</string>
     <plurals name="statistics_rating_bar_description">
         <item quantity="one">Rating %1$d, %2$d title%3$s</item>
         <item quantity="other">Rating %1$d, %2$d titles%3$s</item>
@@ -514,22 +533,11 @@
         <item quantity="other">%1$s: %2$d titles</item>
     </plurals>
     <string name="statistics_movies_watched">Movies Watched</string>
-    <string name="statistics_tv_completed">TV Series Completed</string>
     <string name="statistics_episodes_watched">Episodes Watched</string>
-    <string name="statistics_watch_time">Watch Time</string>
     <string name="statistics_watch_time_unavailable">Unavailable</string>
-    <string name="statistics_watch_time_incomplete">Some runtime data is unavailable</string>
     <string name="statistics_duration_day_short">d</string>
     <string name="statistics_duration_hour_short">h</string>
     <string name="statistics_duration_minute_short">m</string>
-    <string name="statistics_avg_rating">Average Personal Rating</string>
-    <string name="statistics_rated_percentage">Rated Titles</string>
-    <string name="statistics_distribution">Movies vs TV Series Distribution</string>
-    <string name="statistics_distribution_item">%1$s: %2$d (%3$s)</string>
-    <string name="statistics_by_month">Watched by Month</string>
-    <string name="statistics_recently_completed">Recently Completed</string>
-    <string name="statistics_empty_title">No statistics available</string>
-    <string name="statistics_empty_subtitle">Mark movies or TV series as watched to generate statistics.</string>
     <string-array name="statistics_months_short">
         <item>Jan</item><item>Feb</item><item>Mar</item><item>Apr</item><item>May</item><item>Jun</item>
         <item>Jul</item><item>Aug</item><item>Sep</item><item>Oct</item><item>Nov</item><item>Dec</item>

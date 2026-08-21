@@ -11,6 +11,7 @@ import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -86,6 +87,70 @@ class BackupJsonCodecTest {
         val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
 
         assertEquals(listOf(BackupAbandonedSeries(ref)), parsed.document.data.abandonedSeries)
+        assertTrue(validate(parsed.document) is BackupValidationResult.Success)
+    }
+
+    @Test
+    fun favoriteChronologyRoundTripsExactlyAndStaysOptionalForLegacyBackups() {
+        val ref = BackupRef(MediaSource.TMDB, "1")
+        val favoriteAddedAt = Instant.parse("2026-02-03T04:05:06Z")
+        val document = fullDocument().let { base ->
+            base.copy(
+                data = base.data.copy(
+                    media = listOf(
+                        BackupMedia(
+                            primaryRef = ref,
+                            externalRefs = listOf(ref),
+                            mediaType = MediaType.MOVIE,
+                            title = "Favorite",
+                            originalTitle = null,
+                            overview = null,
+                            posterUrl = null,
+                            releaseDate = null,
+                            isFavorite = true,
+                            favoriteAddedAt = favoriteAddedAt
+                        )
+                    )
+                )
+            )
+        }
+
+        val encoded = BackupJsonCodec.encode(document).toString(Charsets.UTF_8)
+        assertTrue(encoded.contains("\"favoriteAddedAt\": \"2026-02-03T04:05:06Z\""))
+        val parsed = BackupJsonCodec.parse(encoded.toByteArray(Charsets.UTF_8)) as BackupParseResult.Success
+        assertEquals(favoriteAddedAt, parsed.document.data.media.single().favoriteAddedAt)
+        assertTrue(validate(parsed.document) is BackupValidationResult.Success)
+
+        // A backup written before v4 chronology existed carries the flag without the timestamp. It
+        // must still restore as a favorite, with chronology left unknown rather than invented.
+        val legacy = JsonParser.parseString(encoded).asJsonObject
+        legacy.getAsJsonObject("data").getAsJsonArray("media").forEach { entry ->
+            entry.asJsonObject.remove("favoriteAddedAt")
+        }
+        val legacyParsed = BackupJsonCodec.parse(
+            legacy.toString().toByteArray(Charsets.UTF_8)
+        ) as BackupParseResult.Success
+        val legacyMedia = legacyParsed.document.data.media.single()
+
+        assertTrue(legacyMedia.isFavorite)
+        assertNull(legacyMedia.favoriteAddedAt)
+        assertTrue(validate(legacyParsed.document) is BackupValidationResult.Success)
+    }
+
+    @Test
+    fun ratingKeepsRatedAtAndUpdatedAtIndependent() {
+        val ref = BackupRef(MediaSource.TMDB, "1")
+        val ratedAt = Instant.parse("2026-01-05T00:00:00Z")
+        val updatedAt = Instant.parse("2026-04-09T11:22:33Z")
+        val document = fullDocument().let { base ->
+            base.copy(data = base.data.copy(ratings = listOf(BackupRating(ref, 8, ratedAt, updatedAt))))
+        }
+
+        val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
+        val rating = parsed.document.data.ratings.single()
+
+        assertEquals(ratedAt, rating.ratedAt)
+        assertEquals(updatedAt, rating.updatedAt)
         assertTrue(validate(parsed.document) is BackupValidationResult.Success)
     }
 

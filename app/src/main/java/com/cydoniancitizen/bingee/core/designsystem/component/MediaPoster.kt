@@ -15,13 +15,25 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cydoniancitizen.bingee.R
 
+/**
+ * Poster artwork for a title.
+ *
+ * [contentDescription] follows the Compose image convention: it defaults to a description derived
+ * from [title], and `null` marks the artwork decorative. Pass `null` wherever a clickable parent
+ * already owns the combined description of the media item, because a merged semantics node
+ * concatenates the child description and TalkBack would otherwise announce the title twice.
+ */
 @Composable
 fun MediaPoster(
     title: String,
     posterUrl: String?,
     modifier: Modifier = Modifier,
     width: Dp = 96.dp,
-    height: Dp = 144.dp
+    height: Dp = 144.dp,
+    contentDescription: String? = stringResource(
+        if (posterUrl == null) R.string.poster_missing else R.string.poster_description,
+        title
+    )
 ) {
     val posterModifier = modifier
         .width(width)
@@ -31,14 +43,14 @@ fun MediaPoster(
     if (posterUrl == null) {
         Image(
             painter = placeholder,
-            contentDescription = stringResource(R.string.poster_missing, title),
+            contentDescription = contentDescription,
             contentScale = ContentScale.Crop,
             modifier = posterModifier
         )
     } else {
         AsyncImage(
             model = posterUrl,
-            contentDescription = stringResource(R.string.poster_description, title),
+            contentDescription = contentDescription,
             placeholder = placeholder,
             error = placeholder,
             fallback = placeholder,

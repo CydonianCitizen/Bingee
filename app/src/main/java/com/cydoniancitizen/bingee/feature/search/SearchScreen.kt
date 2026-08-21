@@ -395,7 +395,8 @@ internal fun SearchResultItem(
             modifier = Modifier.padding(BingeeDimensions.elementSpacing),
             horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
         ) {
-            MediaPoster(title = result.title, posterUrl = result.posterUrl)
+            // The card owns the combined description of this item.
+            MediaPoster(title = result.title, posterUrl = result.posterUrl, contentDescription = null)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)

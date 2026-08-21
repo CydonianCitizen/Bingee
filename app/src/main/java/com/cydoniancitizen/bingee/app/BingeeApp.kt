@@ -72,22 +72,10 @@ private fun BingeeNavigation(
     Scaffold(
         bottomBar = {
             if (currentDestination != null) {
-                NavigationBar {
-                    TopLevelDestination.entries.forEach { destination ->
-                        val label = stringResource(destination.labelRes)
-                        NavigationBarItem(
-                            selected = currentDestination == destination,
-                            onClick = { navController.navigateTopLevel(destination) },
-                            icon = {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = null
-                                )
-                            },
-                            label = { Text(label) }
-                        )
-                    }
-                }
+                BingeeBottomBar(
+                    currentDestination = currentDestination,
+                    onSelect = navController::navigateTopLevel
+                )
             }
         }
     ) { innerPadding ->
@@ -104,6 +92,22 @@ private fun BingeeNavigation(
             onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
             modifier = Modifier.padding(innerPadding)
         )
+    }
+}
+
+@Composable
+internal fun BingeeBottomBar(currentDestination: TopLevelDestination, onSelect: (TopLevelDestination) -> Unit) {
+    NavigationBar {
+        TopLevelDestination.entries.forEach { destination ->
+            val label = stringResource(destination.labelRes)
+            NavigationBarItem(
+                selected = currentDestination == destination,
+                onClick = { onSelect(destination) },
+                // The visible label names the destination, so the icon adds nothing to announce.
+                icon = { Icon(imageVector = destination.icon, contentDescription = null) },
+                label = { Text(label) }
+            )
+        }
     }
 }
 

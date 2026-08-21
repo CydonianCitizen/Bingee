@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -79,7 +80,10 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Movie release").assertIsDisplayed()
         composeRule.onNodeWithText("Season premiere · S1", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Season 1, episode 1", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("No poster available for Title movie").assertIsDisplayed()
+        // The card owns one description for the whole row; its poster stays decorative so the
+        // title is not announced a second time.
+        composeRule.onNodeWithContentDescription("Open title details for Title movie")
+            .assertContentDescriptionEquals("Open title details for Title movie")
         composeRule.onNodeWithText("Remind me").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("Open title details for Title episode").performClick()
         assertEquals(events.last().mediaRef to MediaType.SERIES, opened.get())
@@ -252,7 +256,9 @@ class HomeScreenTest {
         }
 
         composeRule.onNodeWithText(longEvent.title).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("No poster available for ${longEvent.title}").assertIsDisplayed()
+        // A missing poster falls back to the placeholder without adding a second description.
+        composeRule.onNodeWithContentDescription("Open title details for ${longEvent.title}")
+            .assertContentDescriptionEquals("Open title details for ${longEvent.title}")
     }
 
     private fun setHome(

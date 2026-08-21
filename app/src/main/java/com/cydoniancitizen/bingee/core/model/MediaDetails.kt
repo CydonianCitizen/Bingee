@@ -11,6 +11,14 @@ data class Genre(val name: String, val source: MediaSource? = null, val genreId:
     }
 }
 
+/**
+ * Collapses localized name variants that share one canonical genre identity, so a title contributes
+ * a canonical genre once. Identity is (source, genreId); rows without one keep their own identity.
+ * The first row of each identity wins, preserving the caller's provider ordering.
+ */
+fun List<Genre>.distinctByCanonicalIdentity(): List<Genre> =
+    distinctBy { genre -> genre.genreId?.let { id -> genre.source to id } ?: genre }
+
 enum class ProductionStatus {
     RUMORED,
     PLANNED,
