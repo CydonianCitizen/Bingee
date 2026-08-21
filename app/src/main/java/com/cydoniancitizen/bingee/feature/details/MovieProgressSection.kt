@@ -16,6 +16,10 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.ui.toUiError
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 @Composable
 internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Unit, modifier: Modifier = Modifier) {
@@ -38,18 +42,15 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
             )
             is MovieProgressState.Ready -> {
                 val watched = state.state as? MovieWatchState.Watched
+                val watchedLabel = watched?.let {
+                    stringResource(R.string.detail_movie_watched_at, it.localizedWatchedDate())
+                }
                 val watchStateDescription = when {
                     state.updating -> stringResource(R.string.detail_progress_updating)
-                    watched == null -> stringResource(R.string.detail_movie_unwatched)
-                    else -> stringResource(R.string.detail_movie_watched_at, watched.watchedAt.toString())
+                    watchedLabel == null -> stringResource(R.string.detail_movie_unwatched)
+                    else -> watchedLabel
                 }
-                Text(
-                    if (watched == null) {
-                        stringResource(R.string.detail_movie_unwatched)
-                    } else {
-                        stringResource(R.string.detail_movie_watched_at, watched.watchedAt.toString())
-                    }
-                )
+                Text(watchedLabel ?: stringResource(R.string.detail_movie_unwatched))
                 Button(
                     onClick = onToggle,
                     enabled = !state.updating,
@@ -72,4 +73,14 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
             }
         }
     }
+}
+
+/**
+ * The canonical viewing date, formatted for the reader. The stored instant is only a fallback for
+ * rows written before the local-date column existed; either way the user never sees a raw timestamp.
+ */
+private fun MovieWatchState.Watched.localizedWatchedDate(): String {
+    val zone = ZoneId.systemDefault()
+    val date = watchedDate ?: watchedAt.atZone(zone).toLocalDate()
+    return DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault()).format(date)
 }

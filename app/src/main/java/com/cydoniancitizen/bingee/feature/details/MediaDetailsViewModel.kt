@@ -370,7 +370,10 @@ internal class MediaDetailsViewModel @Inject constructor(
                 mutableUiState.update {
                     when (result) {
                         is AppResult.Success -> it.copy(
-                            isInLibrary = result.value != null,
+                            // A cached media row is not membership: opening Details stores the
+                            // fetched title locally, and favorites live outside the Library too, so
+                            // only the entry's own flag decides whether the action reads Add or Remove.
+                            isInLibrary = result.value?.inLibrary == true,
                             isFavorite = result.value?.isFavorite ?: false,
                             isAbandoned = result.value?.isAbandoned == true,
                             watchedDate = result.value?.watchedDate

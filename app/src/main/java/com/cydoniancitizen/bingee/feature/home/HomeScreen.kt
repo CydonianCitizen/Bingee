@@ -8,9 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
@@ -26,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -99,7 +101,10 @@ internal fun HomeContent(
         modifier = modifier.fillMaxSize()
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(BingeeDimensions.screenPadding),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(BingeeDimensions.screenPadding),
             verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
         ) {
             Row(
@@ -170,20 +175,27 @@ internal fun HomeContent(
                     )
                 }
                 is HomeContentState.Events -> {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    // The release calendar shares the screen's single scroll instead of owning a
+                    // nested one: as a weighted LazyColumn it collapsed to the height of one date
+                    // header whenever Continue Watching and Featured Releases were both present.
+                    // ponytail: renders every group eagerly, which the personal calendar's size
+                    // allows; move back to a lazy list if it ever grows beyond a screenful or two.
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
                     ) {
                         content.groups.forEach { group ->
-                            stickyHeader(key = "date:${group.date}") {
+                            key(group.date) {
                                 DateHeader(group)
                             }
-                            items(group.events, key = ReleaseEvent::stableKey) { event ->
-                                ReleaseEventCard(
-                                    event = event,
-                                    category = group.category,
-                                    onClick = { onOpenDetails(event.mediaRef, event.mediaType) }
-                                )
+                            group.events.forEach { event ->
+                                key(event.stableKey) {
+                                    ReleaseEventCard(
+                                        event = event,
+                                        category = group.category,
+                                        onClick = { onOpenDetails(event.mediaRef, event.mediaType) }
+                                    )
+                                }
                             }
                         }
                     }

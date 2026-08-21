@@ -129,6 +129,23 @@ class MediaDetailsViewModelTest {
     }
 
     @Test
+    fun cachedTitleOutsideLibraryIsNotReportedAsMember() = runTest(mainDispatcherRule.dispatcher) {
+        // Opening Details caches the fetched title, so a media row exists even when the user never
+        // added it. Membership must follow the entry's own flag, not the row's existence.
+        val library = FakeLibraryRepository(cachedOnly = true)
+        val viewModel = viewModel(args(), FakeDetailsRepository(cached(CacheFreshness.FRESH)), library)
+        runCurrent()
+
+        assertEquals(false, viewModel.uiState.value.isInLibrary)
+
+        viewModel.toggleLibrary()
+        runCurrent()
+
+        assertEquals(listOf("add"), library.actions)
+        assertEquals(true, viewModel.uiState.value.isInLibrary)
+    }
+
+    @Test
     fun libraryFailureKeepsContentAndMembership() = runTest(mainDispatcherRule.dispatcher) {
         val library = FakeLibraryRepository(member = false, failure = AppError.LocalStorageFailure)
         val viewModel = viewModel(args(), FakeDetailsRepository(cached(CacheFreshness.FRESH)), library)
@@ -337,9 +354,18 @@ class MediaDetailsViewModelTest {
         }
     }
 
-    private class FakeLibraryRepository(member: Boolean = false, private val failure: AppError? = null) :
-        LibraryRepository {
-        private val entry = MutableStateFlow(if (member) libraryEntry() else null)
+    private class FakeLibraryRepository(
+        member: Boolean = false,
+        cachedOnly: Boolean = false,
+        private val failure: AppError? = null
+    ) : LibraryRepository {
+        private val entry = MutableStateFlow(
+            when {
+                member -> libraryEntry()
+                cachedOnly -> libraryEntry().copy(inLibrary = false)
+                else -> null
+            }
+        )
         val actions = mutableListOf<String>()
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             entry.map { AppResult.Success(listOfNotNull(it)) }

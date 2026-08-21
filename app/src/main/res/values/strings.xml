@@ -532,8 +532,8 @@
         <item quantity="one">%1$s: %2$d title</item>
         <item quantity="other">%1$s: %2$d titles</item>
     </plurals>
-    <string name="statistics_movies_watched">Movies Watched</string>
-    <string name="statistics_episodes_watched">Episodes Watched</string>
+    <string name="statistics_movies_watched">Movies watched</string>
+    <string name="statistics_episodes_watched">Episodes watched</string>
     <string name="statistics_watch_time_unavailable">Unavailable</string>
     <string name="statistics_duration_day_short">d</string>
     <string name="statistics_duration_hour_short">h</string>

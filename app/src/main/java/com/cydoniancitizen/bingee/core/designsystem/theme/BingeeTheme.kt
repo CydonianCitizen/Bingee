@@ -40,11 +40,14 @@ private val LightColorScheme =
         onSurface = Color(0xFF141824),
         surfaceVariant = Color(0xFFE0E2E9),
         onSurfaceVariant = Color(0xFF414754),
+        // Each container step stays below the page background (0xFFF7F7FA) so cards, the navigation
+        // bar, and menus read as raised surfaces in light theme; surfaceContainerLow used to match
+        // the background exactly, which made every card silently disappear.
         surfaceContainerLowest = Color.White,
-        surfaceContainerLow = Color(0xFFF7F7FA),
-        surfaceContainer = Color(0xFFF1F1F5),
-        surfaceContainerHigh = Color(0xFFEBEBF0),
-        surfaceContainerHighest = Color(0xFFE5E5EA),
+        surfaceContainerLow = Color(0xFFEFEFF4),
+        surfaceContainer = Color(0xFFE9E9F0),
+        surfaceContainerHigh = Color(0xFFE3E3EB),
+        surfaceContainerHighest = Color(0xFFDCDCE5),
         surfaceDim = Color(0xFFDADAE0),
         surfaceBright = Color.White,
         inverseSurface = Color(0xFF2C303B),
