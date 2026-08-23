@@ -8,12 +8,15 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
@@ -55,14 +58,24 @@ class MediaDetailsScreenTest {
         )
 
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
+        // The runtime now lives inside the hero's meta line ("Movie · 120 min") instead of its own
+        // labelled field, so it is asserted as a substring of that line.
+        composeRule.onNode(hasText("120 min", substring = true)).assertIsDisplayed()
+        // Status and genres are individual chips now, not a status Text plus one joined string.
+        scrollTo(hasText("Released"))
         composeRule.onNodeWithText("Released").assertIsDisplayed()
-        composeRule.onNodeWithText("120 min").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Drama, Thriller").assertIsDisplayed()
-        composeRule.onNodeWithText("Personal rating").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Drama").assertIsDisplayed()
+        composeRule.onNodeWithText("Thriller").assertIsDisplayed()
+        scrollTo(hasText("Personal rating"))
+        composeRule.onNodeWithText("Personal rating").assertIsDisplayed()
+        // The hero meta line only carries the year, so the full date has to survive further down.
+        scrollTo(hasText("Release date"))
+        composeRule.onNodeWithText("Release date").assertIsDisplayed()
+        scrollTo(hasText("Mark watched"))
         composeRule.onNode(
             SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not watched")
         ).assertIsDisplayed()
-        composeRule.onNodeWithText("Mark watched").performScrollTo().performClick()
+        composeRule.onNodeWithText("Mark watched").performClick()
         assertTrue(toggled.get())
     }
 
@@ -91,8 +104,10 @@ class MediaDetailsScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("TV Series").assertIsDisplayed()
-        composeRule.onNodeWithText("Season 1").performScrollTo().assertIsDisplayed()
+        // The hero meta line reads "TV Series · 3 seasons", so the type is a substring of it.
+        composeRule.onNode(hasText("TV Series", substring = true)).assertIsDisplayed()
+        scrollTo(hasText("Season 1"))
+        composeRule.onNodeWithText("Season 1").assertIsDisplayed()
         composeRule.onAllNodesWithText("Specials")[0].performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
@@ -115,7 +130,8 @@ class MediaDetailsScreenTest {
             onRemoveRating = { removed.set(true) }
         )
 
-        composeRule.onNodeWithText("10 out of 10").performScrollTo().assertIsDisplayed()
+        scrollTo(hasText("10 out of 10"))
+        composeRule.onNodeWithText("10 out of 10").assertIsDisplayed()
         composeRule.onNode(
             SemanticsMatcher.expectValue(
                 SemanticsProperties.StateDescription,
@@ -184,12 +200,22 @@ class MediaDetailsScreenTest {
         val toggled = AtomicBoolean(false)
         setDetails(content(movie().copy(posterUrl = null, backdropUrl = null)), onToggle = { toggled.set(true) })
 
-        composeRule.onNodeWithText("Add to library").performClick()
-        assertTrue(toggled.get())
+        // Asserted before the library click, which can scroll the hero artwork out of view.
         composeRule.onNodeWithContentDescription("No poster available for Movie title").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("No backdrop available for Movie title").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Refresh details").assertIsDisplayed()
+        scrollTo(hasText("Add to library"))
+        composeRule.onNodeWithText("Add to library").performClick()
+        assertTrue(toggled.get())
+    }
+
+    /**
+     * Scrolls the screen's single lazy list until [matcher] matches. Items below the hero are not
+     * composed until scrolled to, so [performScrollTo] alone cannot reach them.
+     */
+    private fun scrollTo(matcher: SemanticsMatcher) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(matcher)
     }
 
     private fun setDetails(
@@ -250,6 +276,7 @@ class MediaDetailsScreenTest {
         mediaType = MediaType.MOVIE,
         title = "Movie title",
         overview = "Overview",
+        releaseDate = LocalDate.of(2024, 1, 15),
         runtime = Duration.ofMinutes(120),
         productionStatus = ProductionStatus.RELEASED,
         genres = listOf(Genre("Drama"), Genre("Thriller"))

@@ -16,6 +16,7 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.ui.toUiError
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -81,6 +82,9 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
  */
 private fun MovieWatchState.Watched.localizedWatchedDate(): String {
     val zone = ZoneId.systemDefault()
-    val date = watchedDate ?: watchedAt.atZone(zone).toLocalDate()
-    return DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault()).format(date)
+    return (watchedDate ?: watchedAt.atZone(zone).toLocalDate()).localizedMedium()
 }
+
+/** Shared by every date the detail screen shows, so none of them reaches the user as raw ISO. */
+internal fun LocalDate.localizedMedium(): String =
+    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault()).format(this)

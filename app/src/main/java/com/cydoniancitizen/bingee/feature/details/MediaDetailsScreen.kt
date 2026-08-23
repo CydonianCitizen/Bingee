@@ -1,18 +1,18 @@
 package com.cydoniancitizen.bingee.feature.details
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
@@ -26,30 +26,37 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
-import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.component.OfflineBanner
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
@@ -63,6 +70,9 @@ import com.cydoniancitizen.bingee.core.model.validateWatchedDate
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import java.time.LocalDate
+
+/** Scroll distance over which the transparent top app bar fades into an opaque one. */
+private val BarCollapseDistance = 160.dp
 
 @Composable
 internal fun MediaDetailsScreen(
@@ -121,49 +131,73 @@ internal fun MediaDetailsContent(
     onDismissRatingError: () -> Unit = {},
     onDismissProgressError: () -> Unit = {}
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = BingeeDimensions.elementSpacing),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.detail_back))
-            }
-            Text(
-                text = stringResource(R.string.detail_screen_title),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge
-            )
-            IconButton(
-                onClick = onToggleFavorite,
-                enabled = !state.favoriteUpdating && state.isInLibrary != null
-            ) {
-                Icon(
-                    imageVector = if (state.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = stringResource(
-                        if (state.isFavorite) R.string.favorite_remove else R.string.favorite_add
-                    ),
-                    tint = if (state.isFavorite) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                )
-            }
-            if (state.refresh == DetailRefreshState.Refreshing) {
-                CircularProgressIndicator(modifier = Modifier.padding(BingeeDimensions.elementSpacing))
-            } else if (state.content is DetailContentState.Content) {
-                IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, stringResource(R.string.detail_refresh))
-                }
+    val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val content = state.content
+    val details = (content as? DetailContentState.Content)?.cached?.details
+    val collapseThresholdPx = with(LocalDensity.current) { BarCollapseDistance.toPx() }
+    val collapseFraction by remember(details, collapseThresholdPx) {
+        derivedStateOf {
+            when {
+                // Loading and error states have no artwork behind the bar, so it starts opaque.
+                details == null -> 1f
+                listState.firstVisibleItemIndex > 0 -> 1f
+                else -> (listState.firstVisibleItemScrollOffset / collapseThresholdPx).coerceIn(0f, 1f)
             }
         }
+    }
 
-        when (val content = state.content) {
+    val libraryErrorText = state.libraryError?.let { stringResource(it.toUiError().messageRes) }
+    LaunchedEffect(libraryErrorText) {
+        if (libraryErrorText != null) {
+            snackbarHostState.showSnackbar(libraryErrorText)
+            onDismissLibraryError()
+        }
+    }
+    val progressErrorText = state.progressError?.let { stringResource(it.toUiError().messageRes) }
+    LaunchedEffect(progressErrorText) {
+        if (progressErrorText != null) {
+            snackbarHostState.showSnackbar(progressErrorText)
+            onDismissProgressError()
+        }
+    }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        // The app shell already applies the status bar inset to the nav host.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            DetailTopBar(
+                title = details?.title ?: stringResource(R.string.detail_screen_title),
+                collapseFraction = collapseFraction,
+                state = state,
+                onBack = onBack,
+                onRefresh = onRefresh,
+                onToggleFavorite = onToggleFavorite
+            )
+        }
+    ) { innerPadding ->
+        when (content) {
             DetailContentState.Resolving,
-            DetailContentState.Loading -> LoadingState(stringResource(R.string.detail_loading))
-            is DetailContentState.Error -> FullDetailError(content.error, onRetry, onOpenSettings)
+            DetailContentState.Loading -> LoadingState(
+                message = stringResource(R.string.detail_loading),
+                modifier = Modifier.padding(innerPadding)
+            )
+            is DetailContentState.Error -> FullDetailError(
+                error = content.error,
+                onRetry = onRetry,
+                onOpenSettings = onOpenSettings,
+                modifier = Modifier.padding(innerPadding)
+            )
             is DetailContentState.Content -> DetailBody(
+                listState = listState,
+                // The hero scrolls underneath the transparent bar, so the body drops the top inset
+                // and keeps only the bottom one.
+                contentPadding = PaddingValues(
+                    bottom = innerPadding.calculateBottomPadding() + BingeeDimensions.screenPadding
+                ),
                 details = content.cached.details,
                 isStale = content.cached.freshness == CacheFreshness.STALE,
                 refreshError = (state.refresh as? DetailRefreshState.Error)?.error,
@@ -171,7 +205,6 @@ internal fun MediaDetailsContent(
                 isInLibrary = state.isInLibrary,
                 isAbandoned = state.isAbandoned,
                 isLibraryUpdating = state.libraryAction == DetailLibraryActionState.UPDATING,
-                libraryError = state.libraryError,
                 watchedDate = state.watchedDate,
                 watchedDateUpdating = state.watchedDateUpdating,
                 onSetWatchedDate = onSetWatchedDate,
@@ -179,7 +212,6 @@ internal fun MediaDetailsContent(
                 onToggleSeriesAbandoned = onToggleSeriesAbandoned,
                 movieProgress = state.movieProgress,
                 series = state.series,
-                progressError = state.progressError,
                 rating = state.rating,
                 onToggleMovieWatched = onToggleMovieWatched,
                 onToggleSeasonExpanded = onToggleSeasonExpanded,
@@ -190,19 +222,92 @@ internal fun MediaDetailsContent(
                 onSaveRating = onSaveRating,
                 onRemoveRating = onRemoveRating,
                 onDismissRatingError = onDismissRatingError,
-                onDismissLibraryError = onDismissLibraryError,
-                onDismissProgressError = onDismissProgressError,
                 onOpenSettings = onOpenSettings
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FullDetailError(error: AppError, onRetry: () -> Unit, onOpenSettings: () -> Unit) {
+private fun DetailTopBar(
+    title: String,
+    collapseFraction: Float,
+    state: MediaDetailsUiState,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    // Icons start white over the artwork and land on onSurface once the bar is opaque, so they stay
+    // legible against a bright backdrop and against the bar's own surface alike.
+    val iconTint = lerp(Color.White, scheme.onSurface, collapseFraction)
+    val favoriteTint = lerp(
+        Color.White,
+        if (state.isFavorite) scheme.error else scheme.onSurface,
+        collapseFraction
+    )
+    TopAppBar(
+        title = {
+            // Composed only once the bar is opaque: while the hero title is the one on screen, a
+            // second node carrying the same text would make the title assertions ambiguous.
+            if (collapseFraction >= 1f) {
+                Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.detail_back),
+                    tint = iconTint
+                )
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = onToggleFavorite,
+                enabled = !state.favoriteUpdating && state.isInLibrary != null
+            ) {
+                Icon(
+                    imageVector = if (state.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = stringResource(
+                        if (state.isFavorite) R.string.favorite_remove else R.string.favorite_add
+                    ),
+                    tint = favoriteTint
+                )
+            }
+            if (state.refresh == DetailRefreshState.Refreshing) {
+                CircularProgressIndicator(modifier = Modifier.padding(BingeeDimensions.elementSpacing))
+            } else if (state.content is DetailContentState.Content) {
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.detail_refresh),
+                        tint = iconTint
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = scheme.surface.copy(alpha = collapseFraction),
+            titleContentColor = scheme.onSurface
+        ),
+        // The app shell already applies the status bar inset to the nav host.
+        windowInsets = WindowInsets(0, 0, 0, 0)
+    )
+}
+
+@Composable
+private fun FullDetailError(
+    error: AppError,
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val uiError = error.toUiError()
     Column(
-        modifier = Modifier.fillMaxWidth().padding(BingeeDimensions.screenPadding),
+        modifier = modifier.fillMaxWidth().padding(BingeeDimensions.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
     ) {
@@ -220,6 +325,8 @@ private fun FullDetailError(error: AppError, onRetry: () -> Unit, onOpenSettings
 
 @Composable
 private fun DetailBody(
+    listState: LazyListState,
+    contentPadding: PaddingValues,
     details: MediaDetails,
     isStale: Boolean,
     refreshError: AppError?,
@@ -227,13 +334,11 @@ private fun DetailBody(
     isInLibrary: Boolean?,
     isAbandoned: Boolean,
     isLibraryUpdating: Boolean,
-    libraryError: AppError?,
     watchedDate: LocalDate?,
     watchedDateUpdating: Boolean,
     onSetWatchedDate: (LocalDate?) -> Unit,
     movieProgress: MovieProgressState,
     series: SeriesDetailUiState,
-    progressError: AppError?,
     rating: DetailRatingState,
     onToggleLibrary: () -> Unit,
     onToggleSeriesAbandoned: () -> Unit,
@@ -246,57 +351,43 @@ private fun DetailBody(
     onSaveRating: () -> Unit,
     onRemoveRating: () -> Unit,
     onDismissRatingError: () -> Unit,
-    onDismissLibraryError: () -> Unit,
-    onDismissProgressError: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+    val sectionModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = BingeeDimensions.screenPadding)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
     ) {
-        if (refreshError != null) {
-            OfflineBanner(
-                stringResource(R.string.detail_refresh_failed, stringResource(refreshError.toUiError().messageRes))
-            )
-        } else if (isStale) {
-            OfflineBanner(stringResource(R.string.detail_stale_data))
-        }
-        DetailBackdrop(details)
-        Column(
-            modifier = Modifier.padding(horizontal = BingeeDimensions.screenPadding),
-            verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)) {
-                MediaPoster(details.title, details.posterUrl)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
-                ) {
-                    Text(
-                        text = details.title,
-                        modifier = Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.headlineMedium
+        item(key = "hero") { DetailHero(details) }
+        if (refreshError != null || isStale) {
+            item(key = "banner") {
+                val message = if (refreshError != null) {
+                    stringResource(
+                        R.string.detail_refresh_failed,
+                        stringResource(refreshError.toUiError().messageRes)
                     )
-                    details.originalTitle?.let {
-                        Text(stringResource(R.string.detail_original_title, it))
-                    }
-                    Text(
-                        stringResource(
-                            if (details.mediaType == MediaType.MOVIE) {
-                                R.string.library_type_movie
-                            } else {
-                                R.string.library_type_tv
-                            }
-                        )
-                    )
-                    details.releaseDate?.let { Text(stringResource(R.string.detail_date, it.toString())) }
-                    Text(stringResource(statusString(details.productionStatus)))
+                } else {
+                    stringResource(R.string.detail_stale_data)
                 }
+                OfflineBanner(message = message, modifier = sectionModifier)
             }
+        }
+        item(key = "chips") {
+            DetailChips(
+                statusLabel = stringResource(statusString(details.productionStatus)),
+                genres = details.genres,
+                modifier = sectionModifier
+            )
+        }
+        item(key = "library") {
             Button(
                 onClick = onToggleLibrary,
                 enabled = isInLibrary != null && !isLibraryUpdating,
-                modifier = Modifier.fillMaxWidth()
+                modifier = sectionModifier
             ) {
                 Text(
                     stringResource(
@@ -308,115 +399,93 @@ private fun DetailBody(
                     )
                 )
             }
-            libraryError?.let { error ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(error.toUiError().messageRes),
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    TextButton(onClick = onDismissLibraryError) {
-                        Text(stringResource(R.string.action_dismiss))
-                    }
+        }
+        details.overview?.let { overview ->
+            item(key = "overview") {
+                Column(
+                    modifier = sectionModifier,
+                    verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+                ) {
+                    Text(stringResource(R.string.detail_overview), fontWeight = FontWeight.Bold)
+                    Text(overview, style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            progressError?.let { error ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(error.toUiError().messageRes),
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    TextButton(onClick = onDismissProgressError) {
-                        Text(stringResource(R.string.action_dismiss))
-                    }
-                }
-            }
+        }
+        item(key = "rating") {
             RatingSection(
                 state = rating,
                 onSelect = onSelectRating,
                 onSave = onSaveRating,
                 onRemove = onRemoveRating,
-                onDismissError = onDismissRatingError
+                onDismissError = onDismissRatingError,
+                modifier = sectionModifier
             )
-            if (details.mediaType == MediaType.MOVIE) {
-                MovieProgressSection(movieProgress, onToggleMovieWatched)
-            } else {
-                TvSeriesSection(
-                    state = series,
-                    onToggleExpanded = onToggleSeasonExpanded,
-                    onRetrySeason = onRetrySeason,
-                    onToggleEpisode = onToggleEpisode,
-                    onToggleSeason = onToggleSeasonWatched,
-                    onOpenSettings = onOpenSettings
-                )
-                if (isInLibrary == true) {
-                    TextButton(onClick = onToggleSeriesAbandoned, enabled = !isLibraryUpdating) {
-                        Text(
-                            stringResource(
-                                if (isAbandoned) {
-                                    R.string.series_tracking_restore
-                                } else {
-                                    R.string.series_tracking_abandon
-                                }
+        }
+        item(key = "progress") {
+            Column(
+                modifier = sectionModifier,
+                verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+            ) {
+                if (details.mediaType == MediaType.MOVIE) {
+                    MovieProgressSection(movieProgress, onToggleMovieWatched)
+                } else {
+                    TvSeriesSection(
+                        state = series,
+                        onToggleExpanded = onToggleSeasonExpanded,
+                        onRetrySeason = onRetrySeason,
+                        onToggleEpisode = onToggleEpisode,
+                        onToggleSeason = onToggleSeasonWatched,
+                        onOpenSettings = onOpenSettings
+                    )
+                    if (isInLibrary == true) {
+                        TextButton(onClick = onToggleSeriesAbandoned, enabled = !isLibraryUpdating) {
+                            Text(
+                                stringResource(
+                                    if (isAbandoned) {
+                                        R.string.series_tracking_restore
+                                    } else {
+                                        R.string.series_tracking_abandon
+                                    }
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
+        }
+        item(key = "watchedDate") {
             WatchedDateSection(
                 watchedDate = watchedDate,
                 today = today,
                 isUpdating = watchedDateUpdating,
                 releaseDate = details.releaseDate,
                 mediaType = details.mediaType,
-                onSetWatchedDate = onSetWatchedDate
+                onSetWatchedDate = onSetWatchedDate,
+                modifier = sectionModifier
             )
-            if (details.genres.isNotEmpty()) {
-                DetailField(R.string.detail_genres, details.genres.joinToString { it.name })
-            }
-            details.runtime?.let {
-                DetailField(R.string.detail_runtime, stringResource(R.string.detail_minutes, it.toMinutes()))
-            }
-            details.episodeRuntime?.let {
-                DetailField(R.string.detail_episode_runtime, stringResource(R.string.detail_minutes, it.toMinutes()))
-            }
-            details.originalLanguage?.let {
-                DetailField(R.string.detail_original_language, it)
-            }
-            details.overview?.let {
-                Text(stringResource(R.string.detail_overview), fontWeight = FontWeight.Bold)
-                Text(it, style = MaterialTheme.typography.bodyLarge)
-            }
-            if (refreshError == AppError.Unauthorized) {
-                Button(onClick = onOpenSettings) { Text(stringResource(R.string.search_open_settings)) }
-            }
-            Box(modifier = Modifier.height(BingeeDimensions.screenPadding))
         }
-    }
-}
-
-@Composable
-private fun DetailBackdrop(details: MediaDetails) {
-    val modifier = Modifier.fillMaxWidth().height(220.dp)
-    val placeholder = painterResource(R.drawable.poster_placeholder)
-    if (details.backdropUrl == null) {
-        Image(
-            painter = placeholder,
-            contentDescription = stringResource(R.string.detail_backdrop_missing, details.title),
-            modifier = modifier,
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        AsyncImage(
-            model = details.backdropUrl,
-            contentDescription = stringResource(R.string.detail_backdrop, details.title),
-            placeholder = placeholder,
-            error = placeholder,
-            fallback = placeholder,
-            modifier = modifier,
-            contentScale = ContentScale.Crop
-        )
+        item(key = "metadata") {
+            Column(
+                modifier = sectionModifier,
+                verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+            ) {
+                details.episodeRuntime?.let {
+                    DetailField(
+                        labelRes = R.string.detail_episode_runtime,
+                        value = stringResource(R.string.detail_minutes, it.toMinutes())
+                    )
+                }
+                details.releaseDate?.let {
+                    DetailField(R.string.detail_date, it.localizedMedium())
+                }
+                details.originalLanguage?.let {
+                    DetailField(R.string.detail_original_language, it)
+                }
+                if (refreshError == AppError.Unauthorized) {
+                    Button(onClick = onOpenSettings) { Text(stringResource(R.string.search_open_settings)) }
+                }
+            }
+        }
     }
 }
 
@@ -447,14 +516,15 @@ private fun WatchedDateSection(
     isUpdating: Boolean,
     releaseDate: LocalDate?,
     mediaType: MediaType,
-    onSetWatchedDate: (LocalDate?) -> Unit
+    onSetWatchedDate: (LocalDate?) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val labelRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
     val editRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_edit else R.string.completion_date_edit
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
     ) {
         Text(

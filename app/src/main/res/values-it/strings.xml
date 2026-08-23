@@ -209,11 +209,14 @@
     <string name="detail_backdrop">Sfondo per %1$s</string>
     <string name="detail_backdrop_missing">Sfondo non disponibile per %1$s</string>
     <string name="detail_original_title">Titolo originale: %1$s</string>
-    <string name="detail_date">Data: %1$s</string>
-    <string name="detail_genres">Generi</string>
-    <string name="detail_runtime">Durata</string>
     <string name="detail_episode_runtime">Durata tipica episodio</string>
     <string name="detail_minutes">%1$d min</string>
+    <plurals name="detail_seasons_count">
+        <item quantity="one">%1$d stagione</item>
+        <item quantity="many">%1$d stagioni</item>
+        <item quantity="other">%1$d stagioni</item>
+    </plurals>
+    <string name="detail_date">Data di uscita</string>
     <string name="detail_original_language">Lingua originale</string>
     <string name="detail_overview">Trama</string>
     <string name="detail_movie_progress_title">Progresso di visione</string>

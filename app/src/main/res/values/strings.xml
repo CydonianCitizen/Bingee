@@ -199,11 +199,13 @@
     <string name="detail_backdrop">Backdrop for %1$s</string>
     <string name="detail_backdrop_missing">No backdrop available for %1$s</string>
     <string name="detail_original_title">Original title: %1$s</string>
-    <string name="detail_date">Date: %1$s</string>
-    <string name="detail_genres">Genres</string>
-    <string name="detail_runtime">Runtime</string>
     <string name="detail_episode_runtime">Typical episode runtime</string>
     <string name="detail_minutes">%1$d min</string>
+    <plurals name="detail_seasons_count">
+        <item quantity="one">%1$d season</item>
+        <item quantity="other">%1$d seasons</item>
+    </plurals>
+    <string name="detail_date">Release date</string>
     <string name="detail_original_language">Original language</string>
     <string name="detail_overview">Overview</string>
     <string name="detail_status_rumored">Rumored</string>

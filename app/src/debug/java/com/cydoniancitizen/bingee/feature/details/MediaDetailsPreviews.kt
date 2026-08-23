@@ -108,6 +108,22 @@ private fun UpdatingLargeFontPreview() = PreviewState(
     )
 )
 
+@Preview(name = "TV large font", showBackground = true, fontScale = 1.5f)
+@Composable
+private fun TvLargeFontPreview() = PreviewState(
+    MediaDetailsUiState(
+        today = LocalDate.of(2026, 8, 18),
+        content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),
+        isInLibrary = true,
+        series = SeriesDetailUiState(
+            content = SeriesContentState.Ready(
+                FakeMediaData.previewSeasons,
+                deriveSeriesProgress(FakeMediaData.previewSeasons)
+            )
+        )
+    )
+)
+
 @Composable
 private fun PreviewState(state: MediaDetailsUiState) {
     BingeeTheme {
