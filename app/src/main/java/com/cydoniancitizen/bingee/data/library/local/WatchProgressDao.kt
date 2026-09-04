@@ -23,7 +23,8 @@ internal enum class ProgressWriteOutcome {
 
 internal data class MovieProgressRow(
     @ColumnInfo(name = "media_type") val mediaType: MediaType,
-    @ColumnInfo(name = "watched_at") val watchedAt: Instant?
+    @ColumnInfo(name = "watched_at") val watchedAt: Instant?,
+    @ColumnInfo(name = "watched_date") val watchedDate: LocalDate?
 )
 
 internal data class SeriesCompletionRow(
@@ -36,7 +37,9 @@ internal data class SeriesCompletionRow(
 internal abstract class WatchProgressDao {
     @Query(
         """
-        SELECT media_entries.media_type, movie_watch_progress.watched_at
+        SELECT media_entries.media_type,
+               movie_watch_progress.watched_at,
+               movie_watch_progress.watched_date
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)

@@ -42,6 +42,10 @@ class MainActivity : AppCompatActivity() {
             appearancePreferences.observeLanguage()
                 .collect(::applyAppLanguage)
         }
+        lifecycleScope.launch {
+            appearancePreferences.observeTheme()
+                .collect(::applyNightMode)
+        }
         setContent {
             val theme by appearancePreferences.observeTheme().collectAsStateWithLifecycle(
                 initialValue = AppTheme.SYSTEM_DEFAULT
@@ -68,6 +72,26 @@ class MainActivity : AppCompatActivity() {
                     }
                 )
             }
+        }
+    }
+
+    /**
+     * Keeps the AppCompat night mode on the same preference the Compose theme reads.
+     *
+     * [BingeeTheme] only decides which `ColorScheme` Compose draws with. Resources resolved through
+     * the view theme — `?attr/` tints in vector drawables, the window background — follow
+     * `Theme.Material3.DayNight` instead, which without this call stays on the system setting. A
+     * user who forces Dark while the system is Light would otherwise get dark Compose surfaces and
+     * light-theme drawable tints on top of them.
+     */
+    private fun applyNightMode(theme: AppTheme) {
+        val mode = when (theme) {
+            AppTheme.SYSTEM_DEFAULT -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+        }
+        if (AppCompatDelegate.getDefaultNightMode() != mode) {
+            AppCompatDelegate.setDefaultNightMode(mode)
         }
     }
 

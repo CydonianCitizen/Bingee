@@ -1,21 +1,27 @@
 package com.cydoniancitizen.bingee.feature.home
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -202,31 +208,24 @@ internal fun HomeContent(
                 }
             }
 
-            // General TMDB discovery content stays below personal sections.
-            if (state.featuredReleases.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.home_featured_releases),
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.titleLarge
-                )
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
-                    contentPadding = PaddingValues(vertical = 4.dp)
-                ) {
-                    items(
-                        items = state.featuredReleases,
-                        key = { "${it.externalRef.source}:${it.externalRef.externalId}" }
-                    ) { item ->
-                        FeaturedReleaseCard(
-                            item = item,
-                            inWatchlist = item.externalRef in state.libraryMemberships,
-                            isAdding = item.externalRef in state.addingToWatchlist,
-                            onAddToWatchlist = { onAddToWatchlist(item) },
-                            onClick = { onOpenDetails(item.externalRef, item.mediaType) }
-                        )
-                    }
-                }
-            }
+            // General TMDB discovery content stays below personal sections. Films and series get a
+            // row each: one merged row buried whichever type the interleave happened to push right.
+            FeaturedRow(
+                titleRes = R.string.home_featured_movies,
+                items = state.featuredMovies,
+                libraryMemberships = state.libraryMemberships,
+                addingToWatchlist = state.addingToWatchlist,
+                onAddToWatchlist = onAddToWatchlist,
+                onOpenDetails = onOpenDetails
+            )
+            FeaturedRow(
+                titleRes = R.string.home_featured_series,
+                items = state.featuredSeries,
+                libraryMemberships = state.libraryMemberships,
+                addingToWatchlist = state.addingToWatchlist,
+                onAddToWatchlist = onAddToWatchlist,
+                onOpenDetails = onOpenDetails
+            )
         }
     }
 }
@@ -236,8 +235,10 @@ private fun ContinueWatchingCard(item: ContinueWatchingItem, onClick: () -> Unit
     val openDescription = stringResource(R.string.home_open_continue_details, item.title)
     Card(
         onClick = onClick,
+        // Fixed width so the carousel's slots line up; the height wraps its content instead, because
+        // a fixed one is dead space at font scale 1.0 and runs out of room well before 2.0.
         modifier = Modifier
-            .size(width = 320.dp, height = 184.dp)
+            .width(320.dp)
             .semantics { contentDescription = openDescription }
     ) {
         Row(
@@ -289,6 +290,50 @@ private fun ContinueWatchingCard(item: ContinueWatchingItem, onClick: () -> Unit
     }
 }
 
+/**
+ * One discovery row. Renders nothing at all when its list is empty, so a media type the provider
+ * had nothing for leaves no orphan heading behind.
+ */
+@Composable
+private fun FeaturedRow(
+    @StringRes titleRes: Int,
+    items: List<MediaSearchResult>,
+    libraryMemberships: Set<ExternalMediaRef>,
+    addingToWatchlist: Set<ExternalMediaRef>,
+    onAddToWatchlist: (MediaSearchResult) -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit
+) {
+    if (items.isEmpty()) return
+    Text(
+        text = stringResource(titleRes),
+        modifier = Modifier.semantics { heading() },
+        style = MaterialTheme.typography.titleLarge
+    )
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
+        contentPadding = PaddingValues(vertical = 4.dp)
+    ) {
+        items(
+            items = items,
+            key = { "${it.externalRef.source}:${it.externalRef.externalId}" }
+        ) { item ->
+            FeaturedReleaseCard(
+                item = item,
+                inWatchlist = item.externalRef in libraryMemberships,
+                isAdding = item.externalRef in addingToWatchlist,
+                onAddToWatchlist = { onAddToWatchlist(item) },
+                onClick = { onOpenDetails(item.externalRef, item.mediaType) }
+            )
+        }
+    }
+}
+
+/** Poster width for a discovery card, chosen to sit just under the collection grid's 140 dp cell. */
+private val FeaturedCardWidth = 124.dp
+
+/** Poster aspect ratio, shared with the collection grid so both surfaces crop artwork identically. */
+private val PosterAspectRatio = 0.67f
+
 @Composable
 private fun FeaturedReleaseCard(
     item: MediaSearchResult,
@@ -297,49 +342,66 @@ private fun FeaturedReleaseCard(
     onAddToWatchlist: () -> Unit,
     onClick: () -> Unit
 ) {
+    val watchlistDescription = stringResource(
+        if (inWatchlist) R.string.action_in_watchlist else R.string.action_add_to_watchlist
+    )
     Card(
         onClick = onClick,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = MaterialTheme.shapes.medium,
+        // Fixed width so the row's slots line up; the height wraps the poster and its caption, the
+        // same shape a collection grid cell takes.
         modifier = Modifier
-            .size(width = 200.dp, height = 300.dp)
+            .width(FeaturedCardWidth)
             .semantics { contentDescription = item.title }
     ) {
-        Column(
-            modifier = Modifier.padding(BingeeDimensions.elementSpacing),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            MediaPoster(
-                title = item.title,
-                posterUrl = item.posterUrl,
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box {
+                MediaPoster(
+                    title = item.title,
+                    posterUrl = item.posterUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(PosterAspectRatio),
+                    // The card owns the combined description of this item.
+                    contentDescription = null
+                )
+                // The watchlist action rides on the poster, as the favourite toggle does in the
+                // collection grid. A labelled button cannot hold "Add to Watchlist" at this width.
+                IconButton(
+                    onClick = onAddToWatchlist,
+                    enabled = !inWatchlist && !isAdding,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                ) {
+                    Icon(
+                        imageVector = if (inWatchlist) Icons.Default.Check else Icons.Default.Add,
+                        contentDescription = watchlistDescription,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                // The card owns the combined description of this item.
-                contentDescription = null
-            )
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            item.releaseDate?.let {
-                Text(
-                    text = stringResource(R.string.search_release_year, it.year),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Button(
-                onClick = onAddToWatchlist,
-                enabled = !inWatchlist && !isAdding,
-                modifier = Modifier.fillMaxWidth()
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = stringResource(
-                        if (inWatchlist) R.string.action_in_watchlist else R.string.action_add_to_watchlist
-                    ),
-                    maxLines = 1,
+                    text = item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    // Always two lines, so a one-line title and a wrapped one produce cards of the
+                    // same height and the row keeps a single bottom edge at every font scale.
+                    minLines = 2,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                item.releaseDate?.let {
+                    Text(
+                        text = stringResource(R.string.search_release_year, it.year),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

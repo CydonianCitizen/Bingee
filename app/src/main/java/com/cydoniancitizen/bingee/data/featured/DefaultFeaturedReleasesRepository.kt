@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.data.tmdb.executeTmdbRequest
 import com.cydoniancitizen.bingee.data.tmdb.search.TmdbMovieSearchMapper
 import com.cydoniancitizen.bingee.data.tmdb.search.TmdbSearchService
 import com.cydoniancitizen.bingee.data.tmdb.search.TmdbTvSearchMapper
+import com.cydoniancitizen.bingee.domain.repository.FeaturedReleases
 import com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,9 +21,9 @@ internal class DefaultFeaturedReleasesRepository @Inject constructor(
     private val appearancePreferences: com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 ) : FeaturedReleasesRepository {
 
-    override suspend fun getFeaturedReleases(): AppResult<List<MediaSearchResult>> {
+    override suspend fun getFeaturedReleases(): AppResult<FeaturedReleases> {
         val credential = when (val stored = credentialStore.read()) {
-            is AppResult.Success -> stored.value ?: return AppResult.Success(emptyList())
+            is AppResult.Success -> stored.value ?: return AppResult.Success(FeaturedReleases())
             is AppResult.Failure -> return stored
         }
         val auth = "Bearer ${credential.reveal()}"
@@ -69,25 +70,21 @@ internal class DefaultFeaturedReleasesRepository @Inject constructor(
             return AppResult.Failure(moviesResult.error)
         }
 
-        // Interleave & remove duplicates, bound result count to 10
-        val combined = mutableListOf<MediaSearchResult>()
-        val seen = mutableSetOf<String>()
+        return AppResult.Success(
+            FeaturedReleases(
+                movies = moviesList.take(FEATURED_ROW_LIMIT),
+                series = tvList.take(FEATURED_ROW_LIMIT)
+            )
+        )
+    }
 
-        val maxLen = maxOf(moviesList.size, tvList.size)
-        for (i in 0 until maxLen) {
-            if (i < moviesList.size) {
-                val item = moviesList[i]
-                val key = "${item.externalRef.source}:${item.externalRef.externalId}"
-                if (seen.add(key)) combined.add(item)
-            }
-            if (i < tvList.size) {
-                val item = tvList[i]
-                val key = "${item.externalRef.source}:${item.externalRef.externalId}"
-                if (seen.add(key)) combined.add(item)
-            }
-            if (combined.size >= 10) break
-        }
-
-        return AppResult.Success(combined.take(10))
+    private companion object {
+        /**
+         * How many titles each Home row carries. A TMDB discover page returns 20, so one request
+         * per media type fills a row that is meant to be scrolled rather than counted. Raising it
+         * past 20 would buy a second round trip per row for content nobody scrolls to; lowering it
+         * below about 15 makes the row short enough that the horizontal scroll stops reading as one.
+         */
+        const val FEATURED_ROW_LIMIT = 20
     }
 }

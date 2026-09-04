@@ -291,7 +291,14 @@ class SeriesAndProgressDaoTest {
             ProgressWriteOutcome.SUCCESS,
             progressDao.markMovieWatched(MediaSource.TMDB, "200", now.plusSeconds(1))
         )
-        assertEquals(now.plusSeconds(1), progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)
+        val watchedDate = LocalDate.of(2026, 7, 12)
+        assertEquals(
+            ProgressWriteOutcome.SUCCESS,
+            progressDao.setMediaWatchedDate(MediaSource.TMDB, "200", watchedDate, now)
+        )
+        val progress = progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()
+        assertEquals(now.plusSeconds(1), progress?.watchedAt)
+        assertEquals(watchedDate, progress?.watchedDate)
 
         libraryDao.removeMembership(MediaSource.TMDB, "200")
         assertEquals(now.plusSeconds(1), progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)

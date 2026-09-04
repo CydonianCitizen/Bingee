@@ -15,10 +15,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -322,8 +324,10 @@ private fun SearchResults(
         }
         item {
             when (val next = content.nextPage) {
+                // Paging is a continuation of what the user already asked for, not the screen's call
+                // to action, so it stays below the per-result buttons in emphasis.
                 NextPageState.Ready ->
-                    Button(
+                    OutlinedButton(
                         onClick = onLoadNextPage,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -427,19 +431,24 @@ internal fun SearchResultItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Button(
-                    onClick = onToggleLibrary,
-                    enabled = !isLibraryActionPending
-                ) {
-                    Text(
-                        stringResource(
-                            when {
-                                isLibraryActionPending -> R.string.library_action_updating
-                                isInLibrary -> R.string.search_action_in_watch_later
-                                else -> R.string.search_action_add_watch_later
-                            }
-                        )
-                    )
+                val libraryLabel = stringResource(
+                    when {
+                        isLibraryActionPending -> R.string.library_action_updating
+                        isInLibrary -> R.string.search_action_in_watch_later
+                        else -> R.string.search_action_add_watch_later
+                    }
+                )
+                // "In Watch Later" reports a state the user already reached; only "Add to Watch
+                // Later" is an action. Rendering both as filled buttons made a saved result and an
+                // unsaved one indistinguishable at a glance.
+                if (isInLibrary) {
+                    FilledTonalButton(onClick = onToggleLibrary, enabled = !isLibraryActionPending) {
+                        Text(libraryLabel)
+                    }
+                } else {
+                    Button(onClick = onToggleLibrary, enabled = !isLibraryActionPending) {
+                        Text(libraryLabel)
+                    }
                 }
             }
         }

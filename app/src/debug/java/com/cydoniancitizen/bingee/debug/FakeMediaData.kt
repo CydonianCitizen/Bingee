@@ -69,6 +69,7 @@ object FakeMediaData {
     private val specialsRef = ExternalMediaRef(MediaSource.TMDB, "390")
     private val firstSeasonRef = ExternalMediaRef(MediaSource.TMDB, "391")
     private val secondSeasonRef = ExternalMediaRef(MediaSource.TMDB, "392")
+    private val longSeasonRef = ExternalMediaRef(MediaSource.TMDB, "393")
 
     val previewSeasons = listOf(
         cachedSeason(
@@ -117,6 +118,35 @@ object FakeMediaData {
                 )
             )
         )
+    )
+
+    /**
+     * A full-length season. The three-episode [previewSeasons] cannot show how a real season reads
+     * once every episode is a row of its own, so screenshot and font-scaling checks use this one.
+     */
+    val longSeason = cachedSeason(
+        ref = longSeasonRef,
+        number = 3,
+        name = "Season 3",
+        episodes = (1..24).map { number ->
+            tracked(
+                longSeasonRef,
+                3,
+                number,
+                if (number == 4) {
+                    "An episode with a deliberately long title, to exercise wrapping at large font scales"
+                } else {
+                    "Episode title $number"
+                },
+                LocalDate.of(2026, 4, 1).plusWeeks(number.toLong() - 1),
+                when {
+                    number <= 12 -> EpisodeWatchState.Watched(fixedNow.minusSeconds(3600L * number))
+                    // Air dates from episode 19 on fall after fixedNow, so these are genuinely unaired.
+                    number >= 19 -> EpisodeWatchState.Unavailable
+                    else -> EpisodeWatchState.Unwatched
+                }
+            )
+        }
     )
 
     private fun cachedSeason(

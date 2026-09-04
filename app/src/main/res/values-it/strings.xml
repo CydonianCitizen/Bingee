@@ -151,7 +151,8 @@
     <string name="profile_empty_search_body">Nessun titolo corrisponde a \"%1$s\" nella tua raccolta.</string>
     <string name="profile_empty_action_search">Esplora in Cerca</string>
     <string name="profile_empty_action_clear">Cancella ricerca</string>
-    <string name="home_featured_releases">Uscite in evidenza</string>
+    <string name="home_featured_movies">Film in evidenza</string>
+    <string name="home_featured_series">Serie in evidenza</string>
     <string name="home_continue_watching">Continua a vedere</string>
     <plurals name="home_continue_watching_progress">
         <item quantity="one">%1$d di %2$d episodio</item>
@@ -369,6 +370,9 @@
     <string name="detail_refresh_season">Aggiorna metadati stagione</string>
     <string name="detail_mark_season_watched">Segna come visti gli episodi tracciabili</string>
     <string name="detail_mark_season_unwatched">Segna stagione come non vista</string>
+    <string name="detail_season_watched_state">Tutti gli episodi tracciabili visti</string>
+    <string name="detail_season_partial_state">Visto in parte</string>
+    <string name="detail_season_unwatched_state">Non visto</string>
     <string name="detail_episodes_empty">Nessun episodio disponibile per questa stagione.</string>
     <string name="detail_episode_title">Episodio %1$d · %2$s</string>
     <string name="detail_episode_air_date">Data di uscita: %1$s</string>
@@ -376,8 +380,6 @@
     <string name="detail_episode_future">Non ancora trasmesso</string>
     <string name="detail_episode_watched_state">Visto</string>
     <string name="detail_episode_unwatched_state">Non visto</string>
-    <string name="detail_episode_still">Immagine per %1$s</string>
-    <string name="detail_episode_still_missing">Nessuna immagine disponibile per %1$s</string>
     <string name="tmdb_logo_description">Logo di The Movie Database</string>
     <string name="tmdb_attribution">Questo prodotto usa l\'API TMDB, ma non è approvato né certificato da TMDB.</string>
     <string name="privacy_summary">Bingee usa i metadati TMDB. La tua credenziale è cifrata localmente, non viene mai inviata a un backend Bingee ed è esclusa dai backup dati Bingee.</string>

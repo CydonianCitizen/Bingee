@@ -51,7 +51,8 @@ internal data class HomeUiState(
     val refresh: HomeRefreshState = HomeRefreshState.Idle,
     val lastSuccessfulRefreshAt: Instant? = null,
     val today: LocalDate,
-    val featuredReleases: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
+    val featuredMovies: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
+    val featuredSeries: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
     val continueWatching: List<ContinueWatchingItem> = emptyList(),
     val libraryMemberships: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet(),
     val addingToWatchlist: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet()
@@ -225,7 +226,12 @@ internal class HomeViewModel @Inject constructor(
     private suspend fun loadFeaturedReleases(generation: Long) {
         when (val result = featuredRepository.getFeaturedReleases()) {
             is AppResult.Success -> if (generation == refreshGeneration) {
-                mutableUiState.update { it.copy(featuredReleases = result.value) }
+                mutableUiState.update {
+                    it.copy(
+                        featuredMovies = result.value.movies,
+                        featuredSeries = result.value.series
+                    )
+                }
             }
             is AppResult.Failure -> {
                 // Keep existing or empty

@@ -20,6 +20,7 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
+import com.cydoniancitizen.bingee.domain.repository.FeaturedReleases
 import com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
@@ -277,7 +278,7 @@ class HomeViewModelTest {
     ).also(createdViewModels::add)
 
     private class FakeFeaturedRepo : FeaturedReleasesRepository {
-        override suspend fun getFeaturedReleases(): AppResult<List<MediaSearchResult>> = AppResult.Success(emptyList())
+        override suspend fun getFeaturedReleases(): AppResult<FeaturedReleases> = AppResult.Success(FeaturedReleases())
     }
 
     private class FakeLibraryRepo(private val entries: List<LibraryEntry> = emptyList()) : LibraryRepository {

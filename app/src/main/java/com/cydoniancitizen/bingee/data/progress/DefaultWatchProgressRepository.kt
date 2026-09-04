@@ -35,7 +35,7 @@ internal class DefaultWatchProgressRepository @Inject constructor(
                     row == null -> AppResult.Failure(AppError.MissingData)
                     row.mediaType != MediaType.MOVIE -> AppResult.Failure(AppError.MediaTypeMismatch)
                     row.watchedAt == null -> AppResult.Success(MovieWatchState.Unwatched)
-                    else -> AppResult.Success(MovieWatchState.Watched(row.watchedAt))
+                    else -> AppResult.Success(MovieWatchState.Watched(row.watchedAt, row.watchedDate))
                 }
             }
             .catch { throwable ->

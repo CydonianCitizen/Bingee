@@ -124,6 +124,27 @@ private fun TvLargeFontPreview() = PreviewState(
     )
 )
 
+@Preview(name = "TV long season", showBackground = true, heightDp = 2200)
+@Composable
+private fun TvLongSeasonPreview() = PreviewState(longSeasonState())
+
+@Preview(name = "TV long season large font", showBackground = true, fontScale = 1.5f, heightDp = 2800)
+@Composable
+private fun TvLongSeasonLargeFontPreview() = PreviewState(longSeasonState())
+
+private fun longSeasonState() = MediaDetailsUiState(
+    today = LocalDate.of(2026, 8, 18),
+    content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),
+    isInLibrary = true,
+    series = SeriesDetailUiState(
+        content = SeriesContentState.Ready(
+            listOf(FakeMediaData.longSeason),
+            deriveSeriesProgress(listOf(FakeMediaData.longSeason))
+        ),
+        expandedSeasons = setOf(FakeMediaData.longSeason.season.externalRef)
+    )
+)
+
 @Composable
 private fun PreviewState(state: MediaDetailsUiState) {
     BingeeTheme {
