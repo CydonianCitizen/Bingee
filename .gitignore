@@ -34,4 +34,6 @@ Thumbs.db
 
 
 AGENTS.md
-CLAUDE.mdapp/release/
+CLAUDE.md
+app/release/
+.impeccable/
