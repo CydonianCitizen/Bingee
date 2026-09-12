@@ -25,18 +25,22 @@ keystore.properties
 secrets.properties
 secrets.xml
 
-# Private local evidence
+# Private local evidence and docs
 .local-evidence/
-docs/
+docs/*
+# Referenced by the in-app Privacy settings page
+!docs/privacy.md
 
+# Release artifacts
+app/release/
+*.apk
+*.aab
 
+# Local agent and tooling files
+AGENTS.md
+CLAUDE.md
+.impeccable/
 
 # Operating-system files
 .DS_Store
 Thumbs.db
-
-
-AGENTS.md
-CLAUDE.md
-app/release/
-.impeccable/

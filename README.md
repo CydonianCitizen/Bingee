@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The current development release is Bingee `1.2.0`. It contains a local-first Compose app with Home, Search, the Your Bingee personal dashboard, Continue Watching with one-tap episode tracking, two home screen widgets, Notification Center, settings subpages, secure TMDB credential management, Room v5 details and progress, a Room-first release calendar, approximate local notifications, versioned JSON backup/restore (v2 export, v1/v2 import), an additive importer for documented TV Time JSON ZIP profiles, English/Italian localization, and a manual GitHub update checker. TMDB is the only runtime media provider; animated and anime content is handled as ordinary TMDB Movies or TV Series. What changed in this release is in the [1.2.0 release notes](docs/release-notes-1.2.0.md), and historical release details remain in the [1.0.0-stable release notes](docs/release-notes-1.0.0-stable.md); current work is tracked in the [roadmap](docs/roadmap.md).
+The current development release is Bingee `1.2.0`. It contains a local-first Compose app with Home, Search, the Your Bingee personal dashboard, Continue Watching with one-tap episode tracking, two home screen widgets, Notification Center, settings subpages, secure TMDB credential management, Room v5 details and progress, a Room-first release calendar, approximate local notifications, versioned JSON backup/restore (v2 export, v1/v2 import), an additive importer for documented TV Time JSON ZIP profiles, English/Italian localization, and a manual GitHub update checker. TMDB is the only runtime media provider; animated and anime content is handled as ordinary TMDB Movies or TV Series. What changed in each release is in the [GitHub releases](https://github.com/CydonianCitizen/Bingee/releases).
 
 
 Remote metadata uses a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
@@ -69,11 +69,9 @@ Two home screen widgets read the same Room data and never call TMDB. The 2×2 wi
 
 WorkManager maintains a bounded batch of up to 20 followed titles approximately once per day when network is available. A separate network-free worker evaluates cached Room events for optional local notifications. Notifications are disabled by default; Settings requests Android notification permission only after the user enables them and supports same-day, one-day, three-day, or seven-day lead times plus movie, season, and episode categories. Android may delay work because of Doze, battery optimization, constraints, or device policy; Bingee promises no exact notification time.
 
-Your Bingee → Settings → Data & backup emits backup v2, including media history, watch progress, ratings, preferences, and ordered genre metadata. Restore accepts v1/v2 and validates the complete file before one Room transaction. See [backup format v2](docs/backup-format-v2.md).
+Your Bingee → Settings → Data & backup emits backup v2, including media history, watch progress, ratings, preferences, and ordered genre metadata. Restore accepts v1/v2 and validates the complete file before one Room transaction.
 
-Your Bingee → Settings → Data & backup also exposes an experimental `Import TV Time history` action. It supports only the role-based JSON ZIP profile derived from evidence ID `TVTIME-SAMPLE-001`. The archive is inspected locally with bounded ZIP limits, then matched conservatively through the existing TMDB credential. Ambiguous records require review or skip; confirmation applies additive, idempotent changes only. Ratings, favorites, custom lists, rewatch counters/timelines, CSV, other TV Time variants, TV Time authentication, and TV Time network access are unsupported. See [TV Time source profile](docs/imports/tv-time-source-format-v1.md) and [ADR 0019](docs/adr/0019-tv-time-import-implementation.md).
-
-Release notes are available in [1.2.0 release notes](docs/release-notes-1.2.0.md) and [1.0.0-stable release notes](docs/release-notes-1.0.0-stable.md), and future enhancement plans in [roadmap](docs/roadmap.md).
+Your Bingee → Settings → Data & backup also exposes an experimental `Import TV Time history` action. It supports only the role-based JSON ZIP profile derived from evidence ID `TVTIME-SAMPLE-001`. The archive is inspected locally with bounded ZIP limits, then matched conservatively through the existing TMDB credential. Ambiguous records require review or skip; confirmation applies additive, idempotent changes only. Ratings, favorites, custom lists, rewatch counters/timelines, CSV, other TV Time variants, TV Time authentication, and TV Time network access are unsupported.
 
 ## TMDB configuration and privacy
 
@@ -81,7 +79,7 @@ Bingee supports one TMDB credential format: the API Read Access Token available 
 
 The accepted token is encrypted with AES-256-GCM using key material held by Android Keystore. Ciphertext is stored in `noBackupFilesDir`, separate from ordinary Preferences DataStore settings and excluded from cloud backup and device transfer. The token is never included in Bingee data exports. Startup trusts a previously validated stored token and does not perform automatic remote validation.
 
-Bingee has no account or proprietary backend. Without a usable TMDB credential, the application shell and future local data remain available while remote metadata features stay disabled. Search reads the credential only inside the protected data/network boundary; query text is not logged or stored. See [privacy notes](docs/privacy.md), [ADR 0009](docs/adr/0009-tmdb-credential-configuration.md), and [ADR 0010](docs/adr/0010-tmdb-search.md).
+Bingee has no account or proprietary backend. Without a usable TMDB credential, the application shell and future local data remain available while remote metadata features stay disabled. Search reads the credential only inside the protected data/network boundary; query text is not logged or stored. See [privacy notes](docs/privacy.md).
 
 This product uses the TMDB API but is not endorsed or certified by TMDB. The official TMDB attribution logo is shown in Your Bingee → Settings/About. Credentials are never part of JSON backup files.
 
@@ -103,8 +101,6 @@ app/src/debug/java/com/cydoniancitizen/bingee/
 ```
 
 Feature UI depends on immutable domain models and repository contracts, never provider DTOs or Room entities. TMDB client, DTOs, mappers, errors, and identities remain isolated. Japanese animation returned by TMDB behaves identically to standard Movies and TV Series. Account sync, recommendations, and automatic merging are absent.
-
-See [architecture conventions](docs/architecture.md) and [architecture decisions](docs/adr/) for the current boundaries and durable choices.
 
 ## Versioning
 
