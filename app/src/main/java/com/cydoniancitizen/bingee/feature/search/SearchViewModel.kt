@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
 import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
@@ -63,8 +64,8 @@ internal data class SearchUiState(
         listOf(MediaSearchCategory.MOVIES, MediaSearchCategory.TV_SERIES),
     val credentialAvailability: SearchCredentialAvailability = SearchCredentialAvailability.CHECKING,
     val content: SearchContentState = SearchContentState.Idle,
-    val libraryMembership: Set<ExternalMediaRef> = emptySet(),
-    val pendingLibraryActions: Set<ExternalMediaRef> = emptySet(),
+    val libraryMembership: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
+    val pendingLibraryActions: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
     val libraryError: AppError? = null
 )
 
@@ -144,20 +145,21 @@ internal class SearchViewModel @Inject constructor(
     }
 
     fun toggleLibrary(result: MediaSearchResult) {
-        val ref = result.externalRef
+        // A movie and a series can share a TMDB ID, so library state is tracked per (reference, type).
+        val key = result.externalRef to result.mediaType
         val snapshot = mutableUiState.value
-        if (ref in snapshot.pendingLibraryActions) return
-        val remove = ref in snapshot.libraryMembership
+        if (key in snapshot.pendingLibraryActions) return
+        val remove = key in snapshot.libraryMembership
         mutableUiState.update {
             it.copy(
-                pendingLibraryActions = it.pendingLibraryActions + ref,
+                pendingLibraryActions = it.pendingLibraryActions + key,
                 libraryError = null
             )
         }
         viewModelScope.launch {
             val outcome =
                 if (remove) {
-                    libraryRepository.remove(ref)
+                    libraryRepository.remove(result.externalRef, result.mediaType)
                 } else {
                     when (val added = libraryRepository.add(result)) {
                         is AppResult.Success -> AppResult.Success(Unit)
@@ -170,16 +172,16 @@ internal class SearchViewModel @Inject constructor(
                         state.copy(
                             libraryMembership =
                             if (remove) {
-                                state.libraryMembership - ref
+                                state.libraryMembership - key
                             } else {
-                                state.libraryMembership + ref
+                                state.libraryMembership + key
                             },
-                            pendingLibraryActions = state.pendingLibraryActions - ref
+                            pendingLibraryActions = state.pendingLibraryActions - key
                         )
 
                     is AppResult.Failure ->
                         state.copy(
-                            pendingLibraryActions = state.pendingLibraryActions - ref,
+                            pendingLibraryActions = state.pendingLibraryActions - key,
                             libraryError = outcome.error
                         )
                 }

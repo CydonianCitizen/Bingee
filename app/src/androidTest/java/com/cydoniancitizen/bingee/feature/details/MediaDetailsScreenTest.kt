@@ -117,14 +117,18 @@ class MediaDetailsScreenTest {
 
         // The hero meta line reads "TV Series · 3 seasons", so the type is a substring of it.
         composeRule.onNode(hasText("TV Series", substring = true)).assertIsDisplayed()
+        // Each season is its own lazy item, so every assertion first scrolls its target into composition.
         scrollTo(hasText("Season 1"))
         composeRule.onNodeWithText("Season 1").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Specials")[0].performScrollTo().assertIsDisplayed()
+        scrollTo(hasText("Episode 1 · Watched episode"))
         composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
+        scrollTo(hasText("Episode 3 · Future episode"))
         composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
         composeRule.onNode(
             SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not aired yet")
         ).assertIsNotEnabled()
+        scrollTo(hasText("Specials"))
+        composeRule.onAllNodesWithText("Specials")[0].performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Rate episode").assertDoesNotExist()
         composeRule.onNodeWithText("Rate season").assertDoesNotExist()
     }

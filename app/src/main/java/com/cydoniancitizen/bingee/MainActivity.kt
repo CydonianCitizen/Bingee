@@ -7,8 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,13 +68,18 @@ class MainActivity : AppCompatActivity() {
             }
 
             BingeeTheme(darkTheme = darkTheme) {
-                BingeeApp(
-                    notificationTarget = notificationTarget,
-                    onNotificationTargetConsumed = {
-                        notificationTarget.value = null
-                        setIntent(Intent(this, MainActivity::class.java))
-                    }
-                )
+                // The root surface gives every screen the theme background and a matching content colour.
+                // Screens drawn outside a Scaffold, such as the startup check, otherwise fall back to black
+                // text on the window background, which is unreadable in the dark theme.
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    BingeeApp(
+                        notificationTarget = notificationTarget,
+                        onNotificationTargetConsumed = {
+                            notificationTarget.value = null
+                            setIntent(Intent(this, MainActivity::class.java))
+                        }
+                    )
+                }
             }
         }
     }

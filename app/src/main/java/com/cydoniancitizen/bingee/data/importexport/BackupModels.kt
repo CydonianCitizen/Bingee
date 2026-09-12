@@ -7,7 +7,7 @@ import java.time.LocalDate
 
 internal const val BACKUP_FORMAT_ID = "bingee-backup"
 internal const val BACKUP_SCHEMA_VERSION_V1 = 1
-internal const val BACKUP_SCHEMA_VERSION = 1
+internal const val BACKUP_SCHEMA_VERSION = 2
 internal const val BACKUP_MIME_TYPE = "application/json"
 internal const val MAX_BACKUP_BYTES = 50 * 1024 * 1024
 
@@ -17,9 +17,17 @@ internal object BackupLimits {
     const val MAX_EPISODES = 500_000
     const val MAX_STRING = 8_192
     const val MAX_URL = 2_048
+    const val MAX_GENRES_PER_MEDIA = 100
 }
 
 internal data class BackupRef(val source: MediaSource, val externalId: String)
+
+internal fun BackupRef.key(): String = "${source.name}:$externalId"
+
+/** Media identity: TMDB numbers movies and series independently, so the type is part of the key. */
+internal fun BackupRef.key(type: MediaType): String = "${type.name}:${key()}"
+
+internal data class BackupGenre(val name: String, val source: MediaSource?, val genreId: Long?)
 
 internal data class BackupMedia(
     val primaryRef: BackupRef,
@@ -31,7 +39,10 @@ internal data class BackupMedia(
     val posterUrl: String?,
     val releaseDate: LocalDate?,
     val isFavorite: Boolean = false,
-    val favoriteAddedAt: Instant? = null
+    val favoriteAddedAt: Instant? = null,
+    val genres: List<BackupGenre> = emptyList(),
+    /** Movie runtime, so offline statistics survive a restore that drops the Details cache. */
+    val runtimeMinutes: Int? = null
 )
 
 internal data class BackupSeason(
@@ -56,7 +67,8 @@ internal data class BackupEpisode(
     val stillUrl: String?
 )
 
-internal data class BackupLibraryEntry(val mediaRef: BackupRef, val addedAt: Instant)
+/** [mediaType] tells a movie from a series with the same TMDB ID; v1 files omit it and are never ambiguous. */
+internal data class BackupLibraryEntry(val mediaRef: BackupRef, val addedAt: Instant, val mediaType: MediaType? = null)
 
 internal data class BackupMovieProgress(
     val mediaRef: BackupRef,
@@ -74,7 +86,13 @@ internal data class BackupAbandonedSeries(val mediaRef: BackupRef)
 
 internal data class BackupEpisodeProgress(val episodeRef: BackupRef, val watchedAt: Instant)
 
-internal data class BackupRating(val mediaRef: BackupRef, val rating: Int, val ratedAt: Instant, val updatedAt: Instant)
+internal data class BackupRating(
+    val mediaRef: BackupRef,
+    val rating: Int,
+    val ratedAt: Instant,
+    val updatedAt: Instant,
+    val mediaType: MediaType? = null
+)
 
 internal data class BackupPreferences(
     val notificationLeadDays: Int,

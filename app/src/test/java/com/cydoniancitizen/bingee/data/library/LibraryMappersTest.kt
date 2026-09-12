@@ -40,8 +40,8 @@ class LibraryMappersTest {
     @Test
     fun roomRelationMapsToDomainAndHonorsRequestedProviderRef() {
         val media = mediaEntity()
-        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
-        val imdb = ExternalRefEntity(7, MediaSource.IMDB, "84")
+        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, MediaType.MOVIE, "42")
+        val imdb = ExternalRefEntity(7, MediaSource.IMDB, MediaType.MOVIE, "84")
         val row = LibraryItemWithRefs(
             media = media,
             addedAt = now,
@@ -60,8 +60,8 @@ class LibraryMappersTest {
     @Test
     fun tmdbReferenceWinsRegardlessOfExternalReferenceOrder() {
         val media = mediaEntity()
-        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
-        val imdb = ExternalRefEntity(7, MediaSource.IMDB, "84")
+        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, MediaType.MOVIE, "42")
+        val imdb = ExternalRefEntity(7, MediaSource.IMDB, MediaType.MOVIE, "84")
 
         listOf(listOf(imdb, tmdb), listOf(tmdb, imdb)).forEach { refs ->
             val entry = LibraryItemWithRefs(
@@ -78,7 +78,7 @@ class LibraryMappersTest {
 
     @Test
     fun tmdbOnlyReferenceRemainsNavigable() {
-        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, "42")
+        val tmdb = ExternalRefEntity(7, MediaSource.TMDB, MediaType.MOVIE, "42")
         val entry = LibraryItemWithRefs(
             media = mediaEntity(),
             addedAt = now,
@@ -92,7 +92,7 @@ class LibraryMappersTest {
 
     @Test
     fun imdbOnlyReferenceHasNoNavigableDetailsIdentity() {
-        val imdb = ExternalRefEntity(7, MediaSource.IMDB, "tt1234567")
+        val imdb = ExternalRefEntity(7, MediaSource.IMDB, MediaType.MOVIE, "tt1234567")
         val entry = LibraryItemWithRefs(
             media = mediaEntity(),
             addedAt = now,

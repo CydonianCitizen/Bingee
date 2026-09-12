@@ -91,7 +91,7 @@ internal data class ProfileUiState(
     val tasteStatistics: TasteStatistics = TasteStatistics(),
     val searchQuery: String = "",
     val isLoading: Boolean = true,
-    val pendingRemovals: Set<ExternalMediaRef> = emptySet(),
+    val pendingRemovals: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
     val actionError: AppError? = null,
     val loadError: AppError? = null,
     val statisticsError: AppError? = null,
@@ -196,7 +196,7 @@ internal class ProfileViewModel @Inject constructor(
     fun toggleFavorite(entry: LibraryEntry) {
         val ref = entry.mediaRef
         viewModelScope.launch {
-            when (val result = libraryRepository.setFavorite(ref, !entry.isFavorite)) {
+            when (val result = libraryRepository.setFavorite(ref, entry.mediaType, !entry.isFavorite)) {
                 is AppResult.Success -> {}
                 is AppResult.Failure -> {
                     mutableUiState.update { it.copy(actionError = result.error) }
@@ -208,7 +208,7 @@ internal class ProfileViewModel @Inject constructor(
     fun setWatchedDate(entry: LibraryEntry, watchedDate: LocalDate?) {
         val ref = entry.mediaRef
         viewModelScope.launch {
-            when (val result = libraryRepository.setWatchedDate(ref, watchedDate)) {
+            when (val result = libraryRepository.setWatchedDate(ref, entry.mediaType, watchedDate)) {
                 is AppResult.Success -> {}
                 is AppResult.Failure -> {
                     mutableUiState.update { it.copy(actionError = result.error) }
@@ -219,21 +219,22 @@ internal class ProfileViewModel @Inject constructor(
 
     fun remove(entry: LibraryEntry) {
         val ref = entry.mediaRef
-        if (ref in mutableUiState.value.pendingRemovals) return
+        val pending = ref to entry.mediaType
+        if (pending in mutableUiState.value.pendingRemovals) return
         mutableUiState.update {
-            it.copy(pendingRemovals = it.pendingRemovals + ref, actionError = null)
+            it.copy(pendingRemovals = it.pendingRemovals + pending, actionError = null)
         }
         viewModelScope.launch {
-            when (val result = libraryRepository.remove(ref)) {
+            when (val result = libraryRepository.remove(ref, entry.mediaType)) {
                 is AppResult.Success -> {
                     mutableUiState.update { state ->
-                        state.copy(pendingRemovals = state.pendingRemovals - ref)
+                        state.copy(pendingRemovals = state.pendingRemovals - pending)
                     }
                 }
                 is AppResult.Failure -> {
                     mutableUiState.update { state ->
                         state.copy(
-                            pendingRemovals = state.pendingRemovals - ref,
+                            pendingRemovals = state.pendingRemovals - pending,
                             actionError = result.error
                         )
                     }

@@ -35,7 +35,13 @@ internal data class MediaEntity(
     @ColumnInfo(name = "is_favorite")
     val isFavorite: Boolean = false,
     @ColumnInfo(name = "favorite_added_at")
-    val favoriteAddedAt: Instant? = null
+    val favoriteAddedAt: Instant? = null,
+    /**
+     * Movie runtime kept with the portable metadata so statistics survive a backup restore, which drops
+     * the Details cache. Details refresh fills `media_details.runtime_minutes`, which takes precedence.
+     */
+    @ColumnInfo(name = "runtime_minutes")
+    val runtimeMinutes: Int? = null
 ) {
     init {
         require(localMediaId >= 0) { "Local media ID must not be negative" }
@@ -45,7 +51,9 @@ internal data class MediaEntity(
 
 @Entity(
     tableName = "external_refs",
-    primaryKeys = ["source", "external_id"],
+    // TMDB numbers movies and TV series independently, so the same ID names two works: the type is part
+    // of the identity.
+    primaryKeys = ["source", "media_type", "external_id"],
     foreignKeys = [
         ForeignKey(
             entity = MediaEntity::class,
@@ -60,6 +68,8 @@ internal data class ExternalRefEntity(
     @ColumnInfo(name = "local_media_id")
     val localMediaId: Long,
     val source: MediaSource,
+    @ColumnInfo(name = "media_type")
+    val mediaType: MediaType,
     @ColumnInfo(name = "external_id")
     val externalId: String
 ) {

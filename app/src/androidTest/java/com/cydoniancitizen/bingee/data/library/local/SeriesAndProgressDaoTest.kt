@@ -164,17 +164,17 @@ class SeriesAndProgressDaoTest {
             listOf(episode("301", 1)),
             now
         )
-        libraryDao.removeMembership(MediaSource.TMDB, "300")
+        libraryDao.removeMembership(MediaSource.TMDB, MediaType.SERIES, "300")
 
         addMedia("400", MediaType.MOVIE, "Favorite only")
-        libraryDao.updateFavoriteState(MediaSource.TMDB, "400", true)
-        libraryDao.removeMembership(MediaSource.TMDB, "400")
+        libraryDao.updateFavoriteState(MediaSource.TMDB, MediaType.MOVIE, "400", true)
+        libraryDao.removeMembership(MediaSource.TMDB, MediaType.MOVIE, "400")
 
         val rows = libraryDao.observeLibraryProgress(today).first()
-        val seriesId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "100")!!.localMediaId
-        val movieId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "200")!!.localMediaId
-        val cachedId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "300")!!.localMediaId
-        val favoriteId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "400")!!.localMediaId
+        val seriesId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, MediaType.SERIES, "100")!!.localMediaId
+        val movieId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "200")!!.localMediaId
+        val cachedId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, MediaType.SERIES, "300")!!.localMediaId
+        val favoriteId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "400")!!.localMediaId
 
         assertEquals(setOf(seriesId, movieId, favoriteId), rows.map { it.localMediaId }.toSet())
         assertFalse(rows.any { it.localMediaId == cachedId })
@@ -279,8 +279,9 @@ class SeriesAndProgressDaoTest {
 
     @Test
     fun movieProgressIsSeparateIdempotentAndSurvivesLibraryRemoval() = runBlocking {
+        // "100" is only a series; identity includes the type, so there is no movie 100 to mark.
         assertEquals(
-            ProgressWriteOutcome.MEDIA_TYPE_MISMATCH,
+            ProgressWriteOutcome.NOT_FOUND,
             progressDao.markMovieWatched(MediaSource.TMDB, "100", now)
         )
         assertEquals(
@@ -294,13 +295,13 @@ class SeriesAndProgressDaoTest {
         val watchedDate = LocalDate.of(2026, 7, 12)
         assertEquals(
             ProgressWriteOutcome.SUCCESS,
-            progressDao.setMediaWatchedDate(MediaSource.TMDB, "200", watchedDate, now)
+            progressDao.setMediaWatchedDate(MediaSource.TMDB, MediaType.MOVIE, "200", watchedDate, now)
         )
         val progress = progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()
         assertEquals(now.plusSeconds(1), progress?.watchedAt)
         assertEquals(watchedDate, progress?.watchedDate)
 
-        libraryDao.removeMembership(MediaSource.TMDB, "200")
+        libraryDao.removeMembership(MediaSource.TMDB, MediaType.MOVIE, "200")
         assertEquals(now.plusSeconds(1), progressDao.observeMovieProgress(MediaSource.TMDB, "200").first()?.watchedAt)
         assertEquals(
             ProgressWriteOutcome.SUCCESS,
@@ -317,7 +318,7 @@ class SeriesAndProgressDaoTest {
     fun serialStateOverridePersistsWithoutTouchingFavoriteOrEpisodeProgress() = runBlocking {
         storeRegularEpisodes()
         progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, now)
-        libraryDao.updateFavoriteState(MediaSource.TMDB, "100", true)
+        libraryDao.updateFavoriteState(MediaSource.TMDB, MediaType.SERIES, "100", true)
 
         assertEquals(
             ProgressWriteOutcome.SUCCESS,
@@ -383,6 +384,7 @@ class SeriesAndProgressDaoTest {
             ProgressWriteOutcome.SUCCESS,
             progressDao.setMediaWatchedDate(
                 MediaSource.TMDB,
+                MediaType.SERIES,
                 "100",
                 LocalDate.of(2026, 8, 1),
                 now

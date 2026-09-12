@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import java.time.Instant
@@ -97,7 +98,7 @@ class ReleaseEventDaoTest {
                 "VALUES(1, '2026-08-03T11:00:00Z')"
         )
 
-        database.libraryDao().removeMembership(MediaSource.TMDB, "42")
+        database.libraryDao().removeMembership(MediaSource.TMDB, MediaType.MOVIE, "42")
         assertEquals(
             0,
             dao.observeActiveEvents(LocalDate.MIN).first().count {
@@ -108,7 +109,7 @@ class ReleaseEventDaoTest {
         assertEquals(1, count("media_ratings", "local_media_id = 1"))
         assertEquals(1, count("movie_watch_progress", "local_media_id = 1"))
 
-        database.libraryDao().addExistingToLibrary(MediaSource.TMDB, "42", now)
+        database.libraryDao().addExistingToLibrary(MediaSource.TMDB, MediaType.MOVIE, "42", now)
         assertEquals(
             1,
             dao.observeActiveEvents(LocalDate.MIN).first().count {
@@ -145,9 +146,9 @@ class ReleaseEventDaoTest {
             candidates.map { it.eventType }
         )
 
-        database.libraryDao().removeMembership(MediaSource.TMDB, "42")
+        database.libraryDao().removeMembership(MediaSource.TMDB, MediaType.MOVIE, "42")
         assertEquals(2, dao.getActiveEventsBetween(from, through).size)
-        database.libraryDao().addExistingToLibrary(MediaSource.TMDB, "42", now)
+        database.libraryDao().addExistingToLibrary(MediaSource.TMDB, MediaType.MOVIE, "42", now)
         assertEquals(3, dao.getActiveEventsBetween(from, through).size)
     }
 
@@ -181,7 +182,9 @@ class ReleaseEventDaoTest {
         )
         listOf(1L to "42", 2L to "100", 3L to "old", 4L to "future", 5L to "boundary").forEach {
             sql(
-                "INSERT INTO external_refs(local_media_id, source, external_id) VALUES(${it.first}, 'TMDB', '${it.second}')"
+                "INSERT INTO external_refs(local_media_id, source, media_type, external_id) " +
+                    "SELECT ${it.first}, 'TMDB', media_type, '${it.second}' FROM media_entries " +
+                    "WHERE local_media_id = ${it.first}"
             )
             sql("INSERT INTO library_entries(local_media_id, added_at) VALUES(${it.first}, '2026-08-02T10:00:00Z')")
         }

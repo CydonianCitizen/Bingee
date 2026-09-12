@@ -97,6 +97,32 @@ class BackupValidatorTest {
     }
 
     @Test
+    fun sameTmdbIdMovieAndSeriesNeedTypedReferences() {
+        val pair = listOf(movieWithId("1399"), series())
+        val typed = baseData().copy(
+            media = pair,
+            library = listOf(
+                BackupLibraryEntry(ref("1399"), instant, MediaType.MOVIE),
+                BackupLibraryEntry(ref("1399"), instant, MediaType.SERIES)
+            ),
+            ratings = listOf(BackupRating(ref("1399"), 8, instant, instant, MediaType.SERIES))
+        )
+        assertTrue(validate(document(typed)) is BackupValidationResult.Success)
+
+        val untyped = baseData().copy(media = pair, library = listOf(BackupLibraryEntry(ref("1399"), instant)))
+        assertEquals(BackupFailureKind.CONFLICTING_REFERENCE, failure(untyped))
+        val untypedUnique = baseData().copy(
+            media = listOf(movie()),
+            library = listOf(BackupLibraryEntry(ref("550"), instant))
+        )
+        assertTrue(validate(document(untypedUnique)) is BackupValidationResult.Success)
+        assertEquals(
+            BackupFailureKind.VALIDATION,
+            failure(baseData().copy(media = listOf(movie().copy(runtimeMinutes = 0))))
+        )
+    }
+
+    @Test
     fun previewContainsIncomingAndCurrentCountsWithoutSensitiveState() {
         val plan = (
             validate(

@@ -18,6 +18,7 @@
     <string name="error_media_type_mismatch">Questa azione non è disponibile per questo tipo di titolo.</string>
     <string name="error_unknown">Si è verificato un errore.</string>
     <string name="action_retry">Riprova</string>
+    <string name="action_undo">Annulla</string>
     <string name="action_cancel">Annulla</string>
     <string name="action_dismiss">Chiudi</string>
     <string name="onboarding_title">Connettiti a TMDB</string>
@@ -160,6 +161,19 @@
         <item quantity="other">%1$d di %2$d episodi</item>
     </plurals>
     <string name="home_continue_watching_next_episode">Prossimo: Stagione %1$d • Episodio %2$d</string>
+    <string name="home_continue_watching_last_episode">Ultimo visto: Stagione %1$d • Episodio %2$d</string>
+    <string name="home_continue_watching_mark_watched">Segna come visto Stagione %1$d • Episodio %2$d</string>
+    <string name="home_continue_watching_marked">%1$s: Stagione %2$d • Episodio %3$d segnato come visto</string>
+    <string name="widget_up_next_label">Prossimo episodio e uscite</string>
+    <string name="widget_continue_watching_description">La locandina della serie che stai guardando, con un tasto per segnare visto il prossimo episodio.</string>
+    <string name="widget_up_next_description">Il tuo prossimo episodio e le prossime uscite che segui.</string>
+    <string name="widget_next_episode">Prossimo: S%1$d E%2$d</string>
+    <string name="widget_upcoming_title">In uscita</string>
+    <string name="widget_no_upcoming">Nessuna uscita in arrivo</string>
+    <string name="widget_today">Oggi</string>
+    <string name="widget_tomorrow">Domani</string>
+    <string name="widget_event_episode">%1$s · S%2$d E%3$d</string>
+    <string name="widget_event_season">%1$s · Stagione %2$d</string>
     <string name="home_open_continue_details">Apri dettagli per %1$s</string>
     <string name="action_add_to_watchlist">Aggiungi alla lista</string>
     <string name="action_in_watchlist">Nella lista</string>

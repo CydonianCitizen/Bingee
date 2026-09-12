@@ -7,11 +7,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
@@ -29,6 +31,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.testutil.scrollListTo
 import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
@@ -92,30 +95,72 @@ class HomeScreenTest {
     @Test
     fun continueWatchingCardShowsProgressNextEpisodeAndOpensSeriesDetails() {
         val opened = AtomicReference<Pair<ExternalMediaRef, MediaType>>()
-        val item = ContinueWatchingItem(
-            mediaRef = ExternalMediaRef(MediaSource.TMDB, "continue-1"),
-            mediaType = MediaType.SERIES,
-            title = "Continuing Series",
-            posterUrl = null,
-            progress = SeriesProgress(3, 8, 0, 1, false),
-            nextEpisode = EpisodePosition(2, 5),
-            updatedAt = Instant.parse("2026-08-03T12:00:00Z")
-        )
-        setHome(
-            HomeUiState(
-                content = HomeContentState.Empty,
-                continueWatching = listOf(item),
-                today = today
-            ),
-            onOpenDetails = { ref, type -> opened.set(ref to type) }
+        val marked = AtomicReference<ContinueWatchingItem>()
+        val item = continueItem()
+        setHomeState(
+            {
+                HomeUiState(
+                    content = HomeContentState.Empty,
+                    continueWatching = listOf(item),
+                    today = today
+                )
+            },
+            onOpenDetails = { ref, type -> opened.set(ref to type) },
+            onMarkNextEpisode = marked::set
         )
 
         composeRule.onNodeWithText("Continue Watching").assertIsDisplayed()
+        // The card spans the row, so it keeps the same margin to both screen edges.
+        val root = composeRule.onRoot().getBoundsInRoot()
+        val card = composeRule.onNodeWithContentDescription("Open details for Continuing Series").getBoundsInRoot()
+        assertEquals(card.left.value, (root.right - card.right).value, 1f)
         composeRule.onNodeWithText("3 of 8 episodes").assertIsDisplayed()
+        composeRule.onNodeWithText("Last watched: Season 2 • Episode 4").assertIsDisplayed()
         composeRule.onNodeWithText("Next: Season 2 • Episode 5").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Mark Season 2 • Episode 5 as watched").performClick()
+        assertEquals(item, marked.get())
         composeRule.onNodeWithContentDescription("Open details for Continuing Series").performClick()
         assertEquals(item.mediaRef to MediaType.SERIES, opened.get())
     }
+
+    @Test
+    fun continueWatchingHidesShortcutWithoutEpisodeIdentityAndMarkedFeedbackOffersUndo() {
+        val undone = AtomicBoolean()
+        val item = continueItem().copy(nextEpisodeRef = null)
+        setHomeState(
+            {
+                HomeUiState(
+                    content = HomeContentState.Empty,
+                    continueWatching = listOf(item),
+                    today = today,
+                    snackbar = HomeSnackbar.EpisodeMarked(
+                        "Continuing Series",
+                        EpisodePosition(2, 5),
+                        ExternalMediaRef(MediaSource.TMDB, "episode-205")
+                    )
+                )
+            },
+            onUndoMarkedEpisode = { undone.set(true) }
+        )
+
+        composeRule.onNodeWithContentDescription("Mark Season 2 • Episode 5 as watched").assertDoesNotExist()
+        composeRule.onNodeWithText("Continuing Series: Season 2 • Episode 5 marked as watched").assertIsDisplayed()
+        composeRule.onNodeWithText("Undo").performClick()
+        composeRule.waitForIdle()
+        assertTrue(undone.get())
+    }
+
+    private fun continueItem() = ContinueWatchingItem(
+        mediaRef = ExternalMediaRef(MediaSource.TMDB, "continue-1"),
+        mediaType = MediaType.SERIES,
+        title = "Continuing Series",
+        posterUrl = null,
+        progress = SeriesProgress(3, 8, 0, 1, false),
+        nextEpisode = EpisodePosition(2, 5),
+        updatedAt = Instant.parse("2026-08-03T12:00:00Z"),
+        lastWatchedEpisode = EpisodePosition(2, 4),
+        nextEpisodeRef = ExternalMediaRef(MediaSource.TMDB, "episode-205")
+    )
 
     @Test
     fun continueWatchingSectionIsAbsentWhenEmpty() {
@@ -220,9 +265,9 @@ class HomeScreenTest {
         )
         setHome(HomeUiState(content = HomeContentState.Events(groups), today = today))
 
-        composeRule.onNodeWithText("Recently released").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Releases today").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Upcoming release").performScrollTo().assertIsDisplayed()
+        composeRule.scrollListTo(hasText("Recently released")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText("Releases today")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText("Upcoming release")).assertIsDisplayed()
     }
 
     @Test
@@ -274,7 +319,9 @@ class HomeScreenTest {
         onRefresh: () -> Unit = {},
         onOpenNotifications: () -> Unit = {},
         onOpenSettings: () -> Unit = {},
-        onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> }
+        onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
+        onMarkNextEpisode: (ContinueWatchingItem) -> Unit = {},
+        onUndoMarkedEpisode: () -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
@@ -285,7 +332,9 @@ class HomeScreenTest {
                     onDismissFeedback = {},
                     onOpenNotifications = onOpenNotifications,
                     onOpenSettings = onOpenSettings,
-                    onOpenDetails = onOpenDetails
+                    onOpenDetails = onOpenDetails,
+                    onMarkNextEpisode = onMarkNextEpisode,
+                    onUndoMarkedEpisode = onUndoMarkedEpisode
                 )
             }
         }

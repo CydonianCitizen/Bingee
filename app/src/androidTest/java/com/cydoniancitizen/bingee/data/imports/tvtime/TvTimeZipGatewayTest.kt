@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.data.imports.tvtime
 
 import android.content.Context
+import android.os.Build
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -49,10 +50,21 @@ class TvTimeZipGatewayTest {
 
     @Test
     fun rejectsTraversalAbsoluteDriveUncAndDotSegments() = kotlinx.coroutines.runBlocking {
+        // Android 14+ rejects these names in ZipFile's constructor, before our name validator.
+        // The gateway maps that platform ZipException to MALFORMED_ARCHIVE; rejection is preserved.
+        val platformRejectsPaths = Build.VERSION.SDK_INT >= 34
         val unsafeNames = mapOf(
-            "../movies.json" to TvTimeArchiveFailureKind.PATH_TRAVERSAL,
+            "../movies.json" to if (platformRejectsPaths) {
+                TvTimeArchiveFailureKind.MALFORMED_ARCHIVE
+            } else {
+                TvTimeArchiveFailureKind.PATH_TRAVERSAL
+            },
             "./movies.json" to TvTimeArchiveFailureKind.PATH_TRAVERSAL,
-            "/movies.json" to TvTimeArchiveFailureKind.ABSOLUTE_PATH,
+            "/movies.json" to if (platformRejectsPaths) {
+                TvTimeArchiveFailureKind.MALFORMED_ARCHIVE
+            } else {
+                TvTimeArchiveFailureKind.ABSOLUTE_PATH
+            },
             "C:/movies.json" to TvTimeArchiveFailureKind.DRIVE_PATH,
             "\\\\server\\share\\movies.json" to TvTimeArchiveFailureKind.UNC_PATH
         )
@@ -109,7 +121,7 @@ class TvTimeZipGatewayTest {
     private suspend fun assertFailure(file: File, expected: TvTimeArchiveFailureKind) {
         val result = gateway().withArchive(uri(file)) { Unit }
         assertTrue(result is TvTimeArchiveResult.Failure)
-        assertEquals(expected, (result as TvTimeArchiveResult.Failure).failure.kind)
+        assertEquals(file.name, expected, (result as TvTimeArchiveResult.Failure).failure.kind)
     }
 
     private fun gateway() = AndroidTvTimeZipGateway(context)

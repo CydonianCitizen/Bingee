@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 internal data class PortableSnapshotRows(
     val media: List<MediaEntity>,
     val refs: List<ExternalRefEntity>,
+    val genres: List<MediaGenreEntity>,
     val memberships: List<LibraryMembershipEntity>,
     val seasons: List<SeasonEntity>,
     val episodes: List<EpisodeEntity>,
@@ -23,6 +24,12 @@ internal data class PortableSnapshotRows(
 
 @Dao
 internal abstract class PortableSnapshotDao {
+    @Query("SELECT * FROM media_genres ORDER BY local_media_id, genre_order")
+    protected abstract suspend fun getGenres(): List<MediaGenreEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    abstract suspend fun insertGenres(genres: List<MediaGenreEntity>)
+
     @Query("SELECT * FROM media_entries ORDER BY local_media_id")
     protected abstract suspend fun getMedia(): List<MediaEntity>
 
@@ -146,6 +153,7 @@ internal abstract class PortableSnapshotDao {
     @Transaction
     open suspend fun readSnapshot(): PortableSnapshotRows = PortableSnapshotRows(
         media = getMedia(), refs = getRefs(), memberships = getMemberships(),
+        genres = getGenres(),
         seasons = getSeasons(),
         episodes = getEpisodes(), episodeProgress = getEpisodeProgress(),
         movieProgress = getMovieProgress(), seriesProgress = getSeriesProgress(),

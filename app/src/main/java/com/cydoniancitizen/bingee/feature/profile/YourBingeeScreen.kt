@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,9 +41,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -428,7 +429,8 @@ private fun CollectionSection(counts: ProfileCollectionCounts, onOpenCollection:
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = rowModifier) {
             CollectionShortcut(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Default.Star,
+                // The watchlist is a bookmark everywhere, matching the Home poster control.
+                icon = ImageVector.vectorResource(R.drawable.ic_bookmark),
                 label = stringResource(R.string.profile_collection_watch_later),
                 count = counts.watchLater,
                 onClick = { onOpenCollection(ProfileCollectionShortcut.WATCH_LATER) }

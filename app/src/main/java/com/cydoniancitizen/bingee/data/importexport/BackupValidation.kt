@@ -34,7 +34,7 @@ internal object BackupValidator {
     fun validate(document: BackupDocument, today: LocalDate): BackupValidationResult = try {
         require(document.formatId == BACKUP_FORMAT_ID, BackupFailureKind.WRONG_FORMAT)
         require(
-            document.schemaVersion == BACKUP_SCHEMA_VERSION,
+            document.schemaVersion in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION,
             BackupFailureKind.UNSUPPORTED_VERSION
         )
         val data = document.data
@@ -50,7 +50,16 @@ internal object BackupValidator {
             checkText(media.originalTitle)
             checkText(media.overview)
             checkUrl(media.posterUrl)
+            require(media.genres.size <= BackupLimits.MAX_GENRES_PER_MEDIA, BackupFailureKind.TOO_LARGE)
+            media.genres.forEach { genre ->
+                checkText(genre.name)
+                require(genre.name.isNotBlank(), BackupFailureKind.VALIDATION)
+                require((genre.source == null) == (genre.genreId == null), BackupFailureKind.VALIDATION)
+                require(genre.source == null || genre.source == MediaSource.TMDB, BackupFailureKind.VALIDATION)
+                require(genre.genreId == null || genre.genreId > 0, BackupFailureKind.VALIDATION)
+            }
             require(media.favoriteAddedAt == null || media.isFavorite, BackupFailureKind.VALIDATION)
+            require(media.runtimeMinutes == null || media.runtimeMinutes > 0, BackupFailureKind.VALIDATION)
             val expectedSource = MediaSource.TMDB
             require(media.primaryRef.source == expectedSource, BackupFailureKind.CONFLICTING_REFERENCE)
             require(
@@ -64,9 +73,9 @@ internal object BackupValidator {
             refs.forEach { ref ->
                 checkProvider(ref)
                 require(localRefs.add(ref.key()), BackupFailureKind.DUPLICATE_IDENTITY)
-                val previous = mediaByRef[ref.key()]
+                val previous = mediaByRef[ref.key(media.mediaType)]
                 if (previous == null) {
-                    mediaByRef[ref.key()] = media
+                    mediaByRef[ref.key(media.mediaType)] = media
                 } else {
                     throw BackupValidationFailure(
                         if (previous == media) {
@@ -78,7 +87,7 @@ internal object BackupValidator {
                 }
             }
             require(refs.any { it.key() == media.primaryRef.key() }, BackupFailureKind.MISSING_REFERENCE)
-            require(mediaPrimaryKeys.add(media.primaryRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+            require(mediaPrimaryKeys.add(media.primaryRef.key(media.mediaType)), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
         val seasonsByRef = linkedMapOf<String, BackupSeason>()
@@ -88,8 +97,7 @@ internal object BackupValidator {
             checkProvider(season.externalRef)
             require(season.mediaRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
             require(season.externalRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
-            val media = mediaByRef[season.mediaRef.key()] ?: missing()
-            require(media.mediaType == MediaType.SERIES, BackupFailureKind.CONFLICTING_REFERENCE)
+            val media = mediaByRef.mediaFor(season.mediaRef, MediaType.SERIES)
             require(media.primaryRef.source == season.externalRef.source, BackupFailureKind.CONFLICTING_REFERENCE)
             require(season.seasonNumber >= 0, BackupFailureKind.VALIDATION)
             require(season.episodeCount >= 0, BackupFailureKind.VALIDATION)
@@ -146,22 +154,23 @@ internal object BackupValidator {
 
         val libraryRefs = hashSetOf<String>()
         data.library.forEach { entry ->
-            require(mediaByRef.containsKey(entry.mediaRef.key()), BackupFailureKind.MISSING_REFERENCE)
-            require(libraryRefs.add(entry.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+            val media = mediaByRef.mediaFor(entry.mediaRef, entry.mediaType)
+            require(libraryRefs.add(entry.mediaRef.key(media.mediaType)), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
         val abandonedSeriesRefs = hashSetOf<String>()
         data.abandonedSeries.forEach { abandoned ->
-            val media = mediaByRef[abandoned.mediaRef.key()] ?: missing()
-            require(media.mediaType == MediaType.SERIES, BackupFailureKind.CONFLICTING_REFERENCE)
-            require(libraryRefs.contains(abandoned.mediaRef.key()), BackupFailureKind.MISSING_REFERENCE)
+            mediaByRef.mediaFor(abandoned.mediaRef, MediaType.SERIES)
+            require(
+                libraryRefs.contains(abandoned.mediaRef.key(MediaType.SERIES)),
+                BackupFailureKind.MISSING_REFERENCE
+            )
             require(abandonedSeriesRefs.add(abandoned.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
         val movieProgressRefs = hashSetOf<String>()
         data.movieProgress.forEach { progress ->
-            val media = mediaByRef[progress.mediaRef.key()] ?: missing()
-            require(media.mediaType == MediaType.MOVIE, BackupFailureKind.CONFLICTING_REFERENCE)
+            val media = mediaByRef.mediaFor(progress.mediaRef, MediaType.MOVIE)
             if (progress.watchedDate != null) {
                 val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
                     progress.watchedDate,
@@ -178,8 +187,7 @@ internal object BackupValidator {
 
         val seriesProgressRefs = hashSetOf<String>()
         data.seriesProgress.forEach { progress ->
-            val media = mediaByRef[progress.mediaRef.key()] ?: missing()
-            require(media.mediaType == MediaType.SERIES, BackupFailureKind.CONFLICTING_REFERENCE)
+            val media = mediaByRef.mediaFor(progress.mediaRef, MediaType.SERIES)
             if (progress.watchedDate != null) {
                 val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
                     progress.watchedDate,
@@ -202,10 +210,10 @@ internal object BackupValidator {
 
         val ratingRefs = hashSetOf<String>()
         data.ratings.forEach { rating ->
-            require(mediaByRef.containsKey(rating.mediaRef.key()), BackupFailureKind.MISSING_REFERENCE)
+            val media = mediaByRef.mediaFor(rating.mediaRef, rating.mediaType)
             require(rating.rating in 1..10, BackupFailureKind.VALIDATION)
             require(!rating.updatedAt.isBefore(rating.ratedAt), BackupFailureKind.VALIDATION)
-            require(ratingRefs.add(rating.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
+            require(ratingRefs.add(rating.mediaRef.key(media.mediaType)), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
         require(data.preferences.notificationLeadDays in setOf(0, 1, 3, 7), BackupFailureKind.VALIDATION)
@@ -236,6 +244,17 @@ internal object BackupValidator {
         )
     }
 
+    /**
+     * Resolves a reference to its media. TMDB reuses one ID for a movie and an unrelated series, so media
+     * are keyed by type; a reference of the wrong type conflicts, and one without a type (v1) must be unique.
+     */
+    private fun Map<String, BackupMedia>.mediaFor(ref: BackupRef, type: MediaType?): BackupMedia {
+        val candidates = MediaType.entries.mapNotNull { this[ref.key(it)] }
+        if (candidates.isEmpty()) missing()
+        val media = if (type == null) candidates.singleOrNull() else candidates.firstOrNull { it.mediaType == type }
+        return media ?: throw BackupValidationFailure(BackupFailureKind.CONFLICTING_REFERENCE)
+    }
+
     private fun checkProvider(ref: BackupRef) {
         require(ref.source == MediaSource.TMDB, BackupFailureKind.VALIDATION)
         require(ref.externalId.isNotBlank(), BackupFailureKind.VALIDATION)
@@ -256,8 +275,6 @@ internal object BackupValidator {
     }
 
     private fun missing(): Nothing = throw BackupValidationFailure(BackupFailureKind.MISSING_REFERENCE)
-
-    private fun BackupRef.key(): String = "${source.name}:$externalId"
 
     private fun require(condition: Boolean, kind: BackupFailureKind) {
         if (!condition) throw BackupValidationFailure(kind)

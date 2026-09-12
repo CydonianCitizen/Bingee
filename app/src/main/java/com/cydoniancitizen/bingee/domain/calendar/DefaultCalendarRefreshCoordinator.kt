@@ -50,7 +50,9 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     }
 
     override suspend fun refresh(targets: List<BackgroundRefreshTarget>): CalendarRefreshSummary {
-        val entries = targets.distinctBy { it.mediaRef to it.mediaType }.take(MAX_REFRESH_TARGETS)
+        // Every target is refreshed; the semaphore below bounds concurrency. The background worker passes
+        // its own bounded batch, so only a manual refresh walks the whole Library.
+        val entries = targets.distinctBy { it.mediaRef to it.mediaType }
         if (entries.isEmpty()) return noWorkSummary()
         val tmdbAvailable = credentialRepository.status.value.canRefresh()
         val semaphore = Semaphore(REMOTE_CONCURRENCY_LIMIT)
@@ -134,9 +136,6 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
 
     companion object {
         const val REMOTE_CONCURRENCY_LIMIT = 3
-
-        // ponytail: manual refresh capped at 20 titles; page only if larger libraries need it.
-        const val MAX_REFRESH_TARGETS = 20
     }
 }
 

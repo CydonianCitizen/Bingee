@@ -27,6 +27,9 @@ secrets.xml
 
 # Private local evidence
 .local-evidence/
+docs/
+
+
 
 # Operating-system files
 .DS_Store

@@ -343,12 +343,12 @@ class SearchViewModelTest {
 
         viewModel.toggleLibrary(item)
         runCurrent()
-        assertTrue(item.externalRef in viewModel.uiState.value.libraryMembership)
+        assertTrue(item.externalRef to item.mediaType in viewModel.uiState.value.libraryMembership)
         assertTrue(viewModel.uiState.value.pendingLibraryActions.isEmpty())
 
         viewModel.toggleLibrary(item)
         runCurrent()
-        assertFalse(item.externalRef in viewModel.uiState.value.libraryMembership)
+        assertFalse(item.externalRef to item.mediaType in viewModel.uiState.value.libraryMembership)
     }
 
     @Test
@@ -367,7 +367,7 @@ class SearchViewModelTest {
         viewModel.toggleLibrary(item)
         runCurrent()
 
-        assertFalse(item.externalRef in viewModel.uiState.value.libraryMembership)
+        assertFalse(item.externalRef to item.mediaType in viewModel.uiState.value.libraryMembership)
         assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.libraryError)
         assertTrue(viewModel.uiState.value.pendingLibraryActions.isEmpty())
     }

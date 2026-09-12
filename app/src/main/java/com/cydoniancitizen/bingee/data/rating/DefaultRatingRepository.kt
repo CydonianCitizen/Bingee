@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.data.rating
 
 import android.database.sqlite.SQLiteException
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -21,10 +22,10 @@ import kotlinx.coroutines.flow.map
 @Singleton
 internal class DefaultRatingRepository @Inject constructor(private val ratingDao: RatingDao, private val clock: Clock) :
     RatingRepository {
-    override fun observeRating(reference: ExternalMediaRef): Flow<AppResult<PersonalRating?>> {
+    override fun observeRating(reference: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<PersonalRating?>> {
         val externalId = reference.externalId.trim()
         if (externalId.isEmpty()) return flowOf(AppResult.Failure(AppError.InvalidInput))
-        return ratingDao.observeRating(reference.source, externalId)
+        return ratingDao.observeRating(reference.source, mediaType, externalId)
             .map<MediaRatingEntity?, AppResult<PersonalRating?>> { entity ->
                 AppResult.Success(entity?.let { PersonalRating(it.ratingValue) })
             }
@@ -34,13 +35,16 @@ internal class DefaultRatingRepository @Inject constructor(private val ratingDao
             }
     }
 
-    override suspend fun setRating(reference: ExternalMediaRef, rating: PersonalRating): AppResult<Unit> =
-        write(reference) { externalId ->
-            ratingDao.setRating(reference.source, externalId, rating.value, clock.instant())
-        }
+    override suspend fun setRating(
+        reference: ExternalMediaRef,
+        mediaType: MediaType,
+        rating: PersonalRating
+    ): AppResult<Unit> = write(reference) { externalId ->
+        ratingDao.setRating(reference.source, mediaType, externalId, rating.value, clock.instant())
+    }
 
-    override suspend fun removeRating(reference: ExternalMediaRef): AppResult<Unit> =
-        write(reference) { externalId -> ratingDao.removeRating(reference.source, externalId) }
+    override suspend fun removeRating(reference: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
+        write(reference) { externalId -> ratingDao.removeRating(reference.source, mediaType, externalId) }
 
     private suspend fun write(
         reference: ExternalMediaRef,

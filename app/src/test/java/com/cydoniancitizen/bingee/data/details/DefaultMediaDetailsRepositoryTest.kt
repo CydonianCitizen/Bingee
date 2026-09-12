@@ -9,6 +9,7 @@ import com.cydoniancitizen.bingee.core.model.ProductionStatus
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
@@ -53,9 +54,9 @@ class DefaultMediaDetailsRepositoryTest {
         val remote = FakeRemote { ref, type -> AppResult.Success(details(ref, type, "Remote")) }
         val repository = repository(dao, remote)
 
-        assertNull((repository.observeDetails(movieId).first() as AppResult.Success).value)
+        assertNull((repository.observeDetails(movieId, MediaType.MOVIE).first() as AppResult.Success).value)
         assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE))
-        val cached = (repository.observeDetails(movieId).first() as AppResult.Success).value
+        val cached = (repository.observeDetails(movieId, MediaType.MOVIE).first() as AppResult.Success).value
 
         assertEquals("Remote", cached?.details?.title)
         assertEquals(now, cached?.fetchedAt)
@@ -82,13 +83,13 @@ class DefaultMediaDetailsRepositoryTest {
         val remote = FakeRemote { _, _ -> AppResult.Failure(AppError.NetworkUnavailable) }
         val repository = repository(dao, remote)
 
-        val before = (repository.observeDetails(movieId).first() as AppResult.Success).value
+        val before = (repository.observeDetails(movieId, MediaType.MOVIE).first() as AppResult.Success).value
         assertEquals(CacheFreshness.STALE, before?.freshness)
         assertEquals(
             AppResult.Failure(AppError.NetworkUnavailable),
             repository.refreshDetails(movieId, MediaType.MOVIE)
         )
-        val after = (repository.observeDetails(movieId).first() as AppResult.Success).value
+        val after = (repository.observeDetails(movieId, MediaType.MOVIE).first() as AppResult.Success).value
 
         assertEquals("Cached", after?.details?.title)
         assertEquals(old, after?.fetchedAt)
@@ -100,7 +101,7 @@ class DefaultMediaDetailsRepositoryTest {
         val repository = repository(FakeDetailsDao(), remote)
 
         assertEquals(AppResult.Failure(AppError.InvalidInput), repository.refreshDetails(0, MediaType.MOVIE))
-        assertEquals(AppResult.Failure(AppError.InvalidInput), repository.observeDetails(0).first())
+        assertEquals(AppResult.Failure(AppError.InvalidInput), repository.observeDetails(0, MediaType.MOVIE).first())
         assertTrue(remote.calls.isEmpty())
     }
 
@@ -202,7 +203,7 @@ class DefaultMediaDetailsRepositoryTest {
                 detailsFetchedAt = fetchedAt
             ),
             genres = emptyList(),
-            externalRefs = listOf(ExternalRefEntity(localId, ref.source, ref.externalId))
+            externalRefs = listOf(ExternalRefEntity(localId, ref.source, MediaType.MOVIE, ref.externalId))
         )
     }
 
@@ -252,11 +253,22 @@ class DefaultMediaDetailsRepositoryTest {
         DetailsDao() {
         val cache = MutableStateFlow(initial)
 
-        override fun observeCachedDetails(source: MediaSource, externalId: String): Flow<CachedDetailsRelation?> = cache
-        override suspend fun getCachedDetails(source: MediaSource, externalId: String): CachedDetailsRelation? =
-            cache.value?.takeIf { row -> row.externalRefs.any { it.source == source && it.externalId == externalId } }
-        override suspend fun getMedia(source: MediaSource, externalId: String): MediaEntity? =
-            getCachedDetails(source, externalId)?.media
+        override fun observeCachedDetails(
+            source: MediaSource,
+            mediaType: MediaType,
+            externalId: String
+        ): Flow<CachedDetailsRelation?> = cache
+        override suspend fun getCachedDetails(
+            source: MediaSource,
+            mediaType: MediaType,
+            externalId: String
+        ): CachedDetailsRelation? = cache.value?.takeIf { row ->
+            row.externalRefs.any {
+                it.source == source && it.mediaType == mediaType && it.externalId == externalId
+            }
+        }
+        override suspend fun getMedia(source: MediaSource, mediaType: MediaType, externalId: String): MediaEntity? =
+            getCachedDetails(source, mediaType, externalId)?.media
         override suspend fun insertMedia(media: MediaEntity): Long = 1
         override suspend fun updateMedia(media: MediaEntity) = Unit
         override suspend fun insertExternalRef(externalRef: ExternalRefEntity) = Unit
@@ -277,7 +289,7 @@ class DefaultMediaDetailsRepositoryTest {
                 media = candidate.copy(localMediaId = localId),
                 details = details.copy(localMediaId = localId),
                 genres = genres.map { it.copy(localMediaId = localId) },
-                externalRefs = listOf(ExternalRefEntity(localId, source, externalId))
+                externalRefs = listOf(ExternalRefEntity(localId, source, candidate.mediaType, externalId))
             )
         }
     }

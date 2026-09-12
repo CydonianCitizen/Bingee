@@ -33,3 +33,6 @@ To add an ADR, copy `0000-template.md`, use the next available four-digit number
 | 0023 | Multiplatform readiness without premature Android migration |
 | 0024 | Stable TMDB genre identity and Room v3 |
 | 0025 | Favorite chronology for personal dashboard ordering |
+| 0026 | Restore canonical genre statistics and portable genre metadata |
+| 0027 | Home screen widgets with Glance |
+| 0028 | Type-aware TMDB identity and Room v5 |

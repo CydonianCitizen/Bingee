@@ -136,6 +136,7 @@ class DefaultWatchProgressRepositoryTest {
 
         override suspend fun setMediaWatchedDate(
             source: MediaSource,
+            mediaType: MediaType,
             externalId: String,
             watchedDate: LocalDate?,
             now: Instant
@@ -153,7 +154,8 @@ class DefaultWatchProgressRepositoryTest {
 
         override suspend fun getEpisode(source: MediaSource, externalId: String): EpisodeEntity? = null
         override suspend fun getSeason(source: MediaSource, externalId: String): SeasonEntity? = null
-        override suspend fun getMedia(source: MediaSource, externalId: String): MediaEntity? = null
+        override suspend fun getMedia(source: MediaSource, mediaType: MediaType, externalId: String): MediaEntity? =
+            null
         override suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long> = emptyList()
         override suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity? = null
         override suspend fun getSeriesProgressByMediaId(localMediaId: Long): SeriesWatchProgressEntity? = null

@@ -1,4 +1,4 @@
-# Privacy notes (v1.1.0)
+# Privacy notes (v1.2.0)
 
 Bingee is local-first and currently has no Bingee account, proprietary backend, analytics, or crash-reporting service.
 
@@ -9,6 +9,10 @@ TMDB is the only runtime media provider. The About screen can query GitHub only 
 Bingee supports a user-supplied TMDB API Read Access Token. After TMDB validates it, Bingee encrypts it locally with Android Keystore-backed key material and stores the ciphertext in Android's no-backup directory. The raw token is sent only to TMDB in the HTTPS Authorization header when an authenticated TMDB request is required.
 
 The token is not stored in ordinary preferences, Room, navigation arguments, saved instance state, logs, screenshots, previews, or test fixtures. It is excluded from Android cloud backup, device transfer, and Bingee JSON data exports. Removing it deletes the encrypted file and the dedicated Keystore key. Temporary network or TMDB service failures do not erase an existing token.
+
+## Home screen widgets
+
+The optional widgets display personal data on the launcher: the title and poster of the series in progress, its next episode, and upcoming releases from the cached calendar. Anyone who can see the home screen can see them; adding or removing the widgets is the user's control. Widgets read local Room data only and never call the TMDB API or use the credential. Posters come from the same public TMDB image URLs the app already loads, through the app's image cache. Marking an episode from a widget writes local progress only.
 
 ## TV Time import privacy
 

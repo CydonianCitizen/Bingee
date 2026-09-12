@@ -181,7 +181,7 @@ class SearchScreenTest {
         assertEquals(item, toggled.get())
 
         composeRule.runOnIdle {
-            state = state.copy(libraryMembership = setOf(item.externalRef))
+            state = state.copy(libraryMembership = setOf(item.externalRef to item.mediaType))
         }
         composeRule.onNodeWithText("In Watch Later").assertIsDisplayed()
     }

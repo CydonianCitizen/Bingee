@@ -1,12 +1,19 @@
 package com.cydoniancitizen.bingee.feature.settings
 
+import android.content.Context
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
 import com.cydoniancitizen.bingee.BuildConfig
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.result.AppError
 import java.util.concurrent.atomic.AtomicBoolean
@@ -20,21 +27,27 @@ class AboutSettingsScreenTest {
 
     @Test
     fun aboutDisplaysDynamicVersionAndOpenSourceInfo() {
+        val wentBack = AtomicBoolean(false)
         composeRule.setContent {
             BingeeTheme {
                 AboutSettingsContent(
                     state = AboutUiState(installedVersion = BuildConfig.VERSION_NAME),
                     onCheckForUpdates = {},
-                    onBack = {}
+                    onBack = { wentBack.set(true) }
                 )
             }
         }
 
         composeRule.onNodeWithText("About Bingee").assertIsDisplayed()
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
         composeRule.onNodeWithText("Bingee").assertIsDisplayed()
         composeRule.onNodeWithText("Version ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
         composeRule.onNodeWithText("Open Source").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("View on GitHub").performScrollTo().assertIsDisplayed()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.detail_back))
+            .performScrollTo().performClick()
+        assertTrue(wentBack.get())
     }
 
     @Test

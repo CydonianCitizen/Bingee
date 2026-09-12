@@ -19,11 +19,71 @@ class BackupJsonCodecTest {
     private val validationDate = LocalDate.of(2026, 8, 18)
 
     @Test
+    fun genreIdentityNamesAndOrderRoundTripIncludingLegacyNames() {
+        val genres = listOf(
+            BackupGenre("Dramma", MediaSource.TMDB, 18),
+            BackupGenre("Commedia", MediaSource.TMDB, Long.MAX_VALUE),
+            BackupGenre("Legacy", null, null)
+        )
+        val document = withGenres(genres)
+        val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
+        assertEquals(document, parsed.document)
+        assertTrue(validate(parsed.document) is BackupValidationResult.Success)
+        val schema = JsonParser.parseString(Files.readString(schemaPath()))
+        val payload = JsonParser.parseString(BackupJsonCodec.encode(document).toString(Charsets.UTF_8))
+        assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
+    }
+
+    @Test
+    fun invalidGenreIdentityOrNameRejectsWholeBackup() {
+        listOf(
+            BackupGenre(" ", MediaSource.TMDB, 18),
+            BackupGenre("Drama", null, 18),
+            BackupGenre("Drama", MediaSource.TMDB, null),
+            BackupGenre("Drama", MediaSource.TMDB, 0),
+            BackupGenre("Drama", MediaSource.TMDB, -1),
+            BackupGenre("x".repeat(BackupLimits.MAX_STRING + 1), null, null)
+        ).forEach { genre ->
+            assertTrue(validate(withGenres(listOf(genre))) is BackupValidationResult.Failure)
+        }
+        assertTrue(
+            validate(withGenres(List(101) { BackupGenre("Drama", MediaSource.TMDB, 18) }))
+                is BackupValidationResult.Failure
+        )
+    }
+
+    @Test
+    fun v2RequiresGenresAndExactLongIdentityWhileV1MayOmitGenres() {
+        val payload = JsonParser.parseString(BackupJsonCodec.encode(withGenres(emptyList())).toString(Charsets.UTF_8))
+            .asJsonObject
+        val media = payload.getAsJsonObject("data").getAsJsonArray("media")[0].asJsonObject
+        media.remove("genres")
+        assertTrue(BackupJsonCodec.parse(payload.toString().toByteArray()) is BackupParseResult.Failure)
+        payload.addProperty("schemaVersion", 1)
+        val legacy = BackupJsonCodec.parse(payload.toString().toByteArray()) as BackupParseResult.Success
+        assertTrue(legacy.document.data.media.single().genres.isEmpty())
+        assertTrue(validate(legacy.document) is BackupValidationResult.Success)
+
+        val json = BackupJsonCodec.encode(withGenres(listOf(BackupGenre("Drama", MediaSource.TMDB, 18))))
+            .toString(Charsets.UTF_8)
+        listOf("1.5", "9223372036854775808", "\"18\"").forEach { id ->
+            assertTrue(
+                BackupJsonCodec.parse(json.replace("\"genreId\": 18", "\"genreId\": $id").toByteArray())
+                    is BackupParseResult.Failure
+            )
+        }
+    }
+
+    private fun withGenres(genres: List<BackupGenre>): BackupDocument = fullDocument().let { document ->
+        document.copy(data = document.data.copy(media = document.data.media.map { it.copy(genres = genres) }))
+    }
+
+    @Test
     fun encodesStableContractAndPortableOnlyFields() {
         val json = BackupJsonCodec.encode(fullDocument()).toString(Charsets.UTF_8)
 
         assertTrue(json.contains("\"formatId\": \"bingee-backup\""))
-        assertTrue(json.contains("\"schemaVersion\": 1"))
+        assertTrue(json.contains("\"schemaVersion\": 2"))
         assertTrue(json.contains("\"exportedAt\": \"2026-08-04T10:00:00Z\""))
         assertTrue(json.contains("\"mediaType\": \"MOVIE\""))
         assertTrue(json.contains("\"releaseDate\": \"2026-01-02\""))
@@ -41,7 +101,7 @@ class BackupJsonCodecTest {
     }
 
     @Test
-    fun productionPayloadMatchesCanonicalV1SchemaAndParser() {
+    fun productionPayloadMatchesCanonicalV2SchemaAndParser() {
         val encoded = BackupJsonCodec.encode(fullDocument())
         val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
         val schema = JsonParser.parseString(Files.readString(schemaPath()))
@@ -138,6 +198,26 @@ class BackupJsonCodecTest {
     }
 
     @Test
+    fun movieRuntimeAndTypedReferencesRoundTripWithinTheSchema() {
+        val document = fullDocument().let { base ->
+            base.copy(
+                data = base.data.copy(
+                    media = base.data.media.map { it.copy(runtimeMinutes = 116) },
+                    library = base.data.library.map { it.copy(mediaType = MediaType.MOVIE) },
+                    ratings = base.data.ratings.map { it.copy(mediaType = MediaType.MOVIE) }
+                )
+            )
+        }
+
+        val encoded = BackupJsonCodec.encode(document)
+        val parsed = BackupJsonCodec.parse(encoded) as BackupParseResult.Success
+        assertEquals(document, parsed.document)
+        val schema = JsonParser.parseString(Files.readString(schemaPath()))
+        val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
+        assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
+    }
+
+    @Test
     fun ratingKeepsRatedAtAndUpdatedAtIndependent() {
         val ref = BackupRef(MediaSource.TMDB, "1")
         val ratedAt = Instant.parse("2026-01-05T00:00:00Z")
@@ -183,14 +263,14 @@ class BackupJsonCodecTest {
                 ) as BackupParseResult.Failure
                 ).failure.kind
         )
-        val missingVersionResult = BackupJsonCodec.parse(valid.replace("\"schemaVersion\": 1,\n", "").toByteArray())
+        val missingVersionResult = BackupJsonCodec.parse(valid.replace("\"schemaVersion\": 2,\n", "").toByteArray())
         assertTrue(missingVersionResult is BackupParseResult.Failure)
 
         assertEquals(
             BackupFailureKind.UNSUPPORTED_VERSION,
             (
                 BackupJsonCodec.parse(
-                    valid.replace("\"schemaVersion\": 1", "\"schemaVersion\": 5").toByteArray()
+                    valid.replace("\"schemaVersion\": 2", "\"schemaVersion\": 5").toByteArray()
                 ) as BackupParseResult.Failure
                 ).failure.kind
         )
@@ -236,7 +316,7 @@ class BackupJsonCodecTest {
 
     private fun replaceInteger(key: String, value: String): ByteArray = BackupJsonCodec.encode(fullDocument())
         .toString(Charsets.UTF_8)
-        .replace("\"$key\": 1", "\"$key\": $value")
+        .replace(Regex("\"$key\": [0-9]+"), "\"$key\": $value")
         .toByteArray(Charsets.UTF_8)
 
     private fun fullDocument() = BackupDocument(
@@ -278,8 +358,8 @@ class BackupJsonCodecTest {
     )
 
     private fun schemaPath(): Path = listOf(
-        Path.of("docs", "backup", "bingee-backup-v1.schema.json"),
-        Path.of("..", "docs", "backup", "bingee-backup-v1.schema.json")
+        Path.of("docs", "backup", "bingee-backup-v2.schema.json"),
+        Path.of("..", "docs", "backup", "bingee-backup-v2.schema.json")
     ).first { Files.isRegularFile(it) }
 
     // ponytail: validator covers schema keywords used here; add a library if contract grows beyond this subset.

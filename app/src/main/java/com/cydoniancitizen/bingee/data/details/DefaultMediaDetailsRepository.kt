@@ -8,6 +8,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
@@ -34,12 +35,14 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
     private val clock: Clock
 ) : MediaDetailsRepository {
     private val inFlightLock = Mutex()
-    private val inFlight = mutableMapOf<Long, InFlightRefresh>()
 
-    override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> {
+    // Keyed by type too: TMDB reuses one ID for a movie and an unrelated series.
+    private val inFlight = mutableMapOf<Pair<Long, MediaType>, CompletableDeferred<AppResult<Unit>>>()
+
+    override fun observeDetails(tmdbId: Long, mediaType: MediaType): Flow<AppResult<CachedMediaDetails?>> {
         val reference = tmdbReferenceOrNull(tmdbId)
             ?: return flowOf(AppResult.Failure(AppError.InvalidInput))
-        return detailsDao.observeCachedDetails(reference.source, reference.externalId)
+        return detailsDao.observeCachedDetails(reference.source, mediaType, reference.externalId)
             .map<CachedDetailsRelation?, AppResult<CachedMediaDetails?>> { row ->
                 AppResult.Success(row?.toDomain(reference, freshnessPolicy))
             }
@@ -53,16 +56,14 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         val normalized = tmdbReferenceOrNull(tmdbId)
             ?: return AppResult.Failure(AppError.InvalidInput)
 
+        val key = tmdbId to mediaType
         val mine = CompletableDeferred<AppResult<Unit>>()
         val existing = inFlightLock.withLock {
-            inFlight[tmdbId]?.also { return@withLock it }
-            inFlight[tmdbId] = InFlightRefresh(mediaType, mine)
+            inFlight[key]?.also { return@withLock it }
+            inFlight[key] = mine
             null
         }
-        if (existing != null) {
-            if (existing.mediaType != mediaType) return AppResult.Failure(AppError.CorruptedData)
-            return existing.result.await()
-        }
+        if (existing != null) return existing.await()
 
         return try {
             val result = refreshOwned(normalized, mediaType, force)
@@ -73,7 +74,7 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
             throw cancelled
         } finally {
             inFlightLock.withLock {
-                if (inFlight[tmdbId]?.result === mine) inFlight.remove(tmdbId)
+                if (inFlight[key] === mine) inFlight.remove(key)
             }
         }
     }
@@ -84,7 +85,7 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         force: Boolean
     ): AppResult<Unit> {
         val cached = try {
-            detailsDao.getCachedDetails(reference.source, reference.externalId)
+            detailsDao.getCachedDetails(reference.source, mediaType, reference.externalId)
                 ?.toDomain(reference, freshnessPolicy)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -114,8 +115,6 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         }
     }
 }
-
-private data class InFlightRefresh(val mediaType: MediaType, val result: CompletableDeferred<AppResult<Unit>>)
 
 private fun tmdbReferenceOrNull(tmdbId: Long): ExternalMediaRef? =
     tmdbId.takeIf { it > 0 }?.let { ExternalMediaRef(MediaSource.TMDB, it.toString()) }

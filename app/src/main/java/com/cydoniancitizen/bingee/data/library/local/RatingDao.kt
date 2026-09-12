@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -24,11 +25,13 @@ internal abstract class RatingDao {
         SELECT media_ratings.*
         FROM media_ratings
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    abstract fun observeRating(source: MediaSource, externalId: String): Flow<MediaRatingEntity?>
+    abstract fun observeRating(source: MediaSource, mediaType: MediaType, externalId: String): Flow<MediaRatingEntity?>
 
     @Query(
         """
@@ -43,11 +46,15 @@ internal abstract class RatingDao {
     @Query(
         """
         SELECT local_media_id FROM external_refs
-        WHERE source = :source AND external_id = :externalId
+        WHERE source = :source AND media_type = :mediaType AND external_id = :externalId
         LIMIT 1
         """
     )
-    protected abstract suspend fun findLocalMediaId(source: MediaSource, externalId: String): Long?
+    protected abstract suspend fun findLocalMediaId(
+        source: MediaSource,
+        mediaType: MediaType,
+        externalId: String
+    ): Long?
 
     @Query("SELECT * FROM media_ratings WHERE local_media_id = :localMediaId LIMIT 1")
     protected abstract suspend fun findRating(localMediaId: Long): MediaRatingEntity?
@@ -64,6 +71,7 @@ internal abstract class RatingDao {
     @Transaction
     open suspend fun setRating(
         source: MediaSource,
+        mediaType: MediaType,
         externalId: String,
         ratingValue: Int,
         now: Instant
@@ -71,7 +79,7 @@ internal abstract class RatingDao {
         require(ratingValue in PersonalRating.MIN_VALUE..PersonalRating.MAX_VALUE) {
             "Rating must be between 1 and 10"
         }
-        val localMediaId = findLocalMediaId(source, externalId) ?: return RatingWriteOutcome.NOT_FOUND
+        val localMediaId = findLocalMediaId(source, mediaType, externalId) ?: return RatingWriteOutcome.NOT_FOUND
         val existing = findRating(localMediaId)
         if (existing?.ratingValue == ratingValue) return RatingWriteOutcome.UNCHANGED
         if (existing == null) {
@@ -83,8 +91,8 @@ internal abstract class RatingDao {
     }
 
     @Transaction
-    open suspend fun removeRating(source: MediaSource, externalId: String): RatingWriteOutcome {
-        val localMediaId = findLocalMediaId(source, externalId) ?: return RatingWriteOutcome.NOT_FOUND
+    open suspend fun removeRating(source: MediaSource, mediaType: MediaType, externalId: String): RatingWriteOutcome {
+        val localMediaId = findLocalMediaId(source, mediaType, externalId) ?: return RatingWriteOutcome.NOT_FOUND
         return if (deleteRating(localMediaId) == 0) {
             RatingWriteOutcome.UNCHANGED
         } else {

@@ -177,6 +177,64 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationFourToFiveTypesEveryReferenceAndSeedsMovieRuntime() {
+        val name = "bingee-v4-to-v5"
+        val legacy = helper.createDatabase(name, 4)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, original_title, overview, poster_url, release_date, " +
+                "created_at, metadata_updated_at, is_favorite, favorite_added_at) VALUES " +
+                "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, NULL, " +
+                "'2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 1, NULL)," +
+                "(2, 'SERIES', 'Series', NULL, NULL, NULL, NULL, " +
+                "'2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 0, NULL)"
+        )
+        legacy.execSQL(
+            "INSERT INTO external_refs (local_media_id, source, external_id) " +
+                "VALUES (1, 'TMDB', '42'), (2, 'TMDB', '43')"
+        )
+        legacy.execSQL(
+            "INSERT INTO media_details (local_media_id, backdrop_url, production_status, original_language, " +
+                "runtime_minutes, episode_runtime_minutes, number_of_seasons, number_of_episodes, " +
+                "details_fetched_at) " +
+                "VALUES (1, NULL, 'Released', NULL, 116, NULL, NULL, NULL, '2026-08-01T00:00:00Z')"
+        )
+        legacy.close()
+
+        // Room validates the rebuilt external_refs table against the exported v5 schema.
+        val migrated = helper.runMigrationsAndValidate(name, 5, true, *ALL_MIGRATIONS)
+        migrated.query("SELECT external_id, media_type FROM external_refs ORDER BY external_id").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("42", cursor.getString(0))
+            assertEquals("MOVIE", cursor.getString(1))
+            cursor.moveToNext()
+            assertEquals("43", cursor.getString(0))
+            assertEquals("SERIES", cursor.getString(1))
+        }
+        migrated.query("SELECT runtime_minutes FROM media_entries ORDER BY local_media_id").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(116, cursor.getInt(0))
+            cursor.moveToNext()
+            assertEquals(true, cursor.isNull(0))
+        }
+        // The rebuilt key now admits the series with the movie's TMDB ID.
+        migrated.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, created_at, metadata_updated_at, is_favorite) " +
+                "VALUES (3, 'SERIES', 'Same ID', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 0)"
+        )
+        migrated.execSQL(
+            "INSERT INTO external_refs (local_media_id, source, media_type, external_id) " +
+                "VALUES (3, 'TMDB', 'SERIES', '42')"
+        )
+        migrated.query("SELECT COUNT(*) FROM external_refs WHERE external_id = '42'").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(2, cursor.getInt(0))
+        }
+        migrated.close()
+    }
+
+    @Test
     fun fullMigrationChainPreservesCanonicalPersonalDataThroughEveryVersion() {
         val name = "bingee-v1-to-v4"
         val legacy = helper.createDatabase(name, 1)
@@ -362,10 +420,16 @@ class BingeeDatabaseMigrationTest {
             )
         )
         database.portableSnapshotDao().insertExternalRef(
-            ExternalRefEntity(localMediaId = movieMediaId, source = MediaSource.TMDB, externalId = "1001")
+            ExternalRefEntity(
+                localMediaId = movieMediaId,
+                source = MediaSource.TMDB,
+                mediaType = MediaType.MOVIE,
+                externalId = "1001"
+            )
         )
         database.watchProgressDao().setMediaWatchedDate(
             source = MediaSource.TMDB,
+            mediaType = MediaType.MOVIE,
             externalId = "1001",
             watchedDate = LocalDate.parse("2026-06-01"),
             now = clock.instant()
@@ -385,10 +449,16 @@ class BingeeDatabaseMigrationTest {
             )
         )
         database.portableSnapshotDao().insertExternalRef(
-            ExternalRefEntity(localMediaId = seriesMediaId, source = MediaSource.TMDB, externalId = "1002")
+            ExternalRefEntity(
+                localMediaId = seriesMediaId,
+                source = MediaSource.TMDB,
+                mediaType = MediaType.SERIES,
+                externalId = "1002"
+            )
         )
         database.watchProgressDao().setMediaWatchedDate(
             source = MediaSource.TMDB,
+            mediaType = MediaType.SERIES,
             externalId = "1002",
             watchedDate = LocalDate.parse("2026-07-01"),
             now = clock.instant()
@@ -436,12 +506,12 @@ class BingeeDatabaseMigrationTest {
             LibraryMembershipEntity(localMediaId = mediaId, addedAt = clock.instant())
         )
 
-        val libraryItem = database.libraryDao().observeLibraryItem(MediaSource.TMDB, "1001").first()
+        val libraryItem = database.libraryDao().observeLibraryItem(MediaSource.TMDB, MediaType.MOVIE, "1001").first()
         assertNotNull(libraryItem)
         assertEquals("Baseline Movie", libraryItem?.media?.title)
 
-        database.ratingDao().setRating(MediaSource.TMDB, "1001", 9, clock.instant())
-        val rating = database.ratingDao().observeRating(MediaSource.TMDB, "1001").first()
+        database.ratingDao().setRating(MediaSource.TMDB, MediaType.MOVIE, "1001", 9, clock.instant())
+        val rating = database.ratingDao().observeRating(MediaSource.TMDB, MediaType.MOVIE, "1001").first()
         assertEquals(9, rating?.ratingValue)
     }
 
@@ -479,11 +549,11 @@ class BingeeDatabaseMigrationTest {
         val plan = ValidatedBackupPlan(doc)
         backupDataStore.restore(plan)
 
-        val library = database.libraryDao().observeLibraryItem(MediaSource.TMDB, "101").first()
+        val library = database.libraryDao().observeLibraryItem(MediaSource.TMDB, MediaType.MOVIE, "101").first()
         assertNotNull(library)
         assertEquals("V1 Backup Movie", library?.media?.title)
 
-        val rating = database.ratingDao().observeRating(MediaSource.TMDB, "101").first()
+        val rating = database.ratingDao().observeRating(MediaSource.TMDB, MediaType.MOVIE, "101").first()
         assertEquals(8, rating?.ratingValue)
     }
 
@@ -516,7 +586,7 @@ class BingeeDatabaseMigrationTest {
             )
         )
         database.portableSnapshotDao().insertExternalRef(
-            ExternalRefEntity(localMediaId = mediaId, source = source, externalId = extId)
+            ExternalRefEntity(localMediaId = mediaId, source = source, mediaType = type, externalId = extId)
         )
         return mediaId
     }

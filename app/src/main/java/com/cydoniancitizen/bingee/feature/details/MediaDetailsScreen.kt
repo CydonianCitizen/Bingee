@@ -434,34 +434,30 @@ private fun DetailBody(
                 modifier = sectionModifier
             )
         }
-        item(key = "progress") {
-            Column(
-                modifier = sectionModifier,
-                verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
-            ) {
-                if (details.mediaType == MediaType.MOVIE) {
-                    MovieProgressSection(movieProgress, onToggleMovieWatched)
-                } else {
-                    TvSeriesSection(
-                        state = series,
-                        onToggleExpanded = onToggleSeasonExpanded,
-                        onRetrySeason = onRetrySeason,
-                        onToggleEpisode = onToggleEpisode,
-                        onToggleSeason = onToggleSeasonWatched,
-                        onOpenSettings = onOpenSettings
-                    )
-                    if (isInLibrary == true) {
-                        TextButton(onClick = onToggleSeriesAbandoned, enabled = !isLibraryUpdating) {
-                            Text(
-                                stringResource(
-                                    if (isAbandoned) {
-                                        R.string.series_tracking_restore
-                                    } else {
-                                        R.string.series_tracking_abandon
-                                    }
-                                )
+        if (details.mediaType == MediaType.MOVIE) {
+            item(key = "progress") { MovieProgressSection(movieProgress, onToggleMovieWatched, sectionModifier) }
+        } else {
+            tvSeriesItems(
+                state = series,
+                onToggleExpanded = onToggleSeasonExpanded,
+                onRetrySeason = onRetrySeason,
+                onToggleEpisode = onToggleEpisode,
+                onToggleSeason = onToggleSeasonWatched,
+                onOpenSettings = onOpenSettings,
+                modifier = sectionModifier
+            )
+            if (isInLibrary == true) {
+                item(key = "abandon") {
+                    TextButton(
+                        onClick = onToggleSeriesAbandoned,
+                        enabled = !isLibraryUpdating,
+                        modifier = Modifier.padding(horizontal = BingeeDimensions.screenPadding)
+                    ) {
+                        Text(
+                            stringResource(
+                                if (isAbandoned) R.string.series_tracking_restore else R.string.series_tracking_abandon
                             )
-                        }
+                        )
                     }
                 }
             }

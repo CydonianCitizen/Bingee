@@ -6,6 +6,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.toContinueWatchingItem
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -19,9 +20,10 @@ interface LibraryRepository {
 
     fun observeEntryCount(): Flow<AppResult<Int>>
 
-    fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>>
+    fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>>
 
-    fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>>
+    /** Library titles as (reference, type): TMDB reuses one ID for a movie and an unrelated series. */
+    fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>>
 
     fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>>
 
@@ -37,17 +39,17 @@ interface LibraryRepository {
 
     suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry>
 
-    suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry>
+    suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry>
 
-    suspend fun remove(ref: ExternalMediaRef): AppResult<Unit>
+    suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit>
 
-    suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean>
+    suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean>
 
-    suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit>
+    suspend fun setFavorite(ref: ExternalMediaRef, mediaType: MediaType, isFavorite: Boolean): AppResult<Unit>
 
     suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit>
 
-    suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit>
+    suspend fun setWatchedDate(ref: ExternalMediaRef, mediaType: MediaType, watchedDate: LocalDate?): AppResult<Unit>
 
     suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
         AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.UnsupportedData)

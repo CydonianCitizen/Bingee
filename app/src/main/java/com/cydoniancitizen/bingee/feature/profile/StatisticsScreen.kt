@@ -463,7 +463,7 @@ private fun RatingShelf(
         ) {
             items(
                 items = entries,
-                key = { "${it.mediaRef.source.name}:${it.mediaRef.externalId}" }
+                key = { "${it.mediaRef.source.name}:${it.mediaType}:${it.mediaRef.externalId}" }
             ) { entry ->
                 RatingPosterItem(
                     entry = entry,

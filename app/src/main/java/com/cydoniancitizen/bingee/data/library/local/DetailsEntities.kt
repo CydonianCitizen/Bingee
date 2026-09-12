@@ -34,6 +34,7 @@ internal data class MediaDetailsEntity(
 @Entity(
     tableName = "media_genres",
     primaryKeys = ["local_media_id", "genre_order"],
+    indices = [Index(value = ["source", "genre_id"])],
     foreignKeys = [
         ForeignKey(
             entity = MediaEntity::class,
@@ -41,8 +42,7 @@ internal data class MediaDetailsEntity(
             childColumns = ["local_media_id"],
             onDelete = ForeignKey.CASCADE
         )
-    ],
-    indices = [Index(value = ["source", "genre_id"])]
+    ]
 )
 internal data class MediaGenreEntity(
     @ColumnInfo(name = "local_media_id") val localMediaId: Long,

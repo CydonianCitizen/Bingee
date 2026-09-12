@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -409,7 +410,7 @@ internal fun ProfileContent(
                 ) {
                     items(
                         items = state.entries,
-                        key = { "${it.mediaRef.source}:${it.mediaRef.externalId}" }
+                        key = { "${it.mediaRef.source}:${it.mediaType}:${it.mediaRef.externalId}" }
                     ) { entry ->
                         ProfileGridItem(
                             entry = entry,
@@ -430,12 +431,12 @@ internal fun ProfileContent(
                 ) {
                     items(
                         items = state.entries,
-                        key = { "${it.mediaRef.source}:${it.mediaRef.externalId}" }
+                        key = { "${it.mediaRef.source}:${it.mediaType}:${it.mediaRef.externalId}" }
                     ) { entry ->
                         ProfileListItem(
                             entry = entry,
                             today = state.today,
-                            isRemoving = entry.mediaRef in state.pendingRemovals,
+                            isRemoving = entry.mediaRef to entry.mediaType in state.pendingRemovals,
                             onRemove = { onRemove(entry) },
                             onOpenDetails = entry.navigableDetailsRef?.let { reference ->
                                 { onOpenDetails(reference, entry.mediaType) }
@@ -458,7 +459,11 @@ private fun ProfileEmptyState(
     modifier: Modifier = Modifier
 ) {
     val isSearching = state.searchQuery.isNotBlank()
-    val icon: ImageVector = if (isSearching) Icons.Default.Search else Icons.Default.Star
+    val icon: ImageVector = when {
+        isSearching -> Icons.Default.Search
+        state.collection == ProfileCollection.WATCH_LATER -> ImageVector.vectorResource(R.drawable.ic_bookmark)
+        else -> Icons.Default.Star
+    }
     val title: String
     val body: String
 

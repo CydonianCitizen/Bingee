@@ -47,9 +47,9 @@ class FakeRepositoriesTest {
         val added = repository.add(searchResult) as AppResult.Success
         val entry = added.value
         assertEquals(AppResult.Success(listOf(entry)), repository.observeEntries().first())
-        assertEquals(AppResult.Success(entry), repository.observeEntry(entry.mediaRef).first())
+        assertEquals(AppResult.Success(entry), repository.observeEntry(entry.mediaRef, entry.mediaType).first())
 
-        assertEquals(AppResult.Success(Unit), repository.remove(entry.mediaRef))
+        assertEquals(AppResult.Success(Unit), repository.remove(entry.mediaRef, entry.mediaType))
         assertEquals(AppResult.Success(emptyList<LibraryEntry>()), repository.observeEntries().first())
     }
 }

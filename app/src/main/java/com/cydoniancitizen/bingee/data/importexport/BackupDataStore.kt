@@ -8,6 +8,7 @@ import com.cydoniancitizen.bingee.data.library.local.EpisodeWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryMembershipEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaRatingEntity
 import com.cydoniancitizen.bingee.data.library.local.MovieWatchProgressEntity
 import com.cydoniancitizen.bingee.data.library.local.PortablePreferencesEntity
@@ -27,6 +28,7 @@ import kotlinx.coroutines.withContext
 internal enum class RestoreStage {
     MEDIA,
     EXTERNAL_REFERENCES,
+    GENRES,
     SEASONS,
     EPISODES,
     LIBRARY_MEMBERSHIP,
@@ -72,6 +74,8 @@ internal class BackupDataStore @Inject constructor(
             }
             val media = rows.media.filter { it.localMediaId in portableMediaIds }
             val refsByMedia = rows.refs.groupBy { it.localMediaId }
+            val genresByMedia = rows.genres.groupBy { it.localMediaId }
+            val typeByMedia = media.associate { it.localMediaId to it.mediaType }
             val primaryByMedia = media.associate { entity ->
                 entity.localMediaId to refsByMedia.getValue(entity.localMediaId)
                     .map { BackupRef(it.source, it.externalId) }
@@ -91,7 +95,10 @@ internal class BackupDataStore @Inject constructor(
                     posterUrl = entity.posterUrl,
                     releaseDate = entity.releaseDate,
                     isFavorite = entity.isFavorite,
-                    favoriteAddedAt = entity.favoriteAddedAt
+                    favoriteAddedAt = entity.favoriteAddedAt,
+                    genres = genresByMedia[entity.localMediaId].orEmpty()
+                        .map { BackupGenre(it.name, it.source, it.genreId) },
+                    runtimeMinutes = entity.runtimeMinutes.takeIf { entity.mediaType == MediaType.MOVIE }
                 )
             }.sortedWith(compareBy({ it.primaryRef.source.name }, { it.primaryRef.externalId }, { it.mediaType.name }))
 
@@ -153,7 +160,13 @@ internal class BackupDataStore @Inject constructor(
                 seasons = seasonRecords,
                 episodes = episodeRecords,
                 library = rows.memberships.filter { it.localMediaId in portableMediaIds }
-                    .map { BackupLibraryEntry(primaryByMedia.getValue(it.localMediaId), it.addedAt) }
+                    .map {
+                        BackupLibraryEntry(
+                            primaryByMedia.getValue(it.localMediaId),
+                            it.addedAt,
+                            typeByMedia.getValue(it.localMediaId)
+                        )
+                    }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 movieProgress = rows.movieProgress.filter { it.localMediaId in portableMediaIds }
                     .map { BackupMovieProgress(primaryByMedia.getValue(it.localMediaId), it.watchedAt, it.watchedDate) }
@@ -172,7 +185,13 @@ internal class BackupDataStore @Inject constructor(
                     .sortedWith(compareBy({ it.episodeRef.source.name }, { it.episodeRef.externalId })),
                 ratings = rows.ratings.filter { it.localMediaId in portableMediaIds }
                     .map {
-                        BackupRating(primaryByMedia.getValue(it.localMediaId), it.ratingValue, it.ratedAt, it.updatedAt)
+                        BackupRating(
+                            primaryByMedia.getValue(it.localMediaId),
+                            it.ratingValue,
+                            it.ratedAt,
+                            it.updatedAt,
+                            typeByMedia.getValue(it.localMediaId)
+                        )
                     }
                     .sortedWith(compareBy({ it.mediaRef.source.name }, { it.mediaRef.externalId })),
                 preferences = dataPreferences
@@ -207,7 +226,6 @@ internal class BackupDataStore @Inject constructor(
             snapshotDao.deletePreferences()
 
             val mediaIds = linkedMapOf<String, Long>()
-            val mediaIdsByIdentityKey = linkedMapOf<String, Long>()
             data.media.forEach { media ->
                 val localId = snapshotDao.insertMedia(
                     MediaEntity(
@@ -220,31 +238,40 @@ internal class BackupDataStore @Inject constructor(
                         createdAt = exportedAt,
                         metadataUpdatedAt = exportedAt,
                         isFavorite = media.isFavorite,
-                        favoriteAddedAt = media.favoriteAddedAt
+                        favoriteAddedAt = media.favoriteAddedAt,
+                        runtimeMinutes = media.runtimeMinutes
                     )
                 )
-                mediaIds[media.primaryRef.key()] = localId
-                media.externalRefs.forEach { ref ->
-                    val identityKey = "${ref.source.name}:${media.mediaType.name}:${ref.externalId}"
-                    mediaIdsByIdentityKey[identityKey] = localId
-                }
+                mediaIds[media.primaryRef.key(media.mediaType)] = localId
             }
             failureInjector.check(RestoreStage.MEDIA)
 
             data.media.forEach { media ->
-                val localId = checkNotNull(mediaIds[media.primaryRef.key()])
+                val localId = checkNotNull(mediaIds[media.primaryRef.key(media.mediaType)])
                 media.externalRefs.forEach { ref ->
-                    mediaIds[ref.key()] = localId
-                    snapshotDao.insertExternalRef(ExternalRefEntity(localId, ref.source, ref.externalId))
+                    mediaIds[ref.key(media.mediaType)] = localId
+                    snapshotDao.insertExternalRef(
+                        ExternalRefEntity(localId, ref.source, media.mediaType, ref.externalId)
+                    )
                 }
             }
             failureInjector.check(RestoreStage.EXTERNAL_REFERENCES)
+
+            data.media.forEach { media ->
+                val localId = checkNotNull(mediaIds[media.primaryRef.key(media.mediaType)])
+                snapshotDao.insertGenres(
+                    media.genres.mapIndexed { order, genre ->
+                        MediaGenreEntity(localId, order, genre.name, genre.source, genre.genreId)
+                    }
+                )
+            }
+            failureInjector.check(RestoreStage.GENRES)
 
             val seasonIds = linkedMapOf<String, Long>()
             data.seasons.forEach { season ->
                 val localId = snapshotDao.insertSeason(
                     SeasonEntity(
-                        localMediaId = checkNotNull(mediaIds[season.mediaRef.key()]),
+                        localMediaId = checkNotNull(mediaIds[season.mediaRef.key(MediaType.SERIES)]),
                         source = season.externalRef.source,
                         externalId = season.externalRef.externalId,
                         seasonNumber = season.seasonNumber,
@@ -283,14 +310,14 @@ internal class BackupDataStore @Inject constructor(
 
             data.library.forEach { entry ->
                 snapshotDao.insertMembership(
-                    LibraryMembershipEntity(checkNotNull(mediaIds[entry.mediaRef.key()]), entry.addedAt)
+                    LibraryMembershipEntity(mediaIds.resolve(entry.mediaRef, entry.mediaType), entry.addedAt)
                 )
             }
             failureInjector.check(RestoreStage.LIBRARY_MEMBERSHIP)
 
             data.abandonedSeries.forEach { abandoned ->
                 snapshotDao.insertSeriesStateOverride(
-                    SeriesStateOverrideEntity(checkNotNull(mediaIds[abandoned.mediaRef.key()]))
+                    SeriesStateOverrideEntity(checkNotNull(mediaIds[abandoned.mediaRef.key(MediaType.SERIES)]))
                 )
             }
             failureInjector.check(RestoreStage.SERIES_STATE)
@@ -298,7 +325,7 @@ internal class BackupDataStore @Inject constructor(
             data.movieProgress.forEach { progress ->
                 snapshotDao.insertMovieProgress(
                     MovieWatchProgressEntity(
-                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key()]),
+                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key(MediaType.MOVIE)]),
                         watchedAt = progress.watchedAt,
                         watchedDate = progress.watchedDate
                     )
@@ -309,7 +336,7 @@ internal class BackupDataStore @Inject constructor(
             data.seriesProgress.forEach { progress ->
                 snapshotDao.insertSeriesProgress(
                     SeriesWatchProgressEntity(
-                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key()]),
+                        localMediaId = checkNotNull(mediaIds[progress.mediaRef.key(MediaType.SERIES)]),
                         watchedDate = progress.watchedDate,
                         completedAt = progress.completedAt
                     )
@@ -327,7 +354,7 @@ internal class BackupDataStore @Inject constructor(
             data.ratings.forEach { rating ->
                 snapshotDao.insertRating(
                     MediaRatingEntity(
-                        checkNotNull(mediaIds[rating.mediaRef.key()]),
+                        mediaIds.resolve(rating.mediaRef, rating.mediaType),
                         rating.rating,
                         rating.ratedAt,
                         rating.updatedAt
@@ -352,6 +379,11 @@ internal class BackupDataStore @Inject constructor(
         }
     }
 
+    /** v1 entries carry no type, but a v1 file cannot hold a movie and a series with one ID: the match is unique. */
+    private fun Map<String, Long>.resolve(ref: BackupRef, type: MediaType?): Long = checkNotNull(
+        if (type != null) this[ref.key(type)] else MediaType.entries.firstNotNullOfOrNull { this[ref.key(it)] }
+    )
+
     suspend fun createPortableBackup(exportedAt: Instant): ByteArray = withContext(Dispatchers.IO) {
         val document = BackupDocument(
             formatId = BACKUP_FORMAT_ID,
@@ -361,6 +393,4 @@ internal class BackupDataStore @Inject constructor(
         )
         BackupJsonCodec.encode(document)
     }
-
-    private fun BackupRef.key(): String = "${source.name}:$externalId"
 }

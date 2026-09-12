@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
 import java.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -36,39 +37,42 @@ class RatingDaoTest {
 
     @Test
     fun firstUpdateIdenticalAndRemoveFollowTimestampPolicy() = runBlocking {
-        assertNull(dao.observeRating(MediaSource.TMDB, "101").first())
-        assertEquals(RatingWriteOutcome.SUCCESS, dao.setRating(MediaSource.TMDB, "101", 1, first))
-        val initial = dao.observeRating(MediaSource.TMDB, "101").first()!!
+        assertNull(dao.observeRating(MediaSource.TMDB, MediaType.MOVIE, "101").first())
+        assertEquals(RatingWriteOutcome.SUCCESS, dao.setRating(MediaSource.TMDB, MediaType.MOVIE, "101", 1, first))
+        val initial = dao.observeRating(MediaSource.TMDB, MediaType.MOVIE, "101").first()!!
         assertEquals(1, initial.ratingValue)
         assertEquals(first, initial.ratedAt)
         assertEquals(first, initial.updatedAt)
 
-        assertEquals(RatingWriteOutcome.SUCCESS, dao.setRating(MediaSource.TMDB, "101", 10, second))
-        assertEquals(RatingWriteOutcome.UNCHANGED, dao.setRating(MediaSource.TMDB, "101", 10, second.plusSeconds(60)))
-        val updated = dao.observeRating(MediaSource.TMDB, "101").first()!!
+        assertEquals(RatingWriteOutcome.SUCCESS, dao.setRating(MediaSource.TMDB, MediaType.MOVIE, "101", 10, second))
+        assertEquals(
+            RatingWriteOutcome.UNCHANGED,
+            dao.setRating(MediaSource.TMDB, MediaType.MOVIE, "101", 10, second.plusSeconds(60))
+        )
+        val updated = dao.observeRating(MediaSource.TMDB, MediaType.MOVIE, "101").first()!!
         assertEquals(10, updated.ratingValue)
         assertEquals(first, updated.ratedAt)
         assertEquals(second, updated.updatedAt)
 
-        assertEquals(RatingWriteOutcome.SUCCESS, dao.removeRating(MediaSource.TMDB, "101"))
-        assertEquals(RatingWriteOutcome.UNCHANGED, dao.removeRating(MediaSource.TMDB, "101"))
-        assertNull(dao.observeRating(MediaSource.TMDB, "101").first())
+        assertEquals(RatingWriteOutcome.SUCCESS, dao.removeRating(MediaSource.TMDB, MediaType.MOVIE, "101"))
+        assertEquals(RatingWriteOutcome.UNCHANGED, dao.removeRating(MediaSource.TMDB, MediaType.MOVIE, "101"))
+        assertNull(dao.observeRating(MediaSource.TMDB, MediaType.MOVIE, "101").first())
     }
 
     @Test
     fun movieAndTvRatingsAreProviderAwareAndSurviveLibraryRemoval() = runBlocking {
-        dao.setRating(MediaSource.TMDB, "101", 7, first)
-        dao.setRating(MediaSource.TMDB, "202", 8, first)
-        database.libraryDao().removeMembership(MediaSource.TMDB, "101")
+        dao.setRating(MediaSource.TMDB, MediaType.MOVIE, "101", 7, first)
+        dao.setRating(MediaSource.TMDB, MediaType.SERIES, "202", 8, first)
+        database.libraryDao().removeMembership(MediaSource.TMDB, MediaType.MOVIE, "101")
 
-        assertEquals(7, dao.observeRating(MediaSource.TMDB, "101").first()!!.ratingValue)
-        assertEquals(8, dao.observeRating(MediaSource.TMDB, "202").first()!!.ratingValue)
-        assertEquals(RatingWriteOutcome.NOT_FOUND, dao.setRating(MediaSource.IMDB, "101", 5, first))
+        assertEquals(7, dao.observeRating(MediaSource.TMDB, MediaType.MOVIE, "101").first()!!.ratingValue)
+        assertEquals(8, dao.observeRating(MediaSource.TMDB, MediaType.SERIES, "202").first()!!.ratingValue)
+        assertEquals(RatingWriteOutcome.NOT_FOUND, dao.setRating(MediaSource.IMDB, MediaType.MOVIE, "101", 5, first))
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun invalidRatingNeverReachesRoom(): Unit = runBlocking {
-        dao.setRating(MediaSource.TMDB, "101", 0, first)
+        dao.setRating(MediaSource.TMDB, MediaType.MOVIE, "101", 0, first)
         Unit
     }
 
@@ -80,7 +84,8 @@ class RatingDaoTest {
                 "'2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z', 0)"
         )
         database.openHelper.writableDatabase.execSQL(
-            "INSERT INTO external_refs(local_media_id, source, external_id) VALUES($localId, 'TMDB', '$externalId')"
+            "INSERT INTO external_refs(local_media_id, source, media_type, external_id) " +
+                "VALUES($localId, 'TMDB', '$mediaType', '$externalId')"
         )
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO library_entries(local_media_id, added_at) VALUES($localId, '2026-08-03T09:00:00Z')"

@@ -225,8 +225,8 @@ private fun SearchControls(
 @Composable
 private fun SearchBody(
     content: SearchContentState,
-    libraryMembership: Set<ExternalMediaRef>,
-    pendingLibraryActions: Set<ExternalMediaRef>,
+    libraryMembership: Set<Pair<ExternalMediaRef, MediaType>>,
+    pendingLibraryActions: Set<Pair<ExternalMediaRef, MediaType>>,
     onToggleLibrary: (MediaSearchResult) -> Unit,
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     onRetryInitial: () -> Unit,
@@ -298,8 +298,8 @@ private fun InitialSearchError(error: AppError, onRetry: () -> Unit, onOpenSetti
 @Composable
 private fun SearchResults(
     content: SearchContentState.Results,
-    libraryMembership: Set<ExternalMediaRef>,
-    pendingLibraryActions: Set<ExternalMediaRef>,
+    libraryMembership: Set<Pair<ExternalMediaRef, MediaType>>,
+    pendingLibraryActions: Set<Pair<ExternalMediaRef, MediaType>>,
     onToggleLibrary: (MediaSearchResult) -> Unit,
     onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     onLoadNextPage: () -> Unit,
@@ -316,8 +316,8 @@ private fun SearchResults(
         ) { result ->
             SearchResultItem(
                 result = result,
-                isInLibrary = result.externalRef in libraryMembership,
-                isLibraryActionPending = result.externalRef in pendingLibraryActions,
+                isInLibrary = result.externalRef to result.mediaType in libraryMembership,
+                isLibraryActionPending = result.externalRef to result.mediaType in pendingLibraryActions,
                 onToggleLibrary = { onToggleLibrary(result) },
                 onOpenDetails = { onOpenDetails(result.externalRef, result.mediaType) }
             )

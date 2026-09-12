@@ -31,11 +31,11 @@ class FakeLibraryRepository(
 
     override fun observeEntryCount(): Flow<AppResult<Int>> = entries.map { AppResult.Success(it.size) }
 
-    override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
-        entries.map { current -> AppResult.Success(current.firstOrNull { it.mediaRef == ref }) }
+    override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
+        entries.map { current -> AppResult.Success(current.firstOrNull { it.isFor(ref, mediaType) }) }
 
-    override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
-        entries.map { current -> AppResult.Success(current.mapTo(linkedSetOf()) { it.mediaRef }) }
+    override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
+        entries.map { current -> AppResult.Success(current.mapTo(linkedSetOf()) { it.mediaRef to it.mediaType }) }
 
     override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> = entries.map { current ->
         AppResult.Success(current.mapNotNull(::toPersonalViewingEntry))
@@ -43,7 +43,7 @@ class FakeLibraryRepository(
 
     override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> {
         writeFailure?.let { return AppResult.Failure(it) }
-        val existing = entries.value.firstOrNull { it.mediaRef == result.externalRef }
+        val existing = entries.value.firstOrNull { it.isFor(result.externalRef, result.mediaType) }
         val entry =
             LibraryEntry(
                 mediaRef = result.externalRef,
@@ -55,38 +55,42 @@ class FakeLibraryRepository(
                 overview = result.overview,
                 addedAt = existing?.addedAt ?: now
             )
-        entries.value = entries.value.filterNot { it.mediaRef == entry.mediaRef } + entry
+        entries.value = entries.value.filterNot { it.isFor(entry.mediaRef, entry.mediaType) } + entry
         return AppResult.Success(entry)
     }
 
-    override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> {
+    override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> {
         writeFailure?.let { return AppResult.Failure(it) }
-        val existing = entries.value.firstOrNull { it.mediaRef == ref }
+        val existing = entries.value.firstOrNull { it.isFor(ref, mediaType) }
             ?: return AppResult.Failure(AppError.MissingData)
-        entries.value = entries.value.filterNot { it.mediaRef == ref } + existing
+        entries.value = entries.value.filterNot { it.isFor(ref, mediaType) } + existing
         return AppResult.Success(existing)
     }
 
-    override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> {
+    override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> {
         writeFailure?.let { return AppResult.Failure(it) }
-        entries.value = entries.value.filterNot { it.mediaRef == ref }
+        entries.value = entries.value.filterNot { it.isFor(ref, mediaType) }
         return AppResult.Success(Unit)
     }
 
-    override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> =
-        AppResult.Success(entries.value.any { it.mediaRef == ref })
+    override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
+        AppResult.Success(entries.value.any { it.isFor(ref, mediaType) })
 
-    override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> {
+    override suspend fun setFavorite(
+        ref: ExternalMediaRef,
+        mediaType: MediaType,
+        isFavorite: Boolean
+    ): AppResult<Unit> {
         writeFailure?.let { return AppResult.Failure(it) }
         entries.value = entries.value.map { entry ->
-            if (entry.mediaRef == ref) entry.copy(isFavorite = isFavorite) else entry
+            if (entry.isFor(ref, mediaType)) entry.copy(isFavorite = isFavorite) else entry
         }
         return AppResult.Success(Unit)
     }
 
     override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> {
         writeFailure?.let { return AppResult.Failure(it) }
-        val existing = entries.value.firstOrNull { it.mediaRef == result.externalRef }
+        val existing = entries.value.firstOrNull { it.isFor(result.externalRef, result.mediaType) }
         val updated = if (existing != null) {
             existing.copy(isFavorite = isFavorite)
         } else {
@@ -102,14 +106,18 @@ class FakeLibraryRepository(
                 isFavorite = isFavorite
             )
         }
-        entries.value = entries.value.filterNot { it.mediaRef == result.externalRef } + updated
+        entries.value = entries.value.filterNot { it.isFor(result.externalRef, result.mediaType) } + updated
         return AppResult.Success(Unit)
     }
 
-    override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> {
+    override suspend fun setWatchedDate(
+        ref: ExternalMediaRef,
+        mediaType: MediaType,
+        watchedDate: LocalDate?
+    ): AppResult<Unit> {
         writeFailure?.let { return AppResult.Failure(it) }
         entries.value = entries.value.map { entry ->
-            if (entry.mediaRef == ref) entry.copy(watchedDate = watchedDate) else entry
+            if (entry.isFor(ref, mediaType)) entry.copy(watchedDate = watchedDate) else entry
         }
         return AppResult.Success(Unit)
     }
@@ -138,3 +146,5 @@ class FakeLibraryRepository(
         )
     }
 }
+
+private fun LibraryEntry.isFor(ref: ExternalMediaRef, type: MediaType) = mediaRef == ref && mediaType == type

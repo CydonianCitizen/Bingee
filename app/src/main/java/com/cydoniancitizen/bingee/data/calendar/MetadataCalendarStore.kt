@@ -9,7 +9,6 @@ import com.cydoniancitizen.bingee.data.details.toCacheWrite
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
 import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
-import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.series.toEntity
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload
@@ -32,7 +31,6 @@ internal interface MetadataCalendarStore {
 internal class RoomMetadataCalendarStore @Inject constructor(
     private val database: BingeeDatabase,
     private val detailsDao: DetailsDao,
-    private val seasonSummaryStore: SeasonSummaryStore,
     private val seriesDao: SeriesDao,
     private val releaseEventDao: ReleaseEventDao,
     private val projector: ReleaseEventProjector
@@ -55,7 +53,7 @@ internal class RoomMetadataCalendarStore @Inject constructor(
             if (details.mediaType == MediaType.MOVIE) {
                 releaseEventDao.reconcileMovie(reference, projector.movie(details, fetchedAt))
             } else {
-                seasonSummaryStore.upsertSeasonSummaries(
+                seriesDao.upsertSeasonSummaries(
                     source = reference.source,
                     seriesExternalId = reference.externalId,
                     summaries = seasons.map { it.toEntity(fetchedAt) }

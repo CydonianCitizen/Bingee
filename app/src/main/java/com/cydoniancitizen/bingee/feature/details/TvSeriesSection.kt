@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -55,8 +57,14 @@ import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.ui.toUiError
 
-@Composable
-internal fun TvSeriesSection(
+/**
+ * The series part of the Details list: a heading with overall progress, then one lazy item per season,
+ * so a long-running series composes only the seasons on screen.
+ *
+ * ponytail: an expanded season still composes all its episodes at once; split episodes into their own
+ * items if a single season ever runs to hundreds of episodes.
+ */
+internal fun LazyListScope.tvSeriesItems(
     state: SeriesDetailUiState,
     onToggleExpanded: (CachedSeason) -> Unit,
     onRetrySeason: (CachedSeason) -> Unit,
@@ -65,25 +73,26 @@ internal fun TvSeriesSection(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (state.content == SeriesContentState.NotApplicable) return
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
-    ) {
-        Text(
-            text = stringResource(R.string.detail_series_progress_title),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleLarge
-        )
-        when (val content = state.content) {
-            SeriesContentState.NotApplicable -> Unit
-            SeriesContentState.Loading -> Text(stringResource(R.string.detail_seasons_loading))
-            is SeriesContentState.Error -> Text(
-                text = stringResource(content.error.toUiError().messageRes),
-                color = MaterialTheme.colorScheme.error
+    val content = state.content
+    if (content == SeriesContentState.NotApplicable) return
+    item(key = "seriesProgress") {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
+        ) {
+            Text(
+                text = stringResource(R.string.detail_series_progress_title),
+                modifier = Modifier.semantics { heading() },
+                style = MaterialTheme.typography.titleLarge
             )
-            is SeriesContentState.Ready -> {
-                if (content.progress.trackableEpisodes == 0) {
+            when (content) {
+                SeriesContentState.NotApplicable -> Unit
+                SeriesContentState.Loading -> Text(stringResource(R.string.detail_seasons_loading))
+                is SeriesContentState.Error -> Text(
+                    text = stringResource(content.error.toUiError().messageRes),
+                    color = MaterialTheme.colorScheme.error
+                )
+                is SeriesContentState.Ready -> if (content.progress.trackableEpisodes == 0) {
                     Text(stringResource(R.string.library_progress_unavailable))
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
@@ -99,42 +108,38 @@ internal fun TvSeriesSection(
                         WatchProgressBar(content.progress.fraction)
                     }
                 }
-                val regular = content.seasons.filter { it.season.seasonNumber > 0 }
-                val specials = content.seasons.filter { it.season.seasonNumber == 0 }
-                regular.forEach { season ->
-                    SeasonCard(
-                        season,
-                        state,
-                        onToggleExpanded,
-                        onRetrySeason,
-                        onToggleEpisode,
-                        onToggleSeason,
-                        onOpenSettings
-                    )
-                }
-                if (specials.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.detail_specials_title),
-                        modifier = Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    specials.forEach { season ->
-                        SeasonCard(
-                            season,
-                            state,
-                            onToggleExpanded,
-                            onRetrySeason,
-                            onToggleEpisode,
-                            onToggleSeason,
-                            onOpenSettings
-                        )
-                    }
-                }
-                if (content.seasons.isEmpty()) {
-                    Text(stringResource(R.string.detail_seasons_empty))
-                }
             }
         }
+    }
+    if (content !is SeriesContentState.Ready) return
+    val seasonItems: (List<CachedSeason>) -> Unit = { seasons ->
+        items(seasons, key = { "season:${it.season.externalRef.source}:${it.season.externalRef.externalId}" }) {
+            SeasonCard(
+                it,
+                state,
+                onToggleExpanded,
+                onRetrySeason,
+                onToggleEpisode,
+                onToggleSeason,
+                onOpenSettings,
+                modifier
+            )
+        }
+    }
+    seasonItems(content.seasons.filter { it.season.seasonNumber > 0 })
+    val specials = content.seasons.filter { it.season.seasonNumber == 0 }
+    if (specials.isNotEmpty()) {
+        item(key = "specialsTitle") {
+            Text(
+                text = stringResource(R.string.detail_specials_title),
+                modifier = modifier.semantics { heading() },
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        seasonItems(specials)
+    }
+    if (content.seasons.isEmpty()) {
+        item(key = "seasonsEmpty") { Text(stringResource(R.string.detail_seasons_empty), modifier = modifier) }
     }
 }
 
@@ -161,7 +166,8 @@ private fun SeasonCard(
     onRetrySeason: (CachedSeason) -> Unit,
     onToggleEpisode: (TrackedEpisode) -> Unit,
     onToggleSeason: (CachedSeason) -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    modifier: Modifier
 ) {
     val ref = season.season.externalRef
     val expanded = ref in state.expandedSeasons
@@ -174,7 +180,7 @@ private fun SeasonCard(
             } else {
                 stringResource(R.string.detail_season_fallback, season.season.seasonNumber)
             }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
             // Expanding a season changes this card's height by the whole episode list; without the
             // animation everything below it jumps that distance in a single frame.

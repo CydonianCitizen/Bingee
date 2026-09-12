@@ -1,4 +1,4 @@
-package com.cydoniancitizen.bingee.data.details
+package com.cydoniancitizen.bingee.data
 
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import java.time.Clock
@@ -17,8 +17,12 @@ class CacheFreshnessPolicyTest {
     }
 
     @Test
-    fun exactlyAtBoundaryAndOlderAreStale() {
+    fun exactlyAtTwentyFourHourBoundaryIsStale() {
         assertEquals(CacheFreshness.STALE, policy.classify(now.minusSeconds(86_400)))
+    }
+
+    @Test
+    fun olderThanTwentyFourHoursIsStale() {
         assertEquals(CacheFreshness.STALE, policy.classify(now.minusSeconds(86_401)))
     }
 

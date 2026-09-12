@@ -43,7 +43,6 @@ class MetadataCalendarStoreTest {
             database,
             database.detailsDao(),
             database.seriesDao(),
-            database.seriesDao(),
             database.releaseEventDao(),
             ReleaseEventProjector()
         )

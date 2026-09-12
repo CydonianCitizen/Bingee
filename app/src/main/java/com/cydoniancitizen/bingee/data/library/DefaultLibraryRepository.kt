@@ -103,10 +103,10 @@ internal class DefaultLibraryRepository @Inject constructor(
     override fun observeEntryCount(): Flow<AppResult<Int>> =
         libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
 
-    override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> {
+    override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> {
         val normalized = ref.normalized()
         return combine(
-            libraryDao.observeLibraryItem(normalized.source, normalized.externalId),
+            libraryDao.observeLibraryItem(normalized.source, mediaType, normalized.externalId),
             libraryProgress
         ) { row, progressResult ->
             row?.toDomain(
@@ -117,9 +117,9 @@ internal class DefaultLibraryRepository @Inject constructor(
         }.asPersistenceResult { it }
     }
 
-    override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
+    override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
         libraryDao.observeMembershipRefs().asPersistenceResult { rows ->
-            rows.mapTo(linkedSetOf()) { it.toDomain() }
+            rows.mapTo(linkedSetOf()) { it.toDomain() to it.mediaType }
         }
 
     override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> = combine(
@@ -173,11 +173,11 @@ internal class DefaultLibraryRepository @Inject constructor(
         }
     }
 
-    override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> =
+    override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> =
         withNormalizedExternalId(ref) { externalId ->
             val now = clock.instant()
             try {
-                val existingItem = libraryDao.addExistingToLibrary(ref.source, externalId, now)
+                val existingItem = libraryDao.addExistingToLibrary(ref.source, mediaType, externalId, now)
                 if (existingItem != null) {
                     AppResult.Success(existingItem.toDomain(preferredRef = ExternalMediaRef(ref.source, externalId)))
                 } else {
@@ -194,27 +194,37 @@ internal class DefaultLibraryRepository @Inject constructor(
             }
         }
 
-    override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = withNormalizedExternalId(ref) { externalId ->
-        persistenceRead {
-            libraryDao.removeMembership(ref.source, externalId)
-            Unit
-        }
-    }
-
-    override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> =
-        withNormalizedExternalId(ref) { externalId ->
-            persistenceRead { libraryDao.isInLibrary(ref.source, externalId) }
-        }
-
-    override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+    override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
         withNormalizedExternalId(ref) { externalId ->
             persistenceRead {
-                val updated = libraryDao.updateFavoriteState(ref.source, externalId, isFavorite, clock.instant())
-                if (updated == 0) {
-                    throw IllegalStateException("Media entity not found for favorite state update")
-                }
+                libraryDao.removeMembership(ref.source, mediaType, externalId)
+                Unit
             }
         }
+
+    override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
+        withNormalizedExternalId(ref) { externalId ->
+            persistenceRead { libraryDao.isInLibrary(ref.source, mediaType, externalId) }
+        }
+
+    override suspend fun setFavorite(
+        ref: ExternalMediaRef,
+        mediaType: MediaType,
+        isFavorite: Boolean
+    ): AppResult<Unit> = withNormalizedExternalId(ref) { externalId ->
+        persistenceRead {
+            val updated = libraryDao.updateFavoriteState(
+                ref.source,
+                mediaType,
+                externalId,
+                isFavorite,
+                clock.instant()
+            )
+            if (updated == 0) {
+                throw IllegalStateException("Media entity not found for favorite state update")
+            }
+        }
+    }
 
     override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
         withNormalizedExternalId(result.externalRef) { externalId ->
@@ -229,20 +239,24 @@ internal class DefaultLibraryRepository @Inject constructor(
             }
         }
 
-    override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
-        withNormalizedExternalId(ref) { externalId ->
-            persistenceRead {
-                val outcome = watchProgressDao.setMediaWatchedDate(
-                    source = ref.source,
-                    externalId = externalId,
-                    watchedDate = watchedDate,
-                    now = clock.instant()
-                )
-                if (outcome == ProgressWriteOutcome.NOT_FOUND) {
-                    throw IllegalStateException("Media entity not found for watched date update")
-                }
+    override suspend fun setWatchedDate(
+        ref: ExternalMediaRef,
+        mediaType: MediaType,
+        watchedDate: LocalDate?
+    ): AppResult<Unit> = withNormalizedExternalId(ref) { externalId ->
+        persistenceRead {
+            val outcome = watchProgressDao.setMediaWatchedDate(
+                source = ref.source,
+                mediaType = mediaType,
+                externalId = externalId,
+                watchedDate = watchedDate,
+                now = clock.instant()
+            )
+            if (outcome == ProgressWriteOutcome.NOT_FOUND) {
+                throw IllegalStateException("Media entity not found for watched date update")
             }
         }
+    }
 
     override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
         withNormalizedExternalId(ref) { externalId ->
@@ -280,7 +294,17 @@ private fun LibraryDao.ContinueWatchingRow.toDomain() = ContinueWatchingItem(
         null
     },
     updatedAt = lastProgressAt,
-    isAbandoned = isAbandoned
+    isAbandoned = isAbandoned,
+    lastWatchedEpisode = if (lastSeasonNumber != null && lastEpisodeNumber != null) {
+        EpisodePosition(lastSeasonNumber, lastEpisodeNumber)
+    } else {
+        null
+    },
+    nextEpisodeRef = if (nextEpisodeSource != null && nextEpisodeExternalId != null) {
+        ExternalMediaRef(nextEpisodeSource, nextEpisodeExternalId)
+    } else {
+        null
+    }
 )
 
 internal fun String.toSqlLikePattern(): String {

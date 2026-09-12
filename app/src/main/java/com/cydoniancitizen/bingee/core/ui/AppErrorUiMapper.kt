@@ -22,7 +22,6 @@ fun AppError.toUiError(): UiError = UiError(
         AppError.NotificationDeliveryFailure -> R.string.error_notification_delivery
         AppError.NotTrackable -> R.string.error_not_trackable
         AppError.MediaTypeMismatch -> R.string.error_media_type_mismatch
-        is AppError.LinkError -> R.string.error_invalid_input
         AppError.Unknown -> R.string.error_unknown
     },
     canRetry = isRetryable

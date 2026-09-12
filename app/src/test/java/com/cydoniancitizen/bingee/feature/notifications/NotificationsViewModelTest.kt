@@ -349,24 +349,32 @@ class NotificationsViewModelTest {
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> = entriesFlow
         override fun observeEntryCount(): Flow<AppResult<Int>> =
             MutableStateFlow(AppResult.Success((entriesFlow.value as? AppResult.Success)?.value?.size ?: 0))
-        override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
+        override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             MutableStateFlow(AppResult.Success(null))
-        override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
+        override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
             MutableStateFlow(AppResult.Success(emptySet()))
         override fun observePersonalViewing() =
             MutableStateFlow<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
                 AppResult.Success(emptyList())
             )
         override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> = error("Unused")
-        override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> = error("Unused")
-        override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = AppResult.Success(Unit)
-        override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> = AppResult.Success(true)
-        override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+        override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> = error("Unused")
+        override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
             AppResult.Success(Unit)
+        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
+            AppResult.Success(true)
+        override suspend fun setFavorite(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            isFavorite: Boolean
+        ): AppResult<Unit> = AppResult.Success(Unit)
         override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
             AppResult.Success(Unit)
-        override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun setWatchedDate(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            watchedDate: LocalDate?
+        ): AppResult<Unit> = AppResult.Success(Unit)
     }
 
     private class FakeReleaseCalendarRepository : ReleaseCalendarRepository {
