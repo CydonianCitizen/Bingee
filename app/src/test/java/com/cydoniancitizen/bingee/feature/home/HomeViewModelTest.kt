@@ -3,6 +3,8 @@ package com.cydoniancitizen.bingee.feature.home
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
+import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
@@ -10,6 +12,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
@@ -20,9 +23,11 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
+import com.cydoniancitizen.bingee.domain.repository.FeaturedReleases
 import com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
+import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import com.cydoniancitizen.bingee.testutil.MainDispatcherRule
 import java.time.Instant
 import java.time.LocalDate
@@ -206,7 +211,8 @@ class HomeViewModelTest {
             dates,
             ReleaseCalendarWindow(),
             FakeFeaturedRepo(),
-            FakeLibraryRepo()
+            FakeLibraryRepo(),
+            FakeWatchProgressRepository()
         ).also(createdViewModels::add)
         runCurrent()
         assertEquals(LocalDate.of(2026, 7, 27), repository.requestedFrom)
@@ -233,6 +239,133 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals(listOf("actionable"), viewModel.uiState.value.continueWatching.map { it.title })
+    }
+
+    @Test
+    fun markingNextEpisodeWritesItsIdentityAndUndoReversesIt() = runTest(mainDispatcherRule.dispatcher) {
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            FakeCalendarRepository(emptyList()),
+            FakeCoordinator(success()),
+            watchProgressRepository = progress
+        )
+        runCurrent()
+
+        viewModel.markNextEpisodeWatched(continueItem())
+        runCurrent()
+
+        assertEquals(listOf(nextEpisodeRef), progress.watched)
+        assertEquals(
+            HomeSnackbar.EpisodeMarked("Series", EpisodePosition(2, 5), nextEpisodeRef),
+            viewModel.uiState.value.snackbar
+        )
+        assertTrue(viewModel.uiState.value.markingEpisodes.isEmpty())
+
+        viewModel.undoMarkedEpisode()
+        runCurrent()
+
+        assertEquals(listOf(nextEpisodeRef), progress.unwatched)
+        assertEquals(null, viewModel.uiState.value.snackbar)
+    }
+
+    @Test
+    fun failedMarkReportsTheErrorAndOffersNothingToUndo() = runTest(mainDispatcherRule.dispatcher) {
+        val progress = FakeWatchProgressRepository(result = AppResult.Failure(AppError.LocalStorageFailure))
+        val viewModel = viewModel(
+            FakeCalendarRepository(emptyList()),
+            FakeCoordinator(success()),
+            watchProgressRepository = progress
+        )
+        runCurrent()
+
+        viewModel.markNextEpisodeWatched(continueItem())
+        runCurrent()
+        viewModel.undoMarkedEpisode()
+        runCurrent()
+
+        assertEquals(
+            HomeSnackbar.Failed(AppError.LocalStorageFailure),
+            viewModel.uiState.value.snackbar
+        )
+        assertTrue(progress.unwatched.isEmpty())
+    }
+
+    @Test
+    fun secondTapWhileWritingAndItemsWithoutEpisodeIdentityWriteNothing() = runTest(mainDispatcherRule.dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val progress = FakeWatchProgressRepository(gate = gate)
+        val viewModel = viewModel(
+            FakeCalendarRepository(emptyList()),
+            FakeCoordinator(success()),
+            watchProgressRepository = progress
+        )
+        runCurrent()
+
+        viewModel.markNextEpisodeWatched(continueItem().copy(nextEpisodeRef = null))
+        viewModel.markNextEpisodeWatched(continueItem())
+        runCurrent()
+        viewModel.markNextEpisodeWatched(continueItem())
+        gate.complete(Unit)
+        runCurrent()
+
+        assertEquals(listOf(nextEpisodeRef), progress.watched)
+    }
+
+    @Test
+    fun failedWatchlistAddReportsTheErrorAndReleasesTheButton() = runTest(mainDispatcherRule.dispatcher) {
+        // FakeLibraryRepo.add always fails with AppError.Unknown.
+        val viewModel = viewModel(FakeCalendarRepository(emptyList()), FakeCoordinator(success()))
+        runCurrent()
+        val featured = MediaSearchResult(ExternalMediaRef(MediaSource.TMDB, "42"), MediaType.MOVIE, "Featured")
+
+        viewModel.addToWatchlist(featured)
+        runCurrent()
+
+        assertEquals(HomeSnackbar.Failed(AppError.Unknown), viewModel.uiState.value.snackbar)
+        assertTrue(viewModel.uiState.value.addingToWatchlist.isEmpty())
+        assertTrue(featured.externalRef to featured.mediaType !in viewModel.uiState.value.libraryMemberships)
+    }
+
+    private val nextEpisodeRef = ExternalMediaRef(MediaSource.TMDB, "episode-205")
+
+    private fun continueItem() = ContinueWatchingItem(
+        mediaRef = ExternalMediaRef(MediaSource.TMDB, "series"),
+        mediaType = MediaType.SERIES,
+        title = "Series",
+        posterUrl = null,
+        progress = SeriesProgress(4, 10, 1, 2, false),
+        nextEpisode = EpisodePosition(2, 5),
+        updatedAt = now,
+        nextEpisodeRef = nextEpisodeRef
+    )
+
+    private class FakeWatchProgressRepository(
+        private val result: AppResult<Unit> = AppResult.Success(Unit),
+        private val gate: CompletableDeferred<Unit>? = null
+    ) : WatchProgressRepository {
+        val watched = mutableListOf<ExternalMediaRef>()
+        val unwatched = mutableListOf<ExternalMediaRef>()
+
+        override fun observeMovie(reference: ExternalMediaRef): Flow<AppResult<MovieWatchState>> =
+            MutableStateFlow(AppResult.Success(MovieWatchState.Unwatched))
+
+        override suspend fun markEpisodeWatched(episodeRef: ExternalMediaRef): AppResult<Unit> {
+            watched += episodeRef
+            gate?.await()
+            return result
+        }
+
+        override suspend fun markEpisodeUnwatched(episodeRef: ExternalMediaRef): AppResult<Unit> {
+            unwatched += episodeRef
+            return result
+        }
+
+        override suspend fun markSeasonWatched(seasonRef: ExternalMediaRef) = result
+        override suspend fun markSeasonUnwatched(seasonRef: ExternalMediaRef) = result
+        override suspend fun markMovieWatched(reference: ExternalMediaRef) = result
+        override suspend fun markMovieUnwatched(reference: ExternalMediaRef) = result
+        override suspend fun markSeriesWatched(reference: ExternalMediaRef) = result
+        override suspend fun markSeriesUnwatched(reference: ExternalMediaRef) = result
     }
 
     private fun event(
@@ -266,18 +399,20 @@ class HomeViewModelTest {
         coordinator: CalendarRefreshCoordinator,
         featuredRepository: com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository =
             FakeFeaturedRepo(),
-        libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository = FakeLibraryRepo()
+        libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository = FakeLibraryRepo(),
+        watchProgressRepository: WatchProgressRepository = FakeWatchProgressRepository()
     ) = HomeViewModel(
         repository,
         coordinator,
         FakeDateSource(today),
         ReleaseCalendarWindow(),
         featuredRepository,
-        libraryRepository
+        libraryRepository,
+        watchProgressRepository
     ).also(createdViewModels::add)
 
     private class FakeFeaturedRepo : FeaturedReleasesRepository {
-        override suspend fun getFeaturedReleases(): AppResult<List<MediaSearchResult>> = AppResult.Success(emptyList())
+        override suspend fun getFeaturedReleases(): AppResult<FeaturedReleases> = AppResult.Success(FeaturedReleases())
     }
 
     private class FakeLibraryRepo(private val entries: List<LibraryEntry> = emptyList()) : LibraryRepository {
@@ -286,10 +421,10 @@ class HomeViewModelTest {
 
         override fun observeEntryCount(): Flow<AppResult<Int>> = MutableStateFlow(AppResult.Success(0))
 
-        override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
+        override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             MutableStateFlow(AppResult.Success(null))
 
-        override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
+        override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
             MutableStateFlow(AppResult.Success(emptySet()))
         override fun observePersonalViewing() =
             MutableStateFlow<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
@@ -299,20 +434,29 @@ class HomeViewModelTest {
         override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> =
             AppResult.Failure(AppError.Unknown)
 
-        override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> = AppResult.Failure(AppError.Unknown)
+        override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> =
+            AppResult.Failure(AppError.Unknown)
 
-        override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = AppResult.Success(Unit)
-
-        override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> = AppResult.Success(false)
-
-        override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+        override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
             AppResult.Success(Unit)
+
+        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
+            AppResult.Success(false)
+
+        override suspend fun setFavorite(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            isFavorite: Boolean
+        ): AppResult<Unit> = AppResult.Success(Unit)
 
         override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
             AppResult.Success(Unit)
 
-        override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun setWatchedDate(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            watchedDate: LocalDate?
+        ): AppResult<Unit> = AppResult.Success(Unit)
     }
 
     private fun libraryEntry(id: String, watched: Int, total: Int, complete: Boolean = watched == total) = LibraryEntry(

@@ -48,6 +48,29 @@
             android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
             tools:node="remove" />
 
+        <receiver
+            android:name=".feature.widget.ContinueWatchingWidgetReceiver"
+            android:exported="true"
+            android:label="@string/home_continue_watching">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/continue_watching_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".feature.widget.UpNextWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_up_next_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/up_next_widget_info" />
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

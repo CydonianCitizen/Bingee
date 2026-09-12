@@ -7,8 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +46,10 @@ class MainActivity : AppCompatActivity() {
             appearancePreferences.observeLanguage()
                 .collect(::applyAppLanguage)
         }
+        lifecycleScope.launch {
+            appearancePreferences.observeTheme()
+                .collect(::applyNightMode)
+        }
         setContent {
             val theme by appearancePreferences.observeTheme().collectAsStateWithLifecycle(
                 initialValue = AppTheme.SYSTEM_DEFAULT
@@ -60,14 +68,39 @@ class MainActivity : AppCompatActivity() {
             }
 
             BingeeTheme(darkTheme = darkTheme) {
-                BingeeApp(
-                    notificationTarget = notificationTarget,
-                    onNotificationTargetConsumed = {
-                        notificationTarget.value = null
-                        setIntent(Intent(this, MainActivity::class.java))
-                    }
-                )
+                // The root surface gives every screen the theme background and a matching content colour.
+                // Screens drawn outside a Scaffold, such as the startup check, otherwise fall back to black
+                // text on the window background, which is unreadable in the dark theme.
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    BingeeApp(
+                        notificationTarget = notificationTarget,
+                        onNotificationTargetConsumed = {
+                            notificationTarget.value = null
+                            setIntent(Intent(this, MainActivity::class.java))
+                        }
+                    )
+                }
             }
+        }
+    }
+
+    /**
+     * Keeps the AppCompat night mode on the same preference the Compose theme reads.
+     *
+     * [BingeeTheme] only decides which `ColorScheme` Compose draws with. Resources resolved through
+     * the view theme — `?attr/` tints in vector drawables, the window background — follow
+     * `Theme.Material3.DayNight` instead, which without this call stays on the system setting. A
+     * user who forces Dark while the system is Light would otherwise get dark Compose surfaces and
+     * light-theme drawable tints on top of them.
+     */
+    private fun applyNightMode(theme: AppTheme) {
+        val mode = when (theme) {
+            AppTheme.SYSTEM_DEFAULT -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+        }
+        if (AppCompatDelegate.getDefaultNightMode() != mode) {
+            AppCompatDelegate.setDefaultNightMode(mode)
         }
     }
 

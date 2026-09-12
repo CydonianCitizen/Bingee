@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -38,7 +39,7 @@ class DefaultRatingRepositoryTest {
                 "(1, 'MOVIE', 'Movie', NULL, NULL, NULL, NULL, '2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z', 0)"
         )
         database.openHelper.writableDatabase.execSQL(
-            "INSERT INTO external_refs(local_media_id, source, external_id) VALUES(1, 'TMDB', '101')"
+            "INSERT INTO external_refs(local_media_id, source, media_type, external_id) VALUES(1, 'TMDB', 'MOVIE', '101')"
         )
         repository = DefaultRatingRepository(
             database.ratingDao(),
@@ -51,21 +52,21 @@ class DefaultRatingRepositoryTest {
 
     @Test
     fun observeSetUpdateAndRemoveNeedNoMembershipNetworkOrCredential() = runBlocking {
-        assertEquals(AppResult.Success(null), repository.observeRating(reference).first())
-        assertEquals(AppResult.Success(Unit), repository.setRating(reference, PersonalRating(1)))
-        assertEquals(AppResult.Success(PersonalRating(1)), repository.observeRating(reference).first())
-        assertEquals(AppResult.Success(Unit), repository.setRating(reference, PersonalRating(10)))
-        assertEquals(AppResult.Success(Unit), repository.setRating(reference, PersonalRating(10)))
-        assertEquals(AppResult.Success(Unit), repository.removeRating(reference))
-        assertEquals(AppResult.Success(Unit), repository.removeRating(reference))
-        assertEquals(AppResult.Success(null), repository.observeRating(reference).first())
+        assertEquals(AppResult.Success(null), repository.observeRating(reference, MediaType.MOVIE).first())
+        assertEquals(AppResult.Success(Unit), repository.setRating(reference, MediaType.MOVIE, PersonalRating(1)))
+        assertEquals(AppResult.Success(PersonalRating(1)), repository.observeRating(reference, MediaType.MOVIE).first())
+        assertEquals(AppResult.Success(Unit), repository.setRating(reference, MediaType.MOVIE, PersonalRating(10)))
+        assertEquals(AppResult.Success(Unit), repository.setRating(reference, MediaType.MOVIE, PersonalRating(10)))
+        assertEquals(AppResult.Success(Unit), repository.removeRating(reference, MediaType.MOVIE))
+        assertEquals(AppResult.Success(Unit), repository.removeRating(reference, MediaType.MOVIE))
+        assertEquals(AppResult.Success(null), repository.observeRating(reference, MediaType.MOVIE).first())
     }
 
     @Test
     fun missingIdentityMapsToSafeErrorAndBlankIdentityIsRejectedAtDomainBoundary() = runBlocking {
         assertEquals(
             AppResult.Failure(AppError.MissingData),
-            repository.setRating(ExternalMediaRef(MediaSource.TMDB, "missing"), PersonalRating(5))
+            repository.setRating(ExternalMediaRef(MediaSource.TMDB, "missing"), MediaType.MOVIE, PersonalRating(5))
         )
         assertThrows(IllegalArgumentException::class.java) {
             ExternalMediaRef(MediaSource.TMDB, "   ")

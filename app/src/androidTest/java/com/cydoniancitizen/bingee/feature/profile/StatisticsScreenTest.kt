@@ -78,6 +78,7 @@ class StatisticsScreenTest {
         composeRule.onNodeWithText("Your taste").assertIsDisplayed()
         composeRule.onNodeWithText("Your genres").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Crime").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Drama: 18 titles").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
             "Relative genre taste chart. Genres: Drama, Comedy, Thriller, Science Fiction, Horror, Romance"
         ).assertIsDisplayed()
@@ -252,12 +253,12 @@ class StatisticsScreenTest {
         }
         composeRule.onNodeWithContentDescription("Rating 1, 0 titles")
             .assertIsDisplayed()
-            .assertWidthIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(200.dp)
             .assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithContentDescription("Rating 10, 1 title")
             .performScrollTo()
             .assertIsDisplayed()
-            .assertWidthIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(200.dp)
             .assertHeightIsAtLeast(48.dp)
             .performClick()
         composeRule.onNodeWithContentDescription("Rating 10, 1 title, selected").assertIsSelected()
@@ -295,6 +296,7 @@ class StatisticsScreenTest {
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
         composeRule.scrollListTo(hasText("Movies") and isHeading()).assertIsDisplayed()
         composeRule.scrollListTo(hasText("movie")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText("Series") and isHeading()).assertIsDisplayed()
         composeRule.scrollListTo(hasText("series")).assertIsDisplayed()
         composeRule.scrollListTo(hasText("Movie · 2024")).assertIsDisplayed()
         composeRule.scrollListTo(hasText("Series · 2022")).assertIsDisplayed()

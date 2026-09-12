@@ -54,4 +54,18 @@ class BingeeBottomBarTest {
         composeRule.onNodeWithText("Home").assertIsNotSelected()
         composeRule.onNodeWithText("Search").assertIsNotSelected()
     }
+
+    @Test
+    fun wideWindowRailOffersTheSameDestinations() {
+        val selected = AtomicReference<TopLevelDestination>()
+        composeRule.setContent {
+            BingeeTheme {
+                BingeeNavigationRail(currentDestination = TopLevelDestination.HOME, onSelect = selected::set)
+            }
+        }
+
+        composeRule.onNodeWithText("Home").assertIsSelected()
+        composeRule.onNodeWithText("Your Bingee").performClick()
+        assertEquals(TopLevelDestination.PROFILE, selected.get())
+    }
 }

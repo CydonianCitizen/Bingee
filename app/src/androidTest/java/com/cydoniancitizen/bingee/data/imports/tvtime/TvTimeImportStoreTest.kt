@@ -68,7 +68,7 @@ class TvTimeImportStoreTest {
         )
         val existingAddedAt = text("SELECT added_at FROM library_entries LIMIT 1")
         val existingWatchedAt = text("SELECT watched_at FROM movie_watch_progress LIMIT 1")
-        database.libraryDao().updateFavoriteState(MediaSource.TMDB, "101", true)
+        database.libraryDao().updateFavoriteState(MediaSource.TMDB, MediaType.MOVIE, "101", true)
 
         val second = store.import(plan.copy(confirmedAt = Instant.parse("2026-01-01T00:00:00Z")))
         assertTrue(second is com.cydoniancitizen.bingee.core.result.AppResult.Success)

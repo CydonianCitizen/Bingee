@@ -493,27 +493,35 @@ class ProfileViewModelTest {
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             observedEntries.also { observeEntriesCalls++ }
         override fun observeEntryCount(): Flow<AppResult<Int>> = flowOf(AppResult.Success(0))
-        override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
+        override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             flowOf(AppResult.Success(null))
-        override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
+        override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
             flowOf(AppResult.Success(emptySet()))
         override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> =
             observedViewing.also { observePersonalViewingCalls++ }
         override suspend fun add(
             result: com.cydoniancitizen.bingee.core.model.MediaSearchResult
         ): AppResult<LibraryEntry> = AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.Unknown)
-        override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> =
+        override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> =
             AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.Unknown)
-        override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> = AppResult.Success(Unit)
-        override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> = AppResult.Success(true)
-        override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
+        override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
             AppResult.Success(Unit)
+        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
+            AppResult.Success(true)
+        override suspend fun setFavorite(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            isFavorite: Boolean
+        ): AppResult<Unit> = AppResult.Success(Unit)
         override suspend fun setFavorite(
             result: com.cydoniancitizen.bingee.core.model.MediaSearchResult,
             isFavorite: Boolean
         ): AppResult<Unit> = AppResult.Success(Unit)
-        override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: java.time.LocalDate?): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun setWatchedDate(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            watchedDate: java.time.LocalDate?
+        ): AppResult<Unit> = AppResult.Success(Unit)
     }
 
     private companion object {

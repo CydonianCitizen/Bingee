@@ -23,7 +23,8 @@ internal enum class ProgressWriteOutcome {
 
 internal data class MovieProgressRow(
     @ColumnInfo(name = "media_type") val mediaType: MediaType,
-    @ColumnInfo(name = "watched_at") val watchedAt: Instant?
+    @ColumnInfo(name = "watched_at") val watchedAt: Instant?,
+    @ColumnInfo(name = "watched_date") val watchedDate: LocalDate?
 )
 
 internal data class SeriesCompletionRow(
@@ -36,11 +37,15 @@ internal data class SeriesCompletionRow(
 internal abstract class WatchProgressDao {
     @Query(
         """
-        SELECT media_entries.media_type, movie_watch_progress.watched_at
+        SELECT media_entries.media_type,
+               movie_watch_progress.watched_at,
+               movie_watch_progress.watched_date
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = 'MOVIE'
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
@@ -70,11 +75,13 @@ internal abstract class WatchProgressDao {
         SELECT media_entries.*
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    protected abstract suspend fun getMedia(source: MediaSource, externalId: String): MediaEntity?
+    protected abstract suspend fun getMedia(source: MediaSource, mediaType: MediaType, externalId: String): MediaEntity?
 
     @Query(
         """
@@ -213,7 +220,7 @@ internal abstract class WatchProgressDao {
         watchedAt: Instant,
         watchedDate: LocalDate? = null
     ): ProgressWriteOutcome {
-        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val media = getMedia(source, MediaType.MOVIE, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.MOVIE) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         val existing = getMovieProgressByMediaId(media.localMediaId)
         val finalDate = watchedDate ?: existing?.watchedDate
@@ -223,7 +230,7 @@ internal abstract class WatchProgressDao {
 
     @Transaction
     open suspend fun markMovieUnwatched(source: MediaSource, externalId: String): ProgressWriteOutcome {
-        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val media = getMedia(source, MediaType.MOVIE, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.MOVIE) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         deleteMovieProgress(media.localMediaId)
         return ProgressWriteOutcome.SUCCESS
@@ -237,7 +244,7 @@ internal abstract class WatchProgressDao {
         today: LocalDate,
         watchedDate: LocalDate? = null
     ): ProgressWriteOutcome {
-        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val media = getMedia(source, MediaType.SERIES, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         val completion = getSeriesCompletion(media.localMediaId, today)
         if (completion.trackableEpisodes == 0 ||
@@ -259,7 +266,7 @@ internal abstract class WatchProgressDao {
 
     @Transaction
     open suspend fun markSeriesUnwatched(source: MediaSource, externalId: String): ProgressWriteOutcome {
-        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val media = getMedia(source, MediaType.SERIES, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         deleteSeriesProgress(media.localMediaId)
         return ProgressWriteOutcome.SUCCESS
@@ -268,11 +275,12 @@ internal abstract class WatchProgressDao {
     @Transaction
     open suspend fun setMediaWatchedDate(
         source: MediaSource,
+        mediaType: MediaType,
         externalId: String,
         watchedDate: LocalDate?,
         now: Instant
     ): ProgressWriteOutcome {
-        val media = getMedia(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val media = getMedia(source, mediaType, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType == MediaType.MOVIE) {
             val existing = getMovieProgressByMediaId(media.localMediaId)
             if (existing != null) {

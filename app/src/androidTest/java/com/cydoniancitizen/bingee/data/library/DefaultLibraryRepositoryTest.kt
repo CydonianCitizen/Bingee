@@ -94,8 +94,11 @@ class DefaultLibraryRepositoryTest {
         assertEquals(result.externalRef, entry.mediaRef)
         assertEquals("Arrival", entry.title)
         assertEquals(now, entry.addedAt)
-        assertEquals(AppResult.Success(true), repository.isInLibrary(result.externalRef))
-        assertEquals(AppResult.Success(setOf(result.externalRef)), repository.observeMembershipRefs().first())
+        assertEquals(AppResult.Success(true), repository.isInLibrary(result.externalRef, result.mediaType))
+        assertEquals(
+            AppResult.Success(setOf(result.externalRef to result.mediaType)),
+            repository.observeMembershipRefs().first()
+        )
         assertEquals(
             AppResult.Success(
                 listOf(entry.copy(progress = LibraryProgress.Movie(MovieWatchState.Unwatched)))
@@ -113,11 +116,36 @@ class DefaultLibraryRepositoryTest {
         val result = mediaResult()
         repository.add(result)
 
-        assertEquals(AppResult.Success(Unit), repository.remove(result.externalRef))
-        assertEquals(AppResult.Success(Unit), repository.remove(result.externalRef))
-        assertEquals(AppResult.Success(false), repository.isInLibrary(result.externalRef))
+        assertEquals(AppResult.Success(Unit), repository.remove(result.externalRef, result.mediaType))
+        assertEquals(AppResult.Success(Unit), repository.remove(result.externalRef, result.mediaType))
+        assertEquals(AppResult.Success(false), repository.isInLibrary(result.externalRef, result.mediaType))
         assertEquals(AppResult.Success(emptyList<LibraryEntry>()), repository.observeEntries().first())
-        assertTrue(database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, "42") != null)
+        assertTrue(database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "42") != null)
+    }
+
+    @Test
+    fun movieAndSeriesSharingOneTmdbIdStayTwoWorks() = runBlocking {
+        // TMDB numbers movies and TV series independently: movie 42 and series 42 are unrelated.
+        val movie = mediaResult()
+        val series = mediaResult().copy(mediaType = MediaType.SERIES, title = "Same ID Series")
+
+        assertTrue(repository.add(movie) is AppResult.Success)
+        assertTrue(repository.add(series) is AppResult.Success)
+        assertEquals(
+            AppResult.Success(setOf(movie.externalRef to MediaType.MOVIE, series.externalRef to MediaType.SERIES)),
+            repository.observeMembershipRefs().first()
+        )
+
+        repository.setFavorite(series.externalRef, MediaType.SERIES, true)
+        val movieEntry = (repository.observeEntry(movie.externalRef, MediaType.MOVIE).first() as AppResult.Success)
+        assertEquals(false, movieEntry.value?.isFavorite)
+
+        assertEquals(AppResult.Success(Unit), repository.remove(movie.externalRef, MediaType.MOVIE))
+        assertEquals(AppResult.Success(false), repository.isInLibrary(movie.externalRef, MediaType.MOVIE))
+        assertEquals(AppResult.Success(true), repository.isInLibrary(series.externalRef, MediaType.SERIES))
+        val seriesEntry = (repository.observeEntry(series.externalRef, MediaType.SERIES).first() as AppResult.Success)
+        assertEquals("Same ID Series", seriesEntry.value?.title)
+        assertEquals(true, seriesEntry.value?.isFavorite)
     }
 
     @Test
@@ -127,7 +155,7 @@ class DefaultLibraryRepositoryTest {
         val added = repository.add(result) as AppResult.Success
 
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "42"), added.value.mediaRef)
-        assertTrue(database.libraryDao().isInLibrary(MediaSource.TMDB, "42"))
+        assertTrue(database.libraryDao().isInLibrary(MediaSource.TMDB, MediaType.MOVIE, "42"))
     }
 
     @Test
@@ -207,7 +235,7 @@ class DefaultLibraryRepositoryTest {
         assertEquals(1, seriesProgress.watchedEpisodes)
         assertTrue(seriesProgress.isComplete)
 
-        repository.remove(series.externalRef)
+        repository.remove(series.externalRef, series.mediaType)
         assertFalse(
             (repository.observeEntries().first() as AppResult.Success).value
                 .any { it.mediaRef == series.externalRef }
@@ -270,18 +298,50 @@ class DefaultLibraryRepositoryTest {
     }
 
     @Test
+    fun continueWatchingReportsMostRecentEpisodeAndNextEpisodeIdentity() = runBlocking {
+        val series = mediaResult().copy(
+            externalRef = ExternalMediaRef(MediaSource.TMDB, "400"),
+            mediaType = MediaType.SERIES,
+            title = "Out Of Order"
+        )
+        repository.add(series)
+        storeSeries("400", 4)
+        val progress = database.watchProgressDao()
+        // Episode 3 first, then episode 1: the last watched is the most recent, not the furthest.
+        progress.markEpisodeWatched(MediaSource.TMDB, "400-episode-3", today(), now.minusSeconds(10))
+        progress.markEpisodeWatched(MediaSource.TMDB, "400-episode-1", today(), now)
+
+        repository.observeContinueWatching().first().let { result ->
+            val item = (result as AppResult.Success).value.single()
+            assertEquals(EpisodePosition(1, 1), item.lastWatchedEpisode)
+            assertEquals(EpisodePosition(1, 2), item.nextEpisode)
+            assertEquals(ExternalMediaRef(MediaSource.TMDB, "400-episode-2"), item.nextEpisodeRef)
+        }
+
+        // Same instant as episode 1, as a bulk mark would write: position breaks the tie.
+        progress.markEpisodeWatched(MediaSource.TMDB, "400-episode-2", today(), now)
+
+        repository.observeContinueWatching().first().let { result ->
+            val item = (result as AppResult.Success).value.single()
+            assertEquals(EpisodePosition(1, 2), item.lastWatchedEpisode)
+            assertEquals(EpisodePosition(1, 4), item.nextEpisode)
+            assertEquals(ExternalMediaRef(MediaSource.TMDB, "400-episode-4"), item.nextEpisodeRef)
+        }
+    }
+
+    @Test
     fun ratingSurvivesRemovalAndReAddAndAppearsInLibraryProjection() = runBlocking {
         val result = mediaResult()
         repository.add(result)
-        database.ratingDao().setRating(MediaSource.TMDB, "42", 9, now)
+        database.ratingDao().setRating(MediaSource.TMDB, MediaType.MOVIE, "42", 9, now)
 
         assertEquals(
             PersonalRating(9),
             (repository.observeEntries().first() as AppResult.Success).value.single().personalRating
         )
-        repository.remove(result.externalRef)
+        repository.remove(result.externalRef, result.mediaType)
         assertEquals(0, (repository.observeEntries().first() as AppResult.Success).value.size)
-        repository.add(result.externalRef)
+        repository.add(result.externalRef, result.mediaType)
 
         assertEquals(
             PersonalRating(9),
@@ -295,10 +355,10 @@ class DefaultLibraryRepositoryTest {
         val watchedDate = LocalDate.of(2020, 2, 3)
         repository.add(result)
         database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
-        repository.setWatchedDate(result.externalRef, watchedDate)
-        database.ratingDao().setRating(MediaSource.TMDB, "42", 9, now)
+        repository.setWatchedDate(result.externalRef, result.mediaType, watchedDate)
+        database.ratingDao().setRating(MediaSource.TMDB, MediaType.MOVIE, "42", 9, now)
 
-        repository.remove(result.externalRef)
+        repository.remove(result.externalRef, result.mediaType)
 
         val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
         assertEquals(result.externalRef, history.mediaRef)
@@ -318,15 +378,15 @@ class DefaultLibraryRepositoryTest {
     fun personalViewingProjectionReturnsOneCanonicalRowForMultipleExternalRefs() = runBlocking {
         val result = mediaResult()
         repository.add(result)
-        repository.setFavorite(result.externalRef, true)
+        repository.setFavorite(result.externalRef, result.mediaType, true)
         database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
-        database.ratingDao().setRating(MediaSource.TMDB, "42", 8, now)
+        database.ratingDao().setRating(MediaSource.TMDB, MediaType.MOVIE, "42", 8, now)
         val localMediaId = database.portableSnapshotDao().readSnapshot().refs.single().localMediaId
         database.portableSnapshotDao().insertExternalRef(
-            ExternalRefEntity(localMediaId, MediaSource.IMDB, "tt2543164")
+            ExternalRefEntity(localMediaId, MediaSource.IMDB, MediaType.MOVIE, "tt2543164")
         )
 
-        repository.remove(result.externalRef)
+        repository.remove(result.externalRef, result.mediaType)
 
         val entries = (repository.observePersonalViewing().first() as AppResult.Success).value
         val entry = entries.single()
@@ -377,7 +437,7 @@ class DefaultLibraryRepositoryTest {
             completedAt
         )
 
-        repository.remove(series.externalRef)
+        repository.remove(series.externalRef, series.mediaType)
 
         val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
         assertEquals(completedAt, history.seriesCompletedAt)
@@ -399,7 +459,7 @@ class DefaultLibraryRepositoryTest {
         database.watchProgressDao().markEpisodeWatched(MediaSource.TMDB, "100-episode-1", today(), now)
         repository.setSeriesAbandoned(series.externalRef, true)
 
-        repository.remove(series.externalRef)
+        repository.remove(series.externalRef, series.mediaType)
 
         val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
         assertEquals(1, history.watchedRegularEpisodes)
@@ -522,7 +582,9 @@ class DefaultLibraryRepositoryTest {
         val movie = mediaResult()
         repository.add(movie)
         database.detailsDao().storeDetails(
-            candidate = checkNotNull(database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, "42")),
+            candidate = checkNotNull(
+                database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "42")
+            ),
             source = MediaSource.TMDB,
             externalId = "42",
             details = MediaDetailsEntity(
@@ -756,7 +818,11 @@ class DefaultLibraryRepositoryTest {
         assertEquals(90L, statistics.seriesWatchTimeMinutes)
         assertEquals(90L, statistics.monthlyViewing.months[2].seriesMinutes)
 
-        val localMediaId = database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, "100")!!.localMediaId
+        val localMediaId = database.libraryDao().getMediaByExternalRef(
+            MediaSource.TMDB,
+            MediaType.SERIES,
+            "100"
+        )!!.localMediaId
         val currentProgress = database.libraryDao().observeLibraryProgress(today()).first()
             .single { it.localMediaId == localMediaId }
         assertEquals(1, currentProgress.trackableEpisodes)

@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.model.deriveEpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.deriveSeasonProgress
+import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonWithEpisodesRelation
@@ -44,7 +45,7 @@ internal fun Episode.toEntity(updatedAt: Instant): EpisodeEntity = EpisodeEntity
 internal fun SeasonWithEpisodesRelation.toDomain(
     seriesRef: ExternalMediaRef,
     today: LocalDate,
-    freshnessPolicy: SeasonCacheFreshnessPolicy
+    freshnessPolicy: CacheFreshnessPolicy
 ): CachedSeason {
     require(season.source == seriesRef.source) { "Cached season provider differs from series provider" }
     val seasonRef = ExternalMediaRef(season.source, season.externalId)

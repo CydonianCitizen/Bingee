@@ -7,21 +7,12 @@ import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -40,7 +31,6 @@ import androidx.core.app.ActivityCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cydoniancitizen.bingee.R
-import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.NotificationCapabilityStatus
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
 import com.cydoniancitizen.bingee.core.ui.toUiError
@@ -98,30 +88,11 @@ internal fun NotificationSettingsContent(
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    SettingsPage(
+        title = stringResource(R.string.notifications_title),
+        onBack = onBack,
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(BingeeDimensions.screenPadding),
-        verticalArrangement = Arrangement.spacedBy(BingeeDimensions.contentSpacing)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.detail_back)
-                )
-            }
-            Text(
-                text = stringResource(R.string.notifications_title),
-                modifier = Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.headlineMedium
-            )
-        }
-
         state.error?.let { error ->
             val uiError = error.toUiError()
             Row(

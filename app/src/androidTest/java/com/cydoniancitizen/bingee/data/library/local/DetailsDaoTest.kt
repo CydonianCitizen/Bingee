@@ -41,11 +41,11 @@ class DetailsDaoTest {
     fun cacheWriteCreatesNonMemberCanonicalIdentityAndOrdersGenres() = runBlocking {
         store(title = "Cached", genres = listOf("Second", "First"))
 
-        val row = detailsDao.observeCachedDetails(MediaSource.TMDB, "550").first()
+        val row = detailsDao.observeCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550").first()
         assertNotNull(row)
         assertEquals("Cached", row?.media?.title)
         assertEquals(listOf("Second", "First"), row?.genres?.sortedBy { it.genreOrder }?.map { it.name })
-        assertFalse(libraryDao.isInLibrary(MediaSource.TMDB, "550"))
+        assertFalse(libraryDao.isInLibrary(MediaSource.TMDB, MediaType.MOVIE, "550"))
     }
 
     @Test
@@ -54,21 +54,21 @@ class DetailsDaoTest {
         libraryDao.addToLibrary(media("Search title", addedAt), MediaSource.TMDB, "550", addedAt)
 
         store(title = "Detailed title", fetchedAt = now)
-        val membership = libraryDao.observeLibraryItem(MediaSource.TMDB, "550").first()
+        val membership = libraryDao.observeLibraryItem(MediaSource.TMDB, MediaType.MOVIE, "550").first()
         assertEquals(addedAt, membership?.addedAt)
         assertEquals("Detailed title", membership?.media?.title)
 
-        libraryDao.removeMembership(MediaSource.TMDB, "550")
-        assertFalse(libraryDao.isInLibrary(MediaSource.TMDB, "550"))
-        assertNotNull(detailsDao.getCachedDetails(MediaSource.TMDB, "550")?.details)
+        libraryDao.removeMembership(MediaSource.TMDB, MediaType.MOVIE, "550")
+        assertFalse(libraryDao.isInLibrary(MediaSource.TMDB, MediaType.MOVIE, "550"))
+        assertNotNull(detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")?.details)
     }
 
     @Test
     fun refreshPreservesFavoriteAndOtherPersonalState() = runBlocking {
         val addedAt = now.minusSeconds(3600)
         libraryDao.addToLibrary(media("Search title", addedAt), MediaSource.TMDB, "550", addedAt)
-        libraryDao.updateFavoriteState(MediaSource.TMDB, "550", true)
-        val mediaId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, "550")!!.localMediaId
+        libraryDao.updateFavoriteState(MediaSource.TMDB, MediaType.MOVIE, "550", true)
+        val mediaId = libraryDao.getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "550")!!.localMediaId
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO media_ratings(local_media_id, rating_value, rated_at, updated_at) " +
                 "VALUES($mediaId, 8, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')"
@@ -76,12 +76,12 @@ class DetailsDaoTest {
 
         store(title = "Refreshed", fetchedAt = now.plusSeconds(60))
 
-        assertEquals(true, detailsDao.getCachedDetails(MediaSource.TMDB, "550")?.media?.isFavorite)
-        assertEquals(addedAt, libraryDao.observeLibraryItem(MediaSource.TMDB, "550").first()?.addedAt)
+        assertEquals(true, detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")?.media?.isFavorite)
+        assertEquals(addedAt, libraryDao.observeLibraryItem(MediaSource.TMDB, MediaType.MOVIE, "550").first()?.addedAt)
         assertEquals(1, count("media_ratings"))
         assertEquals(
             Instant.parse("2026-08-01T00:00:00Z"),
-            database.ratingDao().observeRating(MediaSource.TMDB, "550").first()?.updatedAt
+            database.ratingDao().observeRating(MediaSource.TMDB, MediaType.MOVIE, "550").first()?.updatedAt
         )
     }
 
@@ -90,7 +90,7 @@ class DetailsDaoTest {
         store(title = "First")
         store(title = "Refreshed", fetchedAt = now.plusSeconds(60))
 
-        assertFalse(detailsDao.getCachedDetails(MediaSource.TMDB, "550")!!.media.isFavorite)
+        assertFalse(detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")!!.media.isFavorite)
     }
 
     @Test
@@ -98,7 +98,7 @@ class DetailsDaoTest {
         store(title = "First", genres = listOf("Old"))
         store(title = "Second", genres = listOf("New", "Other"), fetchedAt = now.plusSeconds(60))
 
-        val row = detailsDao.getCachedDetails(MediaSource.TMDB, "550")
+        val row = detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")
         assertEquals("Second", row?.media?.title)
         assertEquals(now.plusSeconds(60), row?.details?.detailsFetchedAt)
         assertEquals(listOf("New", "Other"), row?.genres?.sortedBy { it.genreOrder }?.map { it.name })
@@ -116,7 +116,7 @@ class DetailsDaoTest {
             genreRows = listOf(MediaGenreEntity(0, 0, "Dramma", MediaSource.TMDB, 18))
         )
 
-        val genre = detailsDao.getCachedDetails(MediaSource.TMDB, "550")!!.genres.single()
+        val genre = detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")!!.genres.single()
         assertEquals("Dramma", genre.name)
         assertEquals(MediaSource.TMDB, genre.source)
         assertEquals(18L, genre.genreId)
@@ -142,7 +142,7 @@ class DetailsDaoTest {
             // Expected: Room transaction must roll back canonical metadata, detail row, and genres.
         }
 
-        val row = detailsDao.getCachedDetails(MediaSource.TMDB, "550")
+        val row = detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")
         assertEquals("Old", row?.media?.title)
         assertEquals(now, row?.details?.detailsFetchedAt)
         assertEquals(listOf("Stable"), row?.genres?.map { it.name })
@@ -153,8 +153,8 @@ class DetailsDaoTest {
         store(title = "TMDB", source = MediaSource.TMDB)
         store(title = "IMDB", source = MediaSource.IMDB)
 
-        assertEquals("TMDB", detailsDao.getCachedDetails(MediaSource.TMDB, "550")?.media?.title)
-        assertEquals("IMDB", detailsDao.getCachedDetails(MediaSource.IMDB, "550")?.media?.title)
+        assertEquals("TMDB", detailsDao.getCachedDetails(MediaSource.TMDB, MediaType.MOVIE, "550")?.media?.title)
+        assertEquals("IMDB", detailsDao.getCachedDetails(MediaSource.IMDB, MediaType.MOVIE, "550")?.media?.title)
         assertEquals(2, count("media_entries"))
     }
 

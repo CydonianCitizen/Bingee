@@ -22,6 +22,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -384,20 +385,29 @@ private fun DetailBody(
             )
         }
         item(key = "library") {
-            Button(
-                onClick = onToggleLibrary,
-                enabled = isInLibrary != null && !isLibraryUpdating,
-                modifier = sectionModifier
-            ) {
-                Text(
-                    stringResource(
-                        when {
-                            isLibraryUpdating -> R.string.library_action_updating
-                            isInLibrary == true -> R.string.library_action_remove
-                            else -> R.string.library_action_add
-                        }
-                    )
-                )
+            val label = stringResource(
+                when {
+                    isLibraryUpdating -> R.string.library_action_updating
+                    isInLibrary == true -> R.string.library_action_remove
+                    else -> R.string.library_action_add
+                }
+            )
+            val libraryEnabled = isInLibrary != null && !isLibraryUpdating
+            // Adding a title is what this screen is for, so it keeps the filled button. Removing one
+            // discards the user's own record and has no undo, so it steps down to tonal rather than
+            // staying the loudest control on the page.
+            if (isInLibrary == true) {
+                FilledTonalButton(
+                    onClick = onToggleLibrary,
+                    enabled = libraryEnabled,
+                    modifier = sectionModifier
+                ) {
+                    Text(label)
+                }
+            } else {
+                Button(onClick = onToggleLibrary, enabled = libraryEnabled, modifier = sectionModifier) {
+                    Text(label)
+                }
             }
         }
         details.overview?.let { overview ->
@@ -406,7 +416,10 @@ private fun DetailBody(
                     modifier = sectionModifier,
                     verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
                 ) {
-                    Text(stringResource(R.string.detail_overview), fontWeight = FontWeight.Bold)
+                    Text(
+                        text = stringResource(R.string.detail_overview),
+                        style = MaterialTheme.typography.titleLarge
+                    )
                     Text(overview, style = MaterialTheme.typography.bodyLarge)
                 }
             }
@@ -421,34 +434,30 @@ private fun DetailBody(
                 modifier = sectionModifier
             )
         }
-        item(key = "progress") {
-            Column(
-                modifier = sectionModifier,
-                verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
-            ) {
-                if (details.mediaType == MediaType.MOVIE) {
-                    MovieProgressSection(movieProgress, onToggleMovieWatched)
-                } else {
-                    TvSeriesSection(
-                        state = series,
-                        onToggleExpanded = onToggleSeasonExpanded,
-                        onRetrySeason = onRetrySeason,
-                        onToggleEpisode = onToggleEpisode,
-                        onToggleSeason = onToggleSeasonWatched,
-                        onOpenSettings = onOpenSettings
-                    )
-                    if (isInLibrary == true) {
-                        TextButton(onClick = onToggleSeriesAbandoned, enabled = !isLibraryUpdating) {
-                            Text(
-                                stringResource(
-                                    if (isAbandoned) {
-                                        R.string.series_tracking_restore
-                                    } else {
-                                        R.string.series_tracking_abandon
-                                    }
-                                )
+        if (details.mediaType == MediaType.MOVIE) {
+            item(key = "progress") { MovieProgressSection(movieProgress, onToggleMovieWatched, sectionModifier) }
+        } else {
+            tvSeriesItems(
+                state = series,
+                onToggleExpanded = onToggleSeasonExpanded,
+                onRetrySeason = onRetrySeason,
+                onToggleEpisode = onToggleEpisode,
+                onToggleSeason = onToggleSeasonWatched,
+                onOpenSettings = onOpenSettings,
+                modifier = sectionModifier
+            )
+            if (isInLibrary == true) {
+                item(key = "abandon") {
+                    TextButton(
+                        onClick = onToggleSeriesAbandoned,
+                        enabled = !isLibraryUpdating,
+                        modifier = Modifier.padding(horizontal = BingeeDimensions.screenPadding)
+                    ) {
+                        Text(
+                            stringResource(
+                                if (isAbandoned) R.string.series_tracking_restore else R.string.series_tracking_abandon
                             )
-                        }
+                        )
                     }
                 }
             }

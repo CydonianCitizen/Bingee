@@ -18,9 +18,11 @@ class FakeMediaDetailsRepository(
     private val cache = MutableStateFlow(initial)
     val refreshes = mutableListOf<Triple<Long, MediaType, Boolean>>()
 
-    override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> = cache.map { current ->
-        AppResult.Success(current[ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())])
-    }
+    override fun observeDetails(tmdbId: Long, mediaType: MediaType): Flow<AppResult<CachedMediaDetails?>> =
+        cache.map { current ->
+            val cached = current[ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())]
+            AppResult.Success(cached?.takeIf { it.details.mediaType == mediaType })
+        }
 
     override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {
         refreshes += Triple(tmdbId, mediaType, force)

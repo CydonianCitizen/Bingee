@@ -27,6 +27,9 @@ secrets.xml
 
 # Private local evidence
 .local-evidence/
+docs/
+
+
 
 # Operating-system files
 .DS_Store
@@ -34,4 +37,6 @@ Thumbs.db
 
 
 AGENTS.md
-CLAUDE.mdapp/release/
+CLAUDE.md
+app/release/
+.impeccable/

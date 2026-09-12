@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ProductionStatus
+import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
@@ -40,9 +41,9 @@ class DetailsCacheMappersTest {
                     runtime = 121
                 ),
                 genres = listOf(
-                    MediaGenreEntity(1, 2, "Third", MediaSource.TMDB, 3),
-                    MediaGenreEntity(1, 0, "First", MediaSource.TMDB, 1),
-                    MediaGenreEntity(1, 1, "Second", MediaSource.TMDB, 2)
+                    MediaGenreEntity(1, 2, "Third"),
+                    MediaGenreEntity(1, 0, "First"),
+                    MediaGenreEntity(1, 1, "Second")
                 )
             ).toDomain(ref, policy)
         )
@@ -50,13 +51,12 @@ class DetailsCacheMappersTest {
         assertEquals(MediaType.MOVIE, cached.details.mediaType)
         assertEquals(Duration.ofMinutes(121), cached.details.runtime)
         assertEquals(listOf("First", "Second", "Third"), cached.details.genres.map { it.name })
-        assertEquals(listOf(1L, 2L, 3L), cached.details.genres.map { it.genreId })
         assertEquals(ProductionStatus.RELEASED, cached.details.productionStatus)
         assertEquals(CacheFreshness.FRESH, cached.freshness)
     }
 
     @Test
-    fun legacyCachedGenreWithoutIdentityRemainsReadable() {
+    fun migratedLegacyGenreRetainsNameWithoutInventingIdentity() {
         val cached = requireNotNull(
             relation(
                 details = detailEntity(status = ProductionStatus.RELEASED.name),
@@ -67,35 +67,6 @@ class DetailsCacheMappersTest {
         assertEquals("Dramma", cached.details.genres.single().name)
         assertNull(cached.details.genres.single().source)
         assertNull(cached.details.genres.single().genreId)
-    }
-
-    @Test
-    fun cachedGenresCollapseLocalisedAliasesOfOneCanonicalIdentity() {
-        val cached = requireNotNull(
-            relation(
-                details = detailEntity(status = ProductionStatus.RELEASED.name),
-                genres = listOf(
-                    // Rows persisted under different locales for the same TMDB genre.
-                    MediaGenreEntity(1, 0, "Drama", MediaSource.TMDB, 18),
-                    MediaGenreEntity(1, 1, "Dramma", MediaSource.TMDB, 18),
-                    MediaGenreEntity(1, 2, "Commedia", MediaSource.TMDB, 35),
-                    // Same localised name, different identity: two genres, not one.
-                    MediaGenreEntity(1, 3, "Commedia", MediaSource.TMDB, 10751),
-                    // Legacy rows have no identity, so each keeps its own.
-                    MediaGenreEntity(1, 4, "Azione"),
-                    MediaGenreEntity(1, 5, "Avventura")
-                )
-            ).toDomain(ref, policy)
-        )
-
-        assertEquals(
-            listOf("Drama", "Commedia", "Commedia", "Azione", "Avventura"),
-            cached.details.genres.map { it.name }
-        )
-        assertEquals(
-            listOf(18L, 35L, 10751L, null, null),
-            cached.details.genres.map { it.genreId }
-        )
     }
 
     @Test
@@ -139,8 +110,10 @@ class DetailsCacheMappersTest {
         assertEquals(now, write.details.detailsFetchedAt)
         assertEquals(listOf(0, 1), write.genres.map { it.genreOrder })
         assertEquals(listOf("Drama", "Comedy"), write.genres.map { it.name })
-        assertEquals(listOf(MediaSource.TMDB, MediaSource.TMDB), write.genres.map { it.source })
         assertEquals(listOf(18L, 35L), write.genres.map { it.genreId })
+        assertEquals(listOf(MediaSource.TMDB, MediaSource.TMDB), write.genres.map { it.source })
+        val cached = requireNotNull(relation(details = write.details, genres = write.genres).toDomain(ref, policy))
+        assertEquals(details.genres, cached.details.genres)
     }
 
     private fun relation(
@@ -161,7 +134,7 @@ class DetailsCacheMappersTest {
         ),
         details = details,
         genres = genres,
-        externalRefs = listOf(ExternalRefEntity(1, MediaSource.TMDB, "550"))
+        externalRefs = listOf(ExternalRefEntity(1, MediaSource.TMDB, MediaType.MOVIE, "550"))
     )
 
     private fun detailEntity(

@@ -36,7 +36,9 @@ internal abstract class ImportProgressDao {
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN movie_watch_progress USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = 'MOVIE'
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )

@@ -64,7 +64,10 @@ class LibraryQueryDaoTest {
                 "($id, '$type', '$escapedTitle', $originalValue, NULL, NULL, NULL, " +
                 "'2026-08-03T09:00:00Z', '2026-08-03T09:00:00Z', 0)"
         )
-        db.execSQL("INSERT INTO external_refs(local_media_id, source, external_id) VALUES($id, 'TMDB', '$id')")
+        db.execSQL(
+            "INSERT INTO external_refs(local_media_id, source, media_type, external_id) " +
+                "SELECT $id, 'TMDB', media_type, '$id' FROM media_entries WHERE local_media_id = $id"
+        )
         if (active) {
             db.execSQL("INSERT INTO library_entries(local_media_id, added_at) VALUES($id, '2026-08-03T09:00:00Z')")
         }

@@ -90,7 +90,8 @@ internal class TvTimeImportStore @Inject constructor(
         var conflicts = 0
         var approximatedMemberships = 0
         plan.media.forEach { change ->
-            if (libraryDao.isInLibrary(MediaSource.TMDB, change.candidate.externalRef.externalId)) {
+            val externalId = change.candidate.externalRef.externalId
+            if (libraryDao.isInLibrary(MediaSource.TMDB, change.details.mediaType, externalId)) {
                 existingLibrary++
             } else {
                 newLibrary++
@@ -157,7 +158,7 @@ internal class TvTimeImportStore @Inject constructor(
 
             plan.media.forEach { change ->
                 val ref = change.candidate.externalRef
-                val wasMember = libraryDao.isInLibrary(MediaSource.TMDB, ref.externalId)
+                val wasMember = libraryDao.isInLibrary(MediaSource.TMDB, change.details.mediaType, ref.externalId)
                 val fetchedAt = plan.confirmedAt
                 val write = change.details.toCacheWrite(fetchedAt)
                 detailsDao.storeDetails(
@@ -171,6 +172,7 @@ internal class TvTimeImportStore @Inject constructor(
                 check(
                     libraryDao.addExistingToLibrary(
                         MediaSource.TMDB,
+                        change.details.mediaType,
                         ref.externalId,
                         change.source.createdAt ?: plan.confirmedAt
                     ) !=
@@ -181,7 +183,10 @@ internal class TvTimeImportStore @Inject constructor(
                     approximatedMembershipTitles += change.source.title
                 }
                 if (wasMember) existingLibrary += change.source.title else newLibrary += change.source.title
-                val media = checkNotNull(libraryDao.getMediaByExternalRef(MediaSource.TMDB, ref.externalId))
+                val media =
+                    checkNotNull(
+                        libraryDao.getMediaByExternalRef(MediaSource.TMDB, change.details.mediaType, ref.externalId)
+                    )
                 change.source.identities.forEach { identity ->
                     provenanceDao.add(identity.toMediaRef(media.localMediaId))
                 }

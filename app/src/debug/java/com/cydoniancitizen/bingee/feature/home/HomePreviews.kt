@@ -6,6 +6,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
+import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
@@ -15,6 +17,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
+import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import java.time.Instant
 import java.time.LocalDate
 
@@ -117,7 +120,20 @@ private fun calendarState(): HomeUiState {
             }
         ),
         lastSuccessfulRefreshAt = Instant.parse("2026-08-03T10:00:00Z"),
-        today = previewToday
+        today = previewToday,
+        continueWatching = listOf(
+            ContinueWatchingItem(
+                mediaRef = ExternalMediaRef(MediaSource.TMDB, "continue"),
+                mediaType = MediaType.SERIES,
+                title = "A series with a long enough title to wrap",
+                posterUrl = null,
+                progress = SeriesProgress(4, 10, 0, 1, false),
+                nextEpisode = EpisodePosition(1, 5),
+                updatedAt = Instant.parse("2026-08-02T21:00:00Z"),
+                lastWatchedEpisode = EpisodePosition(1, 4),
+                nextEpisodeRef = ExternalMediaRef(MediaSource.TMDB, "episode-5")
+            )
+        )
     )
 }
 

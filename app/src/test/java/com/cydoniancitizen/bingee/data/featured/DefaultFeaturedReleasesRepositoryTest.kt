@@ -48,10 +48,13 @@ class DefaultFeaturedReleasesRepositoryTest {
         moviesStarted.await()
         tvStarted.await()
 
-        assertEquals(
-            listOf(MediaType.MOVIE, MediaType.SERIES, MediaType.MOVIE),
-            (result.await() as AppResult.Success).value.map { it.mediaType }
-        )
+        // The two rows stay separate and each keeps the provider's own ordering; nothing is
+        // interleaved, so a film can no longer be pushed off the end by a series.
+        val featured = (result.await() as AppResult.Success).value
+        assertEquals(listOf(MediaType.MOVIE, MediaType.MOVIE), featured.movies.map { it.mediaType })
+        assertEquals(listOf(1L, 3L), featured.movies.map { it.externalRef.externalId.toLong() })
+        assertEquals(listOf(MediaType.SERIES), featured.series.map { it.mediaType })
+        assertEquals(listOf(2L), featured.series.map { it.externalRef.externalId.toLong() })
     }
 
     private fun repository(service: TmdbSearchService) = DefaultFeaturedReleasesRepository(

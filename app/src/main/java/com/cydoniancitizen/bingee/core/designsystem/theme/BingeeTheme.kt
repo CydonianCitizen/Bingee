@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.core.designsystem.theme
 
 import android.content.res.Configuration
+import androidx.annotation.FontRes
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,11 +16,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.cydoniancitizen.bingee.R
 
-private val LightColorScheme =
+// Internal rather than private: home screen widgets render the same palette through Glance.
+internal val LightColorScheme =
     lightColorScheme(
         primary = Color(0xFF7A5B00),
         onPrimary = Color.White,
@@ -61,7 +68,7 @@ private val LightColorScheme =
         scrim = Color.Black
     )
 
-private val DarkColorScheme =
+internal val DarkColorScheme =
     darkColorScheme(
         primary = Color(0xFFFFCC33),
         onPrimary = Color(0xFF141824),
@@ -100,7 +107,40 @@ private val DarkColorScheme =
         scrim = Color.Black
     )
 
-private val BingeeTypography = Typography()
+@OptIn(ExperimentalTextApi::class)
+private fun variableFontFamily(@FontRes resId: Int, vararg weights: FontWeight) = FontFamily(
+    weights.map { weight ->
+        Font(resId, weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
+    }
+)
+
+// Oswald (condensed) for display/headline styles and titleLarge, Inter for everything else. titleLarge must
+// follow headlineMedium: it is the collapsed LargeTopAppBar title, the TopAppBar title and the section header,
+// so leaving it on Inter swaps the font mid-scroll. Both are variable fonts bundled in res/font.
+private val Oswald = variableFontFamily(R.font.oswald, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
+private val Inter =
+    variableFontFamily(R.font.inter, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold)
+
+private val BingeeTypography =
+    Typography().run {
+        copy(
+            displayLarge = displayLarge.copy(fontFamily = Oswald),
+            displayMedium = displayMedium.copy(fontFamily = Oswald),
+            displaySmall = displaySmall.copy(fontFamily = Oswald),
+            headlineLarge = headlineLarge.copy(fontFamily = Oswald),
+            headlineMedium = headlineMedium.copy(fontFamily = Oswald),
+            headlineSmall = headlineSmall.copy(fontFamily = Oswald),
+            titleLarge = titleLarge.copy(fontFamily = Oswald),
+            titleMedium = titleMedium.copy(fontFamily = Inter),
+            titleSmall = titleSmall.copy(fontFamily = Inter),
+            bodyLarge = bodyLarge.copy(fontFamily = Inter),
+            bodyMedium = bodyMedium.copy(fontFamily = Inter),
+            bodySmall = bodySmall.copy(fontFamily = Inter),
+            labelLarge = labelLarge.copy(fontFamily = Inter),
+            labelMedium = labelMedium.copy(fontFamily = Inter),
+            labelSmall = labelSmall.copy(fontFamily = Inter)
+        )
+    }
 
 private val BingeeShapes =
     Shapes(

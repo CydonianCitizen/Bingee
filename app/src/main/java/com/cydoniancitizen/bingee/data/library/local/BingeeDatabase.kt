@@ -24,7 +24,7 @@ import androidx.room.TypeConverters
         ImportProvenanceRefEntity::class,
         SeriesStateOverrideEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)

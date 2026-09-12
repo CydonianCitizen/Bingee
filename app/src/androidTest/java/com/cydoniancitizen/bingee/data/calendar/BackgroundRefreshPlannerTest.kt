@@ -68,7 +68,10 @@ class BackgroundRefreshPlannerTest {
                 "$id, '${type.name}', 'Fixture $id', NULL, NULL, NULL, NULL, " +
                 "'2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z', 0)"
         )
-        sql("INSERT INTO external_refs(local_media_id, source, external_id) VALUES($id, 'TMDB', '$externalId')")
+        sql(
+            "INSERT INTO external_refs(local_media_id, source, media_type, external_id) " +
+                "SELECT $id, 'TMDB', media_type, '$externalId' FROM media_entries WHERE local_media_id = $id"
+        )
         if (active) sql("INSERT INTO library_entries(local_media_id, added_at) VALUES($id, '2026-01-01T00:00:00Z')")
         if (fetchedAt != null) {
             sql(

@@ -18,6 +18,7 @@
     <string name="error_media_type_mismatch">Questa azione non è disponibile per questo tipo di titolo.</string>
     <string name="error_unknown">Si è verificato un errore.</string>
     <string name="action_retry">Riprova</string>
+    <string name="action_undo">Annulla</string>
     <string name="action_cancel">Annulla</string>
     <string name="action_dismiss">Chiudi</string>
     <string name="onboarding_title">Connettiti a TMDB</string>
@@ -151,7 +152,8 @@
     <string name="profile_empty_search_body">Nessun titolo corrisponde a \"%1$s\" nella tua raccolta.</string>
     <string name="profile_empty_action_search">Esplora in Cerca</string>
     <string name="profile_empty_action_clear">Cancella ricerca</string>
-    <string name="home_featured_releases">Uscite in evidenza</string>
+    <string name="home_featured_movies">Film in evidenza</string>
+    <string name="home_featured_series">Serie in evidenza</string>
     <string name="home_continue_watching">Continua a vedere</string>
     <plurals name="home_continue_watching_progress">
         <item quantity="one">%1$d di %2$d episodio</item>
@@ -159,6 +161,19 @@
         <item quantity="other">%1$d di %2$d episodi</item>
     </plurals>
     <string name="home_continue_watching_next_episode">Prossimo: Stagione %1$d • Episodio %2$d</string>
+    <string name="home_continue_watching_last_episode">Ultimo visto: Stagione %1$d • Episodio %2$d</string>
+    <string name="home_continue_watching_mark_watched">Segna come visto Stagione %1$d • Episodio %2$d</string>
+    <string name="home_continue_watching_marked">%1$s: Stagione %2$d • Episodio %3$d segnato come visto</string>
+    <string name="widget_up_next_label">Prossimo episodio e uscite</string>
+    <string name="widget_continue_watching_description">La locandina della serie che stai guardando, con un tasto per segnare visto il prossimo episodio.</string>
+    <string name="widget_up_next_description">Il tuo prossimo episodio e le prossime uscite che segui.</string>
+    <string name="widget_next_episode">Prossimo: S%1$d E%2$d</string>
+    <string name="widget_upcoming_title">In uscita</string>
+    <string name="widget_no_upcoming">Nessuna uscita in arrivo</string>
+    <string name="widget_today">Oggi</string>
+    <string name="widget_tomorrow">Domani</string>
+    <string name="widget_event_episode">%1$s · S%2$d E%3$d</string>
+    <string name="widget_event_season">%1$s · Stagione %2$d</string>
     <string name="home_open_continue_details">Apri dettagli per %1$s</string>
     <string name="action_add_to_watchlist">Aggiungi alla lista</string>
     <string name="action_in_watchlist">Nella lista</string>
@@ -369,6 +384,9 @@
     <string name="detail_refresh_season">Aggiorna metadati stagione</string>
     <string name="detail_mark_season_watched">Segna come visti gli episodi tracciabili</string>
     <string name="detail_mark_season_unwatched">Segna stagione come non vista</string>
+    <string name="detail_season_watched_state">Tutti gli episodi tracciabili visti</string>
+    <string name="detail_season_partial_state">Visto in parte</string>
+    <string name="detail_season_unwatched_state">Non visto</string>
     <string name="detail_episodes_empty">Nessun episodio disponibile per questa stagione.</string>
     <string name="detail_episode_title">Episodio %1$d · %2$s</string>
     <string name="detail_episode_air_date">Data di uscita: %1$s</string>
@@ -376,8 +394,6 @@
     <string name="detail_episode_future">Non ancora trasmesso</string>
     <string name="detail_episode_watched_state">Visto</string>
     <string name="detail_episode_unwatched_state">Non visto</string>
-    <string name="detail_episode_still">Immagine per %1$s</string>
-    <string name="detail_episode_still_missing">Nessuna immagine disponibile per %1$s</string>
     <string name="tmdb_logo_description">Logo di The Movie Database</string>
     <string name="tmdb_attribution">Questo prodotto usa l\'API TMDB, ma non è approvato né certificato da TMDB.</string>
     <string name="privacy_summary">Bingee usa i metadati TMDB. La tua credenziale è cifrata localmente, non viene mai inviata a un backend Bingee ed è esclusa dai backup dati Bingee.</string>

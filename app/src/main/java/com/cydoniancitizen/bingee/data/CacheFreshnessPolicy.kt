@@ -1,4 +1,4 @@
-package com.cydoniancitizen.bingee.data.details
+package com.cydoniancitizen.bingee.data
 
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import java.time.Clock

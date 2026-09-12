@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
@@ -29,7 +30,7 @@ internal class DefaultSeriesRepository @Inject constructor(
     private val seriesDao: SeriesDao,
     private val metadataStore: MetadataCalendarStore,
     private val remote: TmdbSeasonRemoteDataSource,
-    private val freshnessPolicy: SeasonCacheFreshnessPolicy,
+    private val freshnessPolicy: CacheFreshnessPolicy,
     private val clock: Clock,
     private val dateSource: CalendarDateSource
 ) : SeriesRepository {

@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.cydoniancitizen.bingee.core.model.MediaSource
+import com.cydoniancitizen.bingee.core.model.MediaType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -17,11 +18,17 @@ internal abstract class DetailsDao {
         SELECT media_entries.*
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    abstract fun observeCachedDetails(source: MediaSource, externalId: String): Flow<CachedDetailsRelation?>
+    abstract fun observeCachedDetails(
+        source: MediaSource,
+        mediaType: MediaType,
+        externalId: String
+    ): Flow<CachedDetailsRelation?>
 
     @Transaction
     @Query(
@@ -29,22 +36,30 @@ internal abstract class DetailsDao {
         SELECT media_entries.*
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    abstract suspend fun getCachedDetails(source: MediaSource, externalId: String): CachedDetailsRelation?
+    abstract suspend fun getCachedDetails(
+        source: MediaSource,
+        mediaType: MediaType,
+        externalId: String
+    ): CachedDetailsRelation?
 
     @Query(
         """
         SELECT media_entries.*
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    protected abstract suspend fun getMedia(source: MediaSource, externalId: String): MediaEntity?
+    protected abstract suspend fun getMedia(source: MediaSource, mediaType: MediaType, externalId: String): MediaEntity?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     protected abstract suspend fun insertMedia(media: MediaEntity): Long
@@ -72,10 +87,12 @@ internal abstract class DetailsDao {
         details: MediaDetailsEntity,
         genres: List<MediaGenreEntity>
     ) {
-        val existing = getMedia(source, externalId)
+        val existing = getMedia(source, candidate.mediaType, externalId)
+        // Details own the runtime; copying it onto the portable media row lets backups carry it.
+        val runtimeMinutes = details.runtimeMinutes ?: existing?.runtimeMinutes
         val localMediaId = if (existing == null) {
-            val insertedId = insertMedia(candidate)
-            insertExternalRef(ExternalRefEntity(insertedId, source, externalId))
+            val insertedId = insertMedia(candidate.copy(runtimeMinutes = runtimeMinutes))
+            insertExternalRef(ExternalRefEntity(insertedId, source, candidate.mediaType, externalId))
             insertedId
         } else {
             check(existing.mediaType == candidate.mediaType) {
@@ -86,7 +103,8 @@ internal abstract class DetailsDao {
                     localMediaId = existing.localMediaId,
                     createdAt = existing.createdAt,
                     isFavorite = existing.isFavorite,
-                    favoriteAddedAt = existing.favoriteAddedAt
+                    favoriteAddedAt = existing.favoriteAddedAt,
+                    runtimeMinutes = runtimeMinutes
                 )
             )
             existing.localMediaId

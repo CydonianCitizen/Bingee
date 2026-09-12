@@ -347,7 +347,7 @@ class MediaDetailsViewModelTest {
     ) : MediaDetailsRepository {
         val observed = MutableStateFlow<AppResult<CachedMediaDetails?>>(AppResult.Success(initial))
         val refreshes = mutableListOf<Triple<Long, MediaType, Boolean>>()
-        override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> = observed
+        override fun observeDetails(tmdbId: Long, mediaType: MediaType): Flow<AppResult<CachedMediaDetails?>> = observed
         override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {
             refreshes += Triple(tmdbId, mediaType, force)
             return refreshResult
@@ -380,34 +380,40 @@ class MediaDetailsViewModelTest {
                 }
             )
         }
-        override fun observeEntry(ref: ExternalMediaRef): Flow<AppResult<LibraryEntry?>> =
+        override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             entry.map { AppResult.Success(it) }
-        override fun observeMembershipRefs(): Flow<AppResult<Set<ExternalMediaRef>>> =
-            entry.map { AppResult.Success(listOfNotNull(it?.mediaRef).toSet()) }
+        override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
+            entry.map { AppResult.Success(listOfNotNull(it?.let { e -> e.mediaRef to e.mediaType }).toSet()) }
         override fun observePersonalViewing() =
             flowOf<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
                 AppResult.Success(emptyList())
             )
         override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> = error("unused")
-        override suspend fun add(ref: ExternalMediaRef): AppResult<LibraryEntry> {
+        override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> {
             actions += "add"
             failure?.let { return AppResult.Failure(it) }
             return AppResult.Success(libraryEntry()).also { entry.value = it.value }
         }
-        override suspend fun remove(ref: ExternalMediaRef): AppResult<Unit> {
+        override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> {
             actions += "remove"
             failure?.let { return AppResult.Failure(it) }
             entry.value = null
             return AppResult.Success(Unit)
         }
-        override suspend fun isInLibrary(ref: ExternalMediaRef): AppResult<Boolean> =
+        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
             AppResult.Success(entry.value != null)
-        override suspend fun setFavorite(ref: ExternalMediaRef, isFavorite: Boolean): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun setFavorite(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            isFavorite: Boolean
+        ): AppResult<Unit> = AppResult.Success(Unit)
         override suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit> =
             AppResult.Success(Unit)
-        override suspend fun setWatchedDate(ref: ExternalMediaRef, watchedDate: LocalDate?): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun setWatchedDate(
+            ref: ExternalMediaRef,
+            mediaType: MediaType,
+            watchedDate: LocalDate?
+        ): AppResult<Unit> = AppResult.Success(Unit)
 
         companion object {
             fun libraryEntry() = LibraryEntry(
@@ -465,16 +471,23 @@ class MediaDetailsViewModelTest {
         private val rating = MutableStateFlow<AppResult<PersonalRating?>>(AppResult.Success(initial))
         val actions = mutableListOf<String>()
 
-        override fun observeRating(reference: ExternalMediaRef): Flow<AppResult<PersonalRating?>> = rating
+        override fun observeRating(
+            reference: ExternalMediaRef,
+            mediaType: MediaType
+        ): Flow<AppResult<PersonalRating?>> = rating
 
-        override suspend fun setRating(reference: ExternalMediaRef, rating: PersonalRating): AppResult<Unit> {
+        override suspend fun setRating(
+            reference: ExternalMediaRef,
+            mediaType: MediaType,
+            rating: PersonalRating
+        ): AppResult<Unit> {
             actions += "set:${rating.value}"
             failure?.let { return AppResult.Failure(it) }
             this.rating.value = AppResult.Success(rating)
             return AppResult.Success(Unit)
         }
 
-        override suspend fun removeRating(reference: ExternalMediaRef): AppResult<Unit> {
+        override suspend fun removeRating(reference: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> {
             actions += "remove"
             failure?.let { return AppResult.Failure(it) }
             rating.value = AppResult.Success(null)

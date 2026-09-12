@@ -18,6 +18,7 @@
     <string name="error_media_type_mismatch">This action is not available for this title type.</string>
     <string name="error_unknown">Something went wrong.</string>
     <string name="action_retry">Retry</string>
+    <string name="action_undo">Undo</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_dismiss">Dismiss</string>
     <string name="onboarding_title">Connect to TMDB</string>
@@ -143,13 +144,27 @@
     <string name="profile_empty_search_body">No titles match \"%1$s\" in your collection.</string>
     <string name="profile_empty_action_search">Explore in Search</string>
     <string name="profile_empty_action_clear">Clear search</string>
-    <string name="home_featured_releases">Featured Releases</string>
+    <string name="home_featured_movies">Featured Films</string>
+    <string name="home_featured_series">Featured Series</string>
     <string name="home_continue_watching">Continue Watching</string>
     <plurals name="home_continue_watching_progress">
         <item quantity="one">%1$d of %2$d episode</item>
         <item quantity="other">%1$d of %2$d episodes</item>
     </plurals>
     <string name="home_continue_watching_next_episode">Next: Season %1$d • Episode %2$d</string>
+    <string name="home_continue_watching_last_episode">Last watched: Season %1$d • Episode %2$d</string>
+    <string name="home_continue_watching_mark_watched">Mark Season %1$d • Episode %2$d as watched</string>
+    <string name="home_continue_watching_marked">%1$s: Season %2$d • Episode %3$d marked as watched</string>
+    <string name="widget_up_next_label">Up next &amp; releases</string>
+    <string name="widget_continue_watching_description">The poster of the series you are watching, with a button to mark the next episode as watched.</string>
+    <string name="widget_up_next_description">Your next episode and the upcoming releases you follow.</string>
+    <string name="widget_next_episode">Next: S%1$d E%2$d</string>
+    <string name="widget_upcoming_title">Upcoming</string>
+    <string name="widget_no_upcoming">No upcoming releases</string>
+    <string name="widget_today">Today</string>
+    <string name="widget_tomorrow">Tomorrow</string>
+    <string name="widget_event_episode">%1$s · S%2$d E%3$d</string>
+    <string name="widget_event_season">%1$s · Season %2$d</string>
     <string name="home_open_continue_details">Open details for %1$s</string>
     <string name="action_add_to_watchlist">Add to Watchlist</string>
     <string name="action_in_watchlist">In Watchlist</string>
@@ -249,6 +264,9 @@
     <string name="detail_refresh_season">Refresh season metadata</string>
     <string name="detail_mark_season_watched">Mark trackable episodes watched</string>
     <string name="detail_mark_season_unwatched">Mark season unwatched</string>
+    <string name="detail_season_watched_state">All trackable episodes watched</string>
+    <string name="detail_season_partial_state">Partly watched</string>
+    <string name="detail_season_unwatched_state">Not watched</string>
     <string name="detail_episodes_empty">No episodes are available for this season.</string>
     <string name="detail_episode_title">Episode %1$d · %2$s</string>
     <string name="detail_episode_air_date">Air date: %1$s</string>
@@ -256,8 +274,6 @@
     <string name="detail_episode_future">Not aired yet</string>
     <string name="detail_episode_watched_state">Watched</string>
     <string name="detail_episode_unwatched_state">Not watched</string>
-    <string name="detail_episode_still">Still for %1$s</string>
-    <string name="detail_episode_still_missing">No still available for %1$s</string>
     <string name="tmdb_logo_description">The Movie Database logo</string>
     <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="privacy_summary">Bingee uses TMDB metadata. Your credential is encrypted locally, is never sent to a Bingee backend, and is excluded from Bingee data exports.</string>

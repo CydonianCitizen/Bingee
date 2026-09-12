@@ -42,8 +42,12 @@ class DefaultWatchProgressRepositoryTest {
         assertEquals(AppResult.Success(MovieWatchState.Unwatched), repository.observeMovie(movie).first())
         assertEquals(AppResult.Success(Unit), repository.markMovieWatched(movie))
         assertEquals(now, dao.lastInstant)
-        dao.movie.value = MovieProgressRow(MediaType.MOVIE, now)
-        assertEquals(AppResult.Success(MovieWatchState.Watched(now)), repository.observeMovie(movie).first())
+        val watchedDate = LocalDate.of(2026, 7, 12)
+        dao.movie.value = MovieProgressRow(MediaType.MOVIE, now, watchedDate)
+        assertEquals(
+            AppResult.Success(MovieWatchState.Watched(now, watchedDate)),
+            repository.observeMovie(movie).first()
+        )
 
         dao.outcome = ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         assertEquals(
@@ -95,7 +99,7 @@ class DefaultWatchProgressRepositoryTest {
     private fun ref(id: String) = ExternalMediaRef(MediaSource.TMDB, id)
 
     private class FakeProgressDao : WatchProgressDao() {
-        val movie = MutableStateFlow<MovieProgressRow?>(MovieProgressRow(MediaType.MOVIE, null))
+        val movie = MutableStateFlow<MovieProgressRow?>(MovieProgressRow(MediaType.MOVIE, null, null))
         var outcome = ProgressWriteOutcome.SUCCESS
         var lastDate: LocalDate? = null
         var lastInstant: Instant? = null
@@ -132,6 +136,7 @@ class DefaultWatchProgressRepositoryTest {
 
         override suspend fun setMediaWatchedDate(
             source: MediaSource,
+            mediaType: MediaType,
             externalId: String,
             watchedDate: LocalDate?,
             now: Instant
@@ -149,7 +154,8 @@ class DefaultWatchProgressRepositoryTest {
 
         override suspend fun getEpisode(source: MediaSource, externalId: String): EpisodeEntity? = null
         override suspend fun getSeason(source: MediaSource, externalId: String): SeasonEntity? = null
-        override suspend fun getMedia(source: MediaSource, externalId: String): MediaEntity? = null
+        override suspend fun getMedia(source: MediaSource, mediaType: MediaType, externalId: String): MediaEntity? =
+            null
         override suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long> = emptyList()
         override suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity? = null
         override suspend fun getSeriesProgressByMediaId(localMediaId: Long): SeriesWatchProgressEntity? = null

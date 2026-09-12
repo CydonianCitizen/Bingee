@@ -179,9 +179,9 @@ internal class MediaDetailsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val result = if (state.isInLibrary) {
-                libraryRepository.remove(requireNotNull(routeReference))
+                libraryRepository.remove(requireNotNull(routeReference), args.mediaType)
             } else {
-                when (val added = libraryRepository.add(requireNotNull(routeReference))) {
+                when (val added = libraryRepository.add(requireNotNull(routeReference), args.mediaType)) {
                     is AppResult.Success -> AppResult.Success(Unit)
                     is AppResult.Failure -> added
                 }
@@ -316,10 +316,16 @@ internal class MediaDetailsViewModel @Inject constructor(
     }
 
     fun setRating() = updateRating { _, current ->
-        ratingRepository.setRating(requireNotNull(routeReference), PersonalRating(current.selectedValue))
+        ratingRepository.setRating(
+            requireNotNull(routeReference),
+            requireNotNull(routeArgs).mediaType,
+            PersonalRating(current.selectedValue)
+        )
     }
 
-    fun removeRating() = updateRating { _, _ -> ratingRepository.removeRating(requireNotNull(routeReference)) }
+    fun removeRating() = updateRating { _, _ ->
+        ratingRepository.removeRating(requireNotNull(routeReference), requireNotNull(routeArgs).mediaType)
+    }
 
     fun dismissRatingError() {
         mutableUiState.update { state ->
@@ -330,7 +336,7 @@ internal class MediaDetailsViewModel @Inject constructor(
 
     private fun observeDetails(args: DetailRouteArgs) {
         viewModelScope.launch {
-            detailsRepository.observeDetails(args.tmdbId).collectLatest { result ->
+            detailsRepository.observeDetails(args.tmdbId, args.mediaType).collectLatest { result ->
                 when (result) {
                     is AppResult.Failure -> mutableUiState.update { state ->
                         if (state.content is DetailContentState.Content) {
@@ -366,7 +372,7 @@ internal class MediaDetailsViewModel @Inject constructor(
 
     private fun observeMembership(args: DetailRouteArgs) {
         viewModelScope.launch {
-            libraryRepository.observeEntry(requireNotNull(routeReference)).collectLatest { result ->
+            libraryRepository.observeEntry(requireNotNull(routeReference), args.mediaType).collectLatest { result ->
                 mutableUiState.update {
                     when (result) {
                         is AppResult.Success -> it.copy(
@@ -391,7 +397,11 @@ internal class MediaDetailsViewModel @Inject constructor(
         if (state.favoriteUpdating) return
         mutableUiState.update { it.copy(favoriteUpdating = true) }
         viewModelScope.launch {
-            val result = libraryRepository.setFavorite(requireNotNull(routeReference), !state.isFavorite)
+            val result = libraryRepository.setFavorite(
+                requireNotNull(routeReference),
+                args.mediaType,
+                !state.isFavorite
+            )
             mutableUiState.update {
                 it.copy(
                     favoriteUpdating = false,
@@ -406,7 +416,7 @@ internal class MediaDetailsViewModel @Inject constructor(
         if (mutableUiState.value.watchedDateUpdating) return
         mutableUiState.update { it.copy(watchedDateUpdating = true) }
         viewModelScope.launch {
-            val result = libraryRepository.setWatchedDate(requireNotNull(routeReference), date)
+            val result = libraryRepository.setWatchedDate(requireNotNull(routeReference), args.mediaType, date)
             mutableUiState.update {
                 it.copy(
                     watchedDateUpdating = false,
@@ -459,7 +469,7 @@ internal class MediaDetailsViewModel @Inject constructor(
 
     private fun observeRating(reference: ExternalMediaRef) {
         viewModelScope.launch {
-            ratingRepository.observeRating(reference).collectLatest { result ->
+            ratingRepository.observeRating(reference, requireNotNull(routeArgs).mediaType).collectLatest { result ->
                 mutableUiState.update { state ->
                     when (result) {
                         is AppResult.Success -> {

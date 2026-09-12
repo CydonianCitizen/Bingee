@@ -151,6 +151,16 @@ internal object BackupJsonCodec {
         writeNullable(writer, "releaseDate", media.releaseDate?.toString())
         writer.name("isFavorite").value(media.isFavorite)
         writeNullable(writer, "favoriteAddedAt", media.favoriteAddedAt?.toString())
+        writer.name("runtimeMinutes").value(media.runtimeMinutes)
+        writer.name("genres").beginArray()
+        media.genres.forEach { genre ->
+            writer.beginObject()
+            writer.name("name").value(genre.name)
+            writeNullable(writer, "source", genre.source?.name)
+            writer.name("genreId").value(genre.genreId)
+            writer.endObject()
+        }
+        writer.endArray()
         writer.endObject()
     }
 
@@ -191,6 +201,7 @@ internal object BackupJsonCodec {
     private fun writeLibrary(writer: JsonWriter, entry: BackupLibraryEntry) {
         writer.beginObject().name("mediaRef")
         writeRef(writer, entry.mediaRef)
+        writeNullable(writer, "mediaType", entry.mediaType?.name)
         writer.name("addedAt").value(entry.addedAt.toString()).endObject()
     }
 
@@ -228,6 +239,7 @@ internal object BackupJsonCodec {
     private fun writeRating(writer: JsonWriter, rating: BackupRating) {
         writer.beginObject().name("mediaRef")
         writeRef(writer, rating.mediaRef)
+        writeNullable(writer, "mediaType", rating.mediaType?.name)
         writer.name("rating").value(rating.rating)
         writer.name("ratedAt").value(rating.ratedAt.toString())
         writer.name("updatedAt").value(rating.updatedAt.toString()).endObject()
@@ -250,17 +262,17 @@ internal object BackupJsonCodec {
             return BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.WRONG_FORMAT))
         }
         val schemaVersion = requiredInt(root, "schemaVersion")
-        if (schemaVersion != BACKUP_SCHEMA_VERSION) {
+        if (schemaVersion !in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION) {
             return BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.UNSUPPORTED_VERSION))
         }
         val exportedAt = requiredInstant(root, "exportedAt")
         val dataObj = required(root, "data").asObjectOrProblem()
-        val data = readData(dataObj)
+        val data = readData(dataObj, schemaVersion)
         return BackupParseResult.Success(BackupDocument(formatId, schemaVersion, exportedAt, data))
     }
 
-    private fun readData(dataObj: JsonObject): BackupData {
-        val media = readArray(dataObj, "media", BackupLimits.MAX_MEDIA, ::readMedia)
+    private fun readData(dataObj: JsonObject, schemaVersion: Int): BackupData {
+        val media = readArray(dataObj, "media", BackupLimits.MAX_MEDIA) { readMedia(it, schemaVersion) }
         val seasons = readArray(dataObj, "seasons", BackupLimits.MAX_SEASONS, ::readSeason)
         val episodes = readArray(dataObj, "episodes", BackupLimits.MAX_EPISODES, ::readEpisode)
         val library = readArray(dataObj, "library", BackupLimits.MAX_MEDIA, ::readLibrary)
@@ -304,7 +316,7 @@ internal object BackupJsonCodec {
         return BackupRef(source, externalId)
     }
 
-    private fun readMedia(value: JsonElement): BackupMedia {
+    private fun readMedia(value: JsonElement, schemaVersion: Int): BackupMedia {
         val objectValue = value.asObjectOrProblem()
         return BackupMedia(
             primaryRef = readRef(required(objectValue, "primaryRef")),
@@ -316,8 +328,24 @@ internal object BackupJsonCodec {
             posterUrl = nullableString(objectValue, "posterUrl"),
             releaseDate = nullableDate(objectValue, "releaseDate"),
             isFavorite = booleanOrDefault(objectValue, "isFavorite", false),
-            favoriteAddedAt = nullableInstant(objectValue, "favoriteAddedAt")
+            favoriteAddedAt = nullableInstant(objectValue, "favoriteAddedAt"),
+            runtimeMinutes = nullableInt(objectValue, "runtimeMinutes"),
+            genres = if (schemaVersion >= 2) {
+                readArray(objectValue, "genres", BackupLimits.MAX_GENRES_PER_MEDIA, ::readGenre)
+            } else {
+                readOptionalArray(objectValue, "genres", BackupLimits.MAX_GENRES_PER_MEDIA, ::readGenre)
+            }
         )
+    }
+
+    private fun readGenre(value: JsonElement): BackupGenre {
+        val obj = value.asObjectOrProblem()
+        val source = nullableString(obj, "source")?.let { MediaSource.valueOf(it) }
+        val id = obj.get("genreId")?.takeUnless { it.isJsonNull }?.let {
+            if (!it.isJsonPrimitive || !it.asJsonPrimitive.isNumber) problem(BackupFailureKind.INVALID_STRUCTURE)
+            BigDecimal(it.asString).longValueExact()
+        }
+        return BackupGenre(requiredString(obj, "name"), source, id)
     }
 
     private fun readSeason(value: JsonElement): BackupSeason {
@@ -350,7 +378,11 @@ internal object BackupJsonCodec {
 
     private fun readLibrary(value: JsonElement): BackupLibraryEntry {
         val objectValue = value.asObjectOrProblem()
-        return BackupLibraryEntry(readRef(required(objectValue, "mediaRef")), requiredInstant(objectValue, "addedAt"))
+        return BackupLibraryEntry(
+            readRef(required(objectValue, "mediaRef")),
+            requiredInstant(objectValue, "addedAt"),
+            nullableString(objectValue, "mediaType")?.let(::readMediaType)
+        )
     }
 
     private fun readMovieProgress(value: JsonElement): BackupMovieProgress {
@@ -390,7 +422,8 @@ internal object BackupJsonCodec {
             readRef(required(objectValue, "mediaRef")),
             requiredInt(objectValue, "rating"),
             requiredInstant(objectValue, "ratedAt"),
-            requiredInstant(objectValue, "updatedAt")
+            requiredInstant(objectValue, "updatedAt"),
+            nullableString(objectValue, "mediaType")?.let(::readMediaType)
         )
     }
 

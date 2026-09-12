@@ -11,7 +11,10 @@ data class ContinueWatchingItem(
     val nextEpisode: EpisodePosition?,
     val updatedAt: Instant?,
     val isAbandoned: Boolean = false,
-    val inLibrary: Boolean = true
+    val inLibrary: Boolean = true,
+    val lastWatchedEpisode: EpisodePosition? = null,
+    /** Provider identity of [nextEpisode], so it can be marked watched without opening Details. */
+    val nextEpisodeRef: ExternalMediaRef? = null
 ) {
     init {
         require(title.isNotBlank()) { "Continue Watching title must not be blank" }

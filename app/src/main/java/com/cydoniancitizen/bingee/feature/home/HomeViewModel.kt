@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
+import com.cydoniancitizen.bingee.core.model.EpisodePosition
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseDateGroup
 import com.cydoniancitizen.bingee.core.model.groupReleaseEvents
@@ -13,6 +16,7 @@ import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
+import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -46,15 +50,28 @@ internal sealed interface HomeRefreshState {
     data object CredentialRequired : HomeRefreshState
 }
 
+/** One-shot Home message: an episode marked from Continue Watching, or a Home action that failed. */
+internal sealed interface HomeSnackbar {
+    data class EpisodeMarked(val title: String, val episode: EpisodePosition, val episodeRef: ExternalMediaRef) :
+        HomeSnackbar
+
+    data class Failed(val error: AppError) : HomeSnackbar
+}
+
 internal data class HomeUiState(
     val content: HomeContentState = HomeContentState.Loading,
     val refresh: HomeRefreshState = HomeRefreshState.Idle,
     val lastSuccessfulRefreshAt: Instant? = null,
     val today: LocalDate,
-    val featuredReleases: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
+    val featuredMovies: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
+    val featuredSeries: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
     val continueWatching: List<ContinueWatchingItem> = emptyList(),
-    val libraryMemberships: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet(),
-    val addingToWatchlist: Set<com.cydoniancitizen.bingee.core.model.ExternalMediaRef> = emptySet()
+    /** Keyed by (reference, type): TMDB reuses one ID for a movie and an unrelated series. */
+    val libraryMemberships: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
+    val addingToWatchlist: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
+    /** Series whose next episode is being written, so a second tap cannot mark it twice. */
+    val markingEpisodes: Set<ExternalMediaRef> = emptySet(),
+    val snackbar: HomeSnackbar? = null
 )
 
 @HiltViewModel
@@ -65,7 +82,8 @@ internal class HomeViewModel @Inject constructor(
     private val dateSource: CalendarDateSource,
     private val window: ReleaseCalendarWindow,
     private val featuredRepository: com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository,
-    private val libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository
+    private val libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository,
+    private val watchProgressRepository: WatchProgressRepository
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(HomeUiState(today = dateSource.currentDate()))
     private val localRetry = MutableStateFlow(0)
@@ -122,7 +140,7 @@ internal class HomeViewModel @Inject constructor(
     }
 
     fun addToWatchlist(item: com.cydoniancitizen.bingee.core.model.MediaSearchResult) {
-        val ref = item.externalRef
+        val ref = item.externalRef to item.mediaType
         if (ref in mutableUiState.value.libraryMemberships || ref in mutableUiState.value.addingToWatchlist) return
         mutableUiState.update { it.copy(addingToWatchlist = it.addingToWatchlist + ref) }
         viewModelScope.launch {
@@ -135,10 +153,43 @@ internal class HomeViewModel @Inject constructor(
                 }
                 state.copy(
                     addingToWatchlist = state.addingToWatchlist - ref,
-                    libraryMemberships = nextMemberships
+                    libraryMemberships = nextMemberships,
+                    // The + becomes available again, so say why nothing was saved.
+                    snackbar = (result as? AppResult.Failure)?.let { HomeSnackbar.Failed(it.error) } ?: state.snackbar
                 )
             }
         }
+    }
+
+    fun markNextEpisodeWatched(item: ContinueWatchingItem) {
+        val episodeRef = item.nextEpisodeRef ?: return
+        val episode = item.nextEpisode ?: return
+        if (item.mediaRef in mutableUiState.value.markingEpisodes) return
+        mutableUiState.update { it.copy(markingEpisodes = it.markingEpisodes + item.mediaRef) }
+        viewModelScope.launch {
+            val feedback = when (val result = watchProgressRepository.markEpisodeWatched(episodeRef)) {
+                is AppResult.Success -> HomeSnackbar.EpisodeMarked(item.title, episode, episodeRef)
+                is AppResult.Failure -> HomeSnackbar.Failed(result.error)
+            }
+            mutableUiState.update {
+                it.copy(markingEpisodes = it.markingEpisodes - item.mediaRef, snackbar = feedback)
+            }
+        }
+    }
+
+    fun undoMarkedEpisode() {
+        val marked = mutableUiState.value.snackbar as? HomeSnackbar.EpisodeMarked ?: return
+        mutableUiState.update { it.copy(snackbar = null) }
+        viewModelScope.launch {
+            val result = watchProgressRepository.markEpisodeUnwatched(marked.episodeRef)
+            if (result is AppResult.Failure) {
+                mutableUiState.update { it.copy(snackbar = HomeSnackbar.Failed(result.error)) }
+            }
+        }
+    }
+
+    fun dismissSnackbar() {
+        mutableUiState.update { it.copy(snackbar = null) }
     }
 
     fun retryLocal() {
@@ -225,7 +276,12 @@ internal class HomeViewModel @Inject constructor(
     private suspend fun loadFeaturedReleases(generation: Long) {
         when (val result = featuredRepository.getFeaturedReleases()) {
             is AppResult.Success -> if (generation == refreshGeneration) {
-                mutableUiState.update { it.copy(featuredReleases = result.value) }
+                mutableUiState.update {
+                    it.copy(
+                        featuredMovies = result.value.movies,
+                        featuredSeries = result.value.series
+                    )
+                }
             }
             is AppResult.Failure -> {
                 // Keep existing or empty

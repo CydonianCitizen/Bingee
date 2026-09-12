@@ -1,15 +1,16 @@
 # Architecture conventions
 
-Bingee v1.1.0 is a package-structured modular monolith in one Android application module. Packages provide lightweight boundaries; a future Gradle-module split requires measured value and a superseding ADR.
+Bingee v1.2.0 is a package-structured modular monolith in one Android application module. Packages provide lightweight boundaries; a future Gradle-module split requires measured value and a superseding ADR.
 
-## Current v1.1.0 surface
+## Current v1.2.0 surface
 
 - TMDB is the only runtime media provider. No Jikan or cross-provider deduplication runs in the app.
 - Top-level navigation is Home, Search, and Your Bingee. The personal destination keeps the internal `profile` route and `PROFILE` identifier; only its label and icon present it as Your Bingee / Il tuo Bingee, a personal collection rather than an account.
 - Your Bingee is the personal dashboard: actionable Watching, collection shortcuts with counts, Favorites, and a personal statistics preview. It opens Settings, which indexes the Appearance & Language, Notifications, Data & backup, Privacy, and About subpages, and exposes its own visible Up action alongside system Back.
-- Home is Room-first and includes Continue Watching; Notification Center reads cached release events and supports local refresh feedback.
-- Room v4 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, portable preferences, the explicit serial-state override, canonical genre identity, and favorite chronology.
-- Backup v1 is the versioned JSON export/restore contract and uses transactional replace restore.
+- Home is Room-first. Continue Watching follows the featured rows; each card shows the last watched and next episode and marks the next one watched through `WatchProgressRepository`, with undo. Notification Center reads cached release events and supports local refresh feedback.
+- Two Glance home screen widgets in `feature/widget` render the same Room projections as Home: a 2×2 poster of the most recent series in progress with a next-episode button, and a 4×2 view that adds the next two releases. They reach repositories through a Hilt entry point, never call TMDB, follow the in-app theme choice, and redraw through one application-scoped observer of progress, calendar, date, and theme (ADR 0027).
+- Room v5 owns media metadata, seasons, episodes, library membership, watch progress, ratings, release events, notification state, portable preferences, the explicit serial-state override, canonical genre identity, and favorite chronology.
+- Backup v2 is the versioned JSON export contract (v1 remains importable) and uses transactional replace restore.
 - The UI ships in English and Italian. About exposes a manual GitHub update checker; it does not perform background update checks.
 
 ## Dependency direction
@@ -125,7 +126,7 @@ NotificationEvaluationWorker (no network) -> combined preferences (Room portable
 
 Notification taps carry only provider-aware parent identity into `MainActivity`. Cold-start and `onNewIntent` targets are held until startup/onboarding resolves, navigated through the existing `DetailRoute`, then consumed once.
 
-Local Room data renders independently of the network on every screen. Home is the one startup exception: constructing `HomeViewModel` runs a local idempotent calendar backfill and one bounded featured-discovery pass, which issues at most one `discover` movie page and one `discover` TV page, keeps at most ten interleaved results in memory, persists nothing, and returns an empty list without a stored credential. A failed featured pass leaves the screen on its cached content. The calendar itself is refreshed only by the explicit refresh action or the periodic worker; Details and Search perform their own remote work on open, query, and manual retry as described below.
+Local Room data renders independently of the network on every screen. Home is the one startup exception: constructing `HomeViewModel` runs a local idempotent calendar backfill and one bounded featured-discovery pass, which issues at most one `discover` movie page and one `discover` TV page, keeps up to twenty results per media type in memory, persists nothing, and returns empty rows without a stored credential. A failed featured pass leaves the screen on its cached content. The calendar itself is refreshed only by the explicit refresh action or the periodic worker; Details and Search perform their own remote work on open, query, and manual retry as described below.
 
 - core/model and core/result are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.
 - domain/repository exposes only domain models, AppResult, suspending one-shot operations, and Flow for observable local state.
@@ -153,13 +154,13 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Local library
 
-- Room database `bingee.db` is version 4. Migration 1 -> 2 adds only the explicit serial-state override table; migration 2 -> 3 adds nullable provider-qualified genre identity and its composite index; migration 3 -> 4 adds the nullable `media_entries.favorite_added_at` column that gives Favorites a chronological order. Each migration is additive and non-destructive.
+- Room database `bingee.db` is version 5. Migration 1 -> 2 adds only the explicit serial-state override table; migration 2 -> 3 adds nullable provider-qualified genre identity and its composite index; migration 3 -> 4 adds the nullable `media_entries.favorite_added_at` column that gives Favorites a chronological order; migration 4 -> 5 adds `external_refs.media_type` to the primary key, because TMDB reuses one ID for an unrelated movie and series, and seeds the new nullable `media_entries.runtime_minutes` from cached movie details ([ADR 0028](adr/0028-type-aware-tmdb-identity-room-v5.md)). Each migration is non-destructive; 4 -> 5 rebuilds `external_refs` in place and keeps every row.
 
-- `media_entries` stores list metadata, `external_refs` owns provider-qualified identity, and `library_entries` owns membership only.
+- `media_entries` stores list metadata, `external_refs` owns provider-qualified identity keyed by (`source`, `media_type`, `external_id`), and `library_entries` owns membership only. Every lookup by external ID also names the media type.
 - `LibraryDao` uses `Flow` for observed lists/items/membership and suspending functions for one-shot reads and writes. Multi-query add is a Room transaction. One parameterized query restricts active membership by media type and escaped localized/original-title text.
 - Re-adding refreshes list metadata while preserving media creation and first-added timestamps. Removing deletes only membership and retains canonical metadata plus external references.
 - Source/type enums use names, dates use ISO `LocalDate`, and timestamps use UTC `Instant`; malformed values fail safely rather than changing meaning.
-- Version 4 is the canonical database version. `media_genres` identifies refreshed TMDB genres by (`source`, `genre_id`); localized `name` remains display metadata, while migrated legacy rows retain their names with null identity until a successful refresh. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. `series_watch_progress.completed_at` is genuine historical completion evidence: full covered regular progress creates it, regular progress reversal clears it, Specials cannot create it, and Library removal preserves it. No Anime-specific Room structures exist.
+- Version 5 is the canonical database version. `media_genres` identifies refreshed TMDB genres by (`source`, `genre_id`); localized `name` remains display metadata, while migrated legacy rows retain their names with null identity until a successful refresh and are excluded from canonical statistics. Serial Watch Later/Watching/Watched state derives from membership, regular-episode progress, and trustworthy metadata coverage; only explicit Abandoned intent persists. `series_watch_progress.completed_at` is genuine historical completion evidence: full covered regular progress creates it, regular progress reversal clears it, Specials cannot create it, and Library removal preserves it. No Anime-specific Room structures exist.
 - Metadata contains no watched state. Progress-row absence means unwatched; a present row owns the watched timestamp.
 - No TMDB token, search query, provider DTO/body, derived Library state, progress percentage, formatted calendar label, notification content, permission, or application worker state is persisted.
 - Library search uses trimmed locale-independent lowercase input and escapes `\\`, `%`, and `_` for SQL `LIKE`. Media restriction and active membership happen in Room; derived-state filtering and progress/rating ordering happen in plain Kotlin to keep one source of progress rules. Stable ordering ends with title, original title, provider, and external ID.
@@ -168,7 +169,7 @@ Production Search state distinguishes credential availability, idle/loading/empt
 
 ## Versioned backup and restore
 
-- Export emits `bingee-backup` v1 and import accepts v1. V1 includes TMDB identity, favorites, watched dates, progress, membership, ratings, and preferences; restore regenerates local IDs transactionally. Freshness, provider responses, credentials, network state, WorkManager records, and delivery history remain excluded.
+- Export emits `bingee-backup` v2 and import accepts v1/v2. V2 adds ordered genre names and nullable canonical identity to portable media; v1 imports may lack genres. Both include TMDB identity, favorites, watched dates, progress, membership, ratings, and preferences; restore regenerates local IDs transactionally. Freshness, provider responses, credentials, network state, WorkManager records, and delivery history remain excluded.
 - Import supports only `REPLACE_PORTABLE_DATA`: parse and validate first, preview second, one explicit Room transaction last. The transaction regenerates local IDs, restores portable state, rebuilds release events, clears technical derived state, and leaves credential/permission/enablement/device runtime state outside the transaction.
 - SAF uses `CreateDocument("application/json")` and `OpenDocument`; sharing uses a private cache subdirectory exposed only through a read-only `FileProvider` URI. Backup content and selected URIs are never logged.
 
@@ -203,7 +204,7 @@ Debug fakes live in app/src/debug; debug-variant JVM tests in app/src/test reuse
 - The UI selects either Movies or TV Series; it never merges endpoint rankings.
 - Search waits 350 ms after query changes. New query/category/credential generations cancel active work, and generation checks suppress responses from obsolete requests.
 - The ViewModel owns simple progressive paging. It appends in provider order, deduplicates by ExternalMediaRef, retains results on page failure, and stops at provider end, page 500, or a page with no new usable rows. Paging 3 is intentionally absent.
-- Requests send language=en-US and include_adult=false. No genre, year, provider, region, or adult-content control exists.
+- Requests send the app language (`en-US` or `it-IT`, from `AppearancePreferences.getEffectiveTmdbLanguage()`) and include_adult=false. No genre, year, provider, region, or adult-content control exists.
 - Search queries, responses, and history are not persisted or logged. No offline media-result cache exists.
 - Movie and TV rows map to the same MediaSearchResult. MediaDetails remains a distinct domain model reconstructed by the detail repository.
 - Records lacking a positive provider ID are skipped. A missing localized title falls back to the original title; a row with neither is skipped. Optional poster, overview, and malformed/missing dates never reject an otherwise usable row.
@@ -220,8 +221,9 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Cache-first title details
 
-- Movie details use `GET /3/movie/{movie_id}`; TV details use `GET /3/tv/{series_id}`. Both use `language=en-US`, the protected Bearer boundary, and base responses without appended resources.
+- Movie details use `GET /3/movie/{movie_id}`; TV details use `GET /3/tv/{series_id}`. Both use the app language (`en-US` or `it-IT`), the protected Bearer boundary, and base responses without appended resources.
 - Cache maximum age is 24 hours. Age strictly below 24 hours is fresh; exactly 24 hours is stale. Future timestamps are stale to avoid indefinite freshness after clock changes.
+- Details and season episodes share `data/CacheFreshnessPolicy`, which only classifies a present fetch timestamp using the injected Clock. Missing cache remains the caller's responsibility: absent details yield no cached detail, while a season without `episodesFetchedAt` retains null episode freshness. Neither missing state skips automatic refresh.
 - Cache miss loads remotely. Fresh cache avoids automatic network work. Stale cache renders immediately and refreshes in the background. Manual refresh always requests remote data.
 - Only successful remote mapping plus atomic Room persistence advances `details_fetched_at`. Any network, mapping, or persistence failure leaves old rows and timestamp intact.
 - Per-reference in-flight refreshes are coalesced; unrelated titles may refresh concurrently.
@@ -266,4 +268,4 @@ Season expansion remains state within the existing detail route. There is no sea
 
 ## Decision status
 
-Accepted decisions are recorded in ADRs 0001–0025. ADR numbering is historical: the Room versions named in ADRs 0011–0016 belong to an earlier numbering and are not the current `bingee.db` version, which is 4. TMDB is the single media provider for Bingee. Movies and TV Series may include anime or animated content from TMDB. No Jikan runtime integration exists, and no Anime-specific Room or Backup structures exist. Backup v1 serves as the data contract. Accounts, recommendations, cloud sync, and other import formats remain deferred.
+Accepted decisions are recorded in ADRs 0001–0027. ADR numbering is historical: the Room versions named in ADRs 0011–0016 belong to an earlier numbering and are not the current `bingee.db` version, which is 4. ADR 0026 restores ADR 0024 canonical genre statistics and adds portable genre metadata; ADR 0025 favorite chronology remains in place. ADR 0027 adds home screen widgets without changing the Room schema or the backup format. TMDB is the single media provider for Bingee. Movies and TV Series may include anime or animated content from TMDB. No Jikan runtime integration exists, and no Anime-specific Room or Backup structures exist. Backup v2 serves as the export contract, with v1 imports retained. Accounts, recommendations, cloud sync, and other import formats remain deferred.

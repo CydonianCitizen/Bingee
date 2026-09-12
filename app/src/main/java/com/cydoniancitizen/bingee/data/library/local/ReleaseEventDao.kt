@@ -121,10 +121,13 @@ internal abstract class ReleaseEventDao {
         SELECT media_entries.local_media_id, NULL AS local_season_id, NULL AS local_episode_id
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = 'MOVIE'
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
+    // MEDIA subjects are movie releases; series dates hang off their season and episode subjects.
     protected abstract suspend fun getMediaIds(source: MediaSource, externalId: String): ReleaseSubjectLocalIds?
 
     @Query(
@@ -325,6 +328,7 @@ internal abstract class ReleaseEventDao {
               SELECT 1 FROM media_entries
               INNER JOIN external_refs USING(local_media_id)
               WHERE external_refs.source = release_events.source
+                AND external_refs.media_type = 'MOVIE'
                 AND external_refs.external_id = release_events.subject_external_id
                 AND media_entries.release_date IS NULL
           )
@@ -339,6 +343,7 @@ internal abstract class ReleaseEventDao {
                 SELECT media_entries.release_date FROM media_entries
                 INNER JOIN external_refs USING(local_media_id)
                 WHERE external_refs.source = release_events.source
+                  AND external_refs.media_type = 'MOVIE'
                   AND external_refs.external_id = release_events.subject_external_id
             ),
             projected_at = :projectedAt,
@@ -346,6 +351,7 @@ internal abstract class ReleaseEventDao {
                 SELECT media_entries.metadata_updated_at FROM media_entries
                 INNER JOIN external_refs USING(local_media_id)
                 WHERE external_refs.source = release_events.source
+                  AND external_refs.media_type = 'MOVIE'
                   AND external_refs.external_id = release_events.subject_external_id
             )
         WHERE subject_type = 'MEDIA' AND event_type = 'MOVIE_RELEASE'
@@ -353,6 +359,7 @@ internal abstract class ReleaseEventDao {
               SELECT media_entries.release_date FROM media_entries
               INNER JOIN external_refs USING(local_media_id)
               WHERE external_refs.source = release_events.source
+                AND external_refs.media_type = 'MOVIE'
                 AND external_refs.external_id = release_events.subject_external_id
           )
         """

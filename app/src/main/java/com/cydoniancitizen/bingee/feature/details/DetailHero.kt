@@ -60,6 +60,26 @@ private val PosterBackdropOverlap = BackdropHeight - PosterTopOffset
 /** Dark band over the artwork, sized for the top app bar's icons rather than for the hero. */
 private val TopScrimHeight = 68.dp
 
+/**
+ * Opacity of that band. The top app bar's icons are white on every backdrop, so this is the only
+ * thing standing between them and a bright one. Black at this alpha over pure white — the worst
+ * case, and the one the placeholder backdrop produces in the light theme — resolves to sRGB 140,
+ * which holds the 3:1 contrast WCAG asks of an icon. Lowering it below 0.42 breaks that floor and
+ * the back, favourite and refresh icons start disappearing into pale artwork; raising it veils more
+ * of the backdrop's top edge, which is the part of the image the hero exists to show.
+ */
+private val TopScrimAlpha = 0.45f
+
+/**
+ * How far down the band holds [TopScrimAlpha] before it starts fading out. The app bar's icon
+ * glyphs measure out between roughly 21 dp and 46 dp from the top, and a band that starts fading at
+ * 0 dp is already down to about half its alpha by the time it reaches them — which is how the icons
+ * ended up at 1.80:1 over a pale backdrop despite the band nominally being dark enough. Lowering
+ * this pulls the fade back up into the icons and the contrast floor goes with it; raising it past
+ * [TopScrimHeight] leaves the band with no room to fade and it ends on a visible edge.
+ */
+private val TopScrimHoldHeight = 48.dp
+
 /** Distance the scrim ramps up over before it reaches the text, so it has no visible edge. */
 private val FadeRunway = 24.dp
 
@@ -144,7 +164,8 @@ internal fun DetailHero(details: MediaDetails, modifier: Modifier = Modifier) {
  * already [TextCoverage] of the way to the background by the time it gets there, so the title sits
  * on background rather than on raw artwork at every font scale.
  *
- * Three constants tune it, and each one trades visible artwork against the title's contrast.
+ * Three constants tune the fade, and each one trades visible artwork against the title's contrast.
+ * The band above it is tuned separately by [TopScrimAlpha], against the app bar icons instead.
  * Raising [TextCoverage] hides more of the image behind the text and keeps the title safe over a
  * bright backdrop. Raising [FadeRunway] starts the fade further up the image, so the transition is
  * gentler but the artwork is veiled earlier. Raising [FadeTail] pulls the whole fade up whenever
@@ -157,13 +178,15 @@ internal fun DetailHero(details: MediaDetails, modifier: Modifier = Modifier) {
  */
 private fun heroScrim(background: Color, backdropHeight: Dp, textTop: Dp): Brush {
     val scrimEnd = (TopScrimHeight / backdropHeight).coerceIn(0f, 1f)
+    val scrimHold = (TopScrimHoldHeight / backdropHeight).coerceIn(0f, scrimEnd)
     // Anchored on the text, pulled earlier only when the text starts so low that the fade would
     // have no room left to reach the page background before the backdrop's own bottom edge.
     val anchor = minOf(textTop, backdropHeight - FadeTail)
     val covered = (anchor / backdropHeight).coerceIn(scrimEnd, 1f)
     val rampStart = ((anchor - FadeRunway) / backdropHeight).coerceIn(scrimEnd, covered)
     return Brush.verticalGradient(
-        0f to Color.Black.copy(alpha = 0.32f),
+        0f to Color.Black.copy(alpha = TopScrimAlpha),
+        scrimHold to Color.Black.copy(alpha = TopScrimAlpha),
         scrimEnd to Color.Transparent,
         rampStart to background.copy(alpha = 0f),
         covered to background.copy(alpha = TextCoverage),

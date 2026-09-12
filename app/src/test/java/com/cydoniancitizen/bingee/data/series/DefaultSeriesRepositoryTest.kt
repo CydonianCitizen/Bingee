@@ -7,6 +7,7 @@ import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
@@ -136,7 +137,7 @@ class DefaultSeriesRepositoryTest {
         seriesDao = dao,
         metadataStore = FakeMetadataStore(dao),
         remote = remote,
-        freshnessPolicy = SeasonCacheFreshnessPolicy(clock),
+        freshnessPolicy = CacheFreshnessPolicy(clock),
         clock = clock,
         dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3))
     )

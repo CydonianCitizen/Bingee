@@ -22,7 +22,9 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         FROM seasons
         INNER JOIN media_entries USING(local_media_id)
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :seriesExternalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = 'SERIES'
+          AND external_refs.external_id = :seriesExternalId
         ORDER BY seasons.season_number
         """
     )
@@ -37,6 +39,7 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         SELECT seasons.* FROM seasons
         INNER JOIN external_refs USING(local_media_id)
         WHERE external_refs.source = :source
+          AND external_refs.media_type = 'SERIES'
           AND external_refs.external_id = :seriesExternalId
           AND seasons.source = :source
           AND seasons.external_id = :seasonExternalId
@@ -64,6 +67,7 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         FROM seasons
         INNER JOIN external_refs USING(local_media_id)
         WHERE external_refs.source = :source
+          AND external_refs.media_type = 'SERIES'
           AND external_refs.external_id = :seriesExternalId
           AND seasons.season_number = :seasonNumber
         LIMIT 1
@@ -80,7 +84,9 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         SELECT media_entries.*
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = 'SERIES'
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )

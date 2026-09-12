@@ -73,8 +73,8 @@ class LibraryDaoTest {
 
         assertNotEquals(tmdb.media.localMediaId, imdb.media.localMediaId)
         assertEquals(2, dao.observeLibraryItems().firstValue().size)
-        assertTrue(dao.isInLibrary(MediaSource.TMDB, "7"))
-        assertTrue(dao.isInLibrary(MediaSource.IMDB, "7"))
+        assertTrue(dao.isInLibrary(MediaSource.TMDB, MediaType.MOVIE, "7"))
+        assertTrue(dao.isInLibrary(MediaSource.IMDB, MediaType.SERIES, "7"))
     }
 
     @Test
@@ -98,22 +98,22 @@ class LibraryDaoTest {
 
         dao.addToLibrary(media("Movie", MediaType.MOVIE, now), MediaSource.TMDB, "1", now)
         assertEquals(1, withTimeout(5_000) { sizes.receive() })
-        assertEquals(1, dao.removeMembership(MediaSource.TMDB, "1"))
+        assertEquals(1, dao.removeMembership(MediaSource.TMDB, MediaType.MOVIE, "1"))
         assertEquals(0, withTimeout(5_000) { sizes.receive() })
 
-        assertFalse(dao.isInLibrary(MediaSource.TMDB, "1"))
-        assertNotNull(dao.getMediaByExternalRef(MediaSource.TMDB, "1"))
+        assertFalse(dao.isInLibrary(MediaSource.TMDB, MediaType.MOVIE, "1"))
+        assertNotNull(dao.getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "1"))
         assertEquals(1, rowCount("media_entries"))
         assertEquals(1, rowCount("external_refs"))
         assertEquals(0, rowCount("library_entries"))
-        assertEquals(0, dao.removeMembership(MediaSource.TMDB, "1"))
+        assertEquals(0, dao.removeMembership(MediaSource.TMDB, MediaType.MOVIE, "1"))
         observation.cancel()
     }
 
     @Test(expected = SQLiteConstraintException::class)
     fun foreignKeyRejectsOrphanExternalReference() {
         database.openHelper.writableDatabase.execSQL(
-            "INSERT INTO external_refs(local_media_id, source, external_id) VALUES(999, 'TMDB', 'orphan')"
+            "INSERT INTO external_refs(local_media_id, source, media_type, external_id) VALUES(999, 'TMDB', 'MOVIE', 'orphan')"
         )
     }
 

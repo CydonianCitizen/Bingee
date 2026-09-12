@@ -6,7 +6,7 @@ import com.cydoniancitizen.bingee.core.result.AppResult
 import kotlinx.coroutines.flow.Flow
 
 interface MediaDetailsRepository {
-    fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>>
+    fun observeDetails(tmdbId: Long, mediaType: MediaType): Flow<AppResult<CachedMediaDetails?>>
 
     suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean = false): AppResult<Unit>
 }

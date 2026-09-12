@@ -191,6 +191,46 @@ class BackupDataStoreTest {
         assertEquals(ratingUpdatedAt, rating.updatedAt)
     }
 
+    @Test
+    fun sameTmdbIdMovieAndSeriesAndMovieRuntimeSurviveExportAndRestore() = runBlocking {
+        // TMDB movie 1399 and series 1399 are unrelated works; the backup must keep both apart.
+        val ref = BackupRef(MediaSource.TMDB, "1399")
+        val data = BackupData(
+            media = listOf(
+                BackupMedia(ref, listOf(ref), MediaType.MOVIE, "Movie", null, null, null, null, runtimeMinutes = 116),
+                BackupMedia(ref, listOf(ref), MediaType.SERIES, "Series", null, null, null, null)
+            ),
+            seasons = emptyList(),
+            episodes = emptyList(),
+            library = listOf(
+                BackupLibraryEntry(ref, exportedAt, MediaType.MOVIE),
+                BackupLibraryEntry(ref, exportedAt, MediaType.SERIES)
+            ),
+            movieProgress = listOf(BackupMovieProgress(ref, exportedAt)),
+            episodeProgress = emptyList(),
+            ratings = listOf(BackupRating(ref, 6, exportedAt, exportedAt, MediaType.SERIES)),
+            preferences = BackupPreferences(3, true, false, true)
+        )
+        store.restore(
+            (
+                validate(BackupDocument(BACKUP_FORMAT_ID, BACKUP_SCHEMA_VERSION, exportedAt, data))
+                    as BackupValidationResult.Success
+                ).plan
+        )
+        val exported = exportedDocument(BackupExporter(store, Clock.fixed(exportedAt, ZoneOffset.UTC)).export().bytes)
+        store.restore((validate(exported) as BackupValidationResult.Success).plan)
+
+        val snapshot = database.portableSnapshotDao().readSnapshot()
+        val movie = snapshot.media.single { it.mediaType == MediaType.MOVIE }
+        val series = snapshot.media.single { it.mediaType == MediaType.SERIES }
+        assertEquals(2, snapshot.refs.count { it.externalId == "1399" })
+        assertEquals(2, snapshot.memberships.size)
+        assertEquals(116, movie.runtimeMinutes)
+        assertNull(series.runtimeMinutes)
+        assertEquals(series.localMediaId, snapshot.ratings.single().localMediaId)
+        assertEquals(movie.localMediaId, snapshot.movieProgress.single().localMediaId)
+    }
+
     private fun exportedDocument(bytes: ByteArray): BackupDocument =
         (BackupJsonCodec.parse(bytes) as BackupParseResult.Success).document
 

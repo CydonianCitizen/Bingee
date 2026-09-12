@@ -62,7 +62,11 @@ internal abstract class LibraryDao {
         @ColumnInfo(name = "is_abandoned") val isAbandoned: Boolean,
         @ColumnInfo(name = "last_progress_at") val lastProgressAt: Instant?,
         @ColumnInfo(name = "next_season_number") val nextSeasonNumber: Int?,
-        @ColumnInfo(name = "next_episode_number") val nextEpisodeNumber: Int?
+        @ColumnInfo(name = "next_episode_number") val nextEpisodeNumber: Int?,
+        @ColumnInfo(name = "next_episode_source") val nextEpisodeSource: MediaSource?,
+        @ColumnInfo(name = "next_episode_external_id") val nextEpisodeExternalId: String?,
+        @ColumnInfo(name = "last_season_number") val lastSeasonNumber: Int?,
+        @ColumnInfo(name = "last_episode_number") val lastEpisodeNumber: Int?
     )
 
     internal data class LibraryProgressRow(
@@ -118,11 +122,17 @@ internal abstract class LibraryDao {
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN library_entries USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    abstract fun observeLibraryItem(source: MediaSource, externalId: String): Flow<LibraryItemWithRefs?>
+    abstract fun observeLibraryItem(
+        source: MediaSource,
+        mediaType: MediaType,
+        externalId: String
+    ): Flow<LibraryItemWithRefs?>
 
     @Query(
         """
@@ -157,7 +167,7 @@ internal abstract class LibraryDao {
                COALESCE(regular_episode_activity.watched_regular_episodes, 0) AS watched_regular_episodes,
                series_watch_progress.completed_at AS series_completed_at,
                series_watch_progress.watched_date AS series_watched_date,
-               media_details.runtime_minutes AS movie_runtime_minutes,
+               COALESCE(media_details.runtime_minutes, media_entries.runtime_minutes) AS movie_runtime_minutes,
                COALESCE((
                    SELECT SUM(episodes.runtime_minutes)
                    FROM episodes
@@ -230,13 +240,15 @@ internal abstract class LibraryDao {
      * Genres are cached for every title the user opens, so this is restricted to the same cohort
      * [observePersonalViewing] returns. Without it the projection also carries genre rows for titles the
      * user only browsed, which the caller then discards.
+     *
+     * Identity belongs to the genre, not the title's external reference. Legacy names without
+     * identity remain readable in Details but cannot participate in canonical genre statistics.
      */
     @Query(
         """
         SELECT local_media_id, source, genre_id, name
         FROM media_genres
-        WHERE source IS NOT NULL AND genre_id IS NOT NULL
-          AND (
+        WHERE (
               EXISTS (
                   SELECT 1 FROM movie_watch_progress
                   WHERE movie_watch_progress.local_media_id = media_genres.local_media_id
@@ -254,7 +266,7 @@ internal abstract class LibraryDao {
                     AND seasons.season_number > 0
               )
           )
-        ORDER BY local_media_id, source, genre_id, genre_order
+        ORDER BY local_media_id, genre_order
         """
     )
     abstract fun observePersonalViewingGenres(): Flow<List<PersonalViewingGenreRow>>
@@ -369,13 +381,65 @@ internal abstract class LibraryDao {
                      AND episode_watch_progress.local_episode_id IS NULL
                    ORDER BY seasons.season_number, episodes.episode_number
                    LIMIT 1
-               ) AS next_episode_number
+               ) AS next_episode_number,
+               (
+                   SELECT episodes.source
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   LEFT JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     AND episode_watch_progress.local_episode_id IS NULL
+                   ORDER BY seasons.season_number, episodes.episode_number
+                   LIMIT 1
+               ) AS next_episode_source,
+               (
+                   SELECT episodes.external_id
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   LEFT JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                     AND episode_watch_progress.local_episode_id IS NULL
+                   ORDER BY seasons.season_number, episodes.episode_number
+                   LIMIT 1
+               ) AS next_episode_external_id,
+               (
+                   SELECT seasons.season_number
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                   ORDER BY episode_watch_progress.watched_at DESC,
+                            seasons.season_number DESC,
+                            episodes.episode_number DESC
+                   LIMIT 1
+               ) AS last_season_number,
+               (
+                   SELECT episodes.episode_number
+                   FROM episodes
+                   INNER JOIN seasons USING(local_season_id)
+                   INNER JOIN episode_watch_progress USING(local_episode_id)
+                   WHERE seasons.local_media_id = media_entries.local_media_id
+                     AND seasons.season_number > 0
+                     AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+                   ORDER BY episode_watch_progress.watched_at DESC,
+                            seasons.season_number DESC,
+                            episodes.episode_number DESC
+                   LIMIT 1
+               ) AS last_episode_number
         FROM media_entries
         INNER JOIN library_entries USING(local_media_id)
         INNER JOIN external_refs USING(local_media_id)
         WHERE external_refs.source = :source
         """
     )
+    // The last episode is the most recently watched regular one. A season marked at once shares one
+    // watched_at, so position breaks the tie and reports the furthest episode.
     abstract fun observeContinueWatchingRows(source: MediaSource, today: LocalDate): Flow<List<ContinueWatchingRow>>
 
     @Query(
@@ -523,11 +587,17 @@ internal abstract class LibraryDao {
         SELECT media_entries.*
         FROM media_entries
         INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+        WHERE external_refs.source = :source
+          AND external_refs.media_type = :mediaType
+          AND external_refs.external_id = :externalId
         LIMIT 1
         """
     )
-    abstract suspend fun getMediaByExternalRef(source: MediaSource, externalId: String): MediaEntity?
+    abstract suspend fun getMediaByExternalRef(
+        source: MediaSource,
+        mediaType: MediaType,
+        externalId: String
+    ): MediaEntity?
 
     @Transaction
     open suspend fun setSeriesAbandoned(
@@ -535,7 +605,7 @@ internal abstract class LibraryDao {
         externalId: String,
         isAbandoned: Boolean
     ): ProgressWriteOutcome {
-        val media = getMediaByExternalRef(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val media = getMediaByExternalRef(source, MediaType.SERIES, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         if (media.mediaType != MediaType.SERIES) return ProgressWriteOutcome.MEDIA_TYPE_MISMATCH
         if (isAbandoned && !isInLibraryByMediaId(media.localMediaId)) return ProgressWriteOutcome.NOT_IN_LIBRARY
         if (isAbandoned) {
@@ -555,11 +625,13 @@ internal abstract class LibraryDao {
             SELECT 1
             FROM external_refs
             INNER JOIN library_entries USING(local_media_id)
-            WHERE external_refs.source = :source AND external_refs.external_id = :externalId
+            WHERE external_refs.source = :source
+              AND external_refs.media_type = :mediaType
+              AND external_refs.external_id = :externalId
         )
         """
     )
-    abstract suspend fun isInLibrary(source: MediaSource, externalId: String): Boolean
+    abstract suspend fun isInLibrary(source: MediaSource, mediaType: MediaType, externalId: String): Boolean
 
     @Query(
         """
@@ -571,19 +643,24 @@ internal abstract class LibraryDao {
               END
         WHERE local_media_id = (
             SELECT local_media_id FROM external_refs
-            WHERE source = :source AND external_id = :externalId
+            WHERE source = :source AND external_id = :externalId AND media_type = :mediaType
         )
         """
     )
     abstract suspend fun updateFavoriteState(
         source: MediaSource,
+        mediaType: MediaType,
         externalId: String,
         isFavorite: Boolean,
         now: Instant
     ): Int
 
-    open suspend fun updateFavoriteState(source: MediaSource, externalId: String, isFavorite: Boolean): Int =
-        updateFavoriteState(source, externalId, isFavorite, Instant.now())
+    open suspend fun updateFavoriteState(
+        source: MediaSource,
+        mediaType: MediaType,
+        externalId: String,
+        isFavorite: Boolean
+    ): Int = updateFavoriteState(source, mediaType, externalId, isFavorite, Instant.now())
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     protected abstract suspend fun insertMedia(media: MediaEntity): Long
@@ -620,10 +697,11 @@ internal abstract class LibraryDao {
     @Transaction
     open suspend fun addExistingToLibrary(
         source: MediaSource,
+        mediaType: MediaType,
         externalId: String,
         addedAt: Instant
     ): LibraryItemWithRefs? {
-        val existing = getMediaByExternalRef(source, externalId) ?: return null
+        val existing = getMediaByExternalRef(source, mediaType, externalId) ?: return null
         insertMembership(LibraryMembershipEntity(existing.localMediaId, addedAt))
         return getLibraryItem(existing.localMediaId)
     }
@@ -635,7 +713,7 @@ internal abstract class LibraryDao {
         externalId: String,
         addedAt: Instant
     ): LibraryItemWithRefs {
-        val existing = getMediaByExternalRef(source, externalId)
+        val existing = getMediaByExternalRef(source, candidate.mediaType, externalId)
         val localMediaId =
             if (existing == null) {
                 val insertedId = insertMedia(candidate)
@@ -643,6 +721,7 @@ internal abstract class LibraryDao {
                     ExternalRefEntity(
                         localMediaId = insertedId,
                         source = source,
+                        mediaType = candidate.mediaType,
                         externalId = externalId
                     )
                 )
@@ -656,7 +735,9 @@ internal abstract class LibraryDao {
                         localMediaId = existing.localMediaId,
                         createdAt = existing.createdAt,
                         isFavorite = existing.isFavorite,
-                        favoriteAddedAt = existing.favoriteAddedAt
+                        favoriteAddedAt = existing.favoriteAddedAt,
+                        // A search result does not know the runtime; keep what Details or a restore stored.
+                        runtimeMinutes = candidate.runtimeMinutes ?: existing.runtimeMinutes
                     )
                 )
                 existing.localMediaId
@@ -675,7 +756,7 @@ internal abstract class LibraryDao {
         externalId: String,
         isFavorite: Boolean
     ) {
-        val existing = getMediaByExternalRef(source, externalId)
+        val existing = getMediaByExternalRef(source, candidate.mediaType, externalId)
         if (existing == null) {
             val insertedId = insertMedia(
                 candidate.copy(
@@ -687,6 +768,7 @@ internal abstract class LibraryDao {
                 ExternalRefEntity(
                     localMediaId = insertedId,
                     source = source,
+                    mediaType = candidate.mediaType,
                     externalId = externalId
                 )
             )
@@ -710,17 +792,17 @@ internal abstract class LibraryDao {
         WHERE local_media_id = (
             SELECT local_media_id
             FROM external_refs
-            WHERE source = :source AND external_id = :externalId
+            WHERE source = :source AND external_id = :externalId AND media_type = :mediaType
         )
         """
     )
-    protected abstract suspend fun deleteMembership(source: MediaSource, externalId: String): Int
+    protected abstract suspend fun deleteMembership(source: MediaSource, mediaType: MediaType, externalId: String): Int
 
     @Transaction
-    open suspend fun removeMembership(source: MediaSource, externalId: String): Int {
-        val removed = deleteMembership(source, externalId)
+    open suspend fun removeMembership(source: MediaSource, mediaType: MediaType, externalId: String): Int {
+        val removed = deleteMembership(source, mediaType, externalId)
         if (removed > 0) {
-            getMediaByExternalRef(source, externalId)?.let { deleteSeriesStateOverride(it.localMediaId) }
+            getMediaByExternalRef(source, mediaType, externalId)?.let { deleteSeriesStateOverride(it.localMediaId) }
         }
         return removed
     }

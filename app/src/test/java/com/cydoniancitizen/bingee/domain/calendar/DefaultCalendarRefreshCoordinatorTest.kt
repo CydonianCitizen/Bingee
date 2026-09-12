@@ -199,20 +199,20 @@ class DefaultCalendarRefreshCoordinatorTest {
     }
 
     @Test
-    fun manualRefreshIsBoundedToTwentyTargets() = runTest {
+    fun manualRefreshReachesEveryLibraryTitle() = runTest {
         val details = FakeDetailsRepository()
-        val targets = (1..25).map {
-            BackgroundRefreshTarget(ref(it.toString()), MediaType.MOVIE)
-        }
+        val entries = (1..25).map { entry(it.toString(), MediaType.MOVIE) }
 
-        coordinator(
-            emptyList(),
+        val summary = coordinator(
+            entries,
             details,
             FakeSeriesRepository(),
             FakeCalendarRepository()
-        ).refresh(targets)
+        ).refresh()
 
-        assertEquals(20, details.calls.size)
+        // A library beyond the background batch size is refreshed in full, not just its first titles.
+        assertEquals(25, details.calls.size)
+        assertEquals(25, summary.titlesConsidered)
     }
 
     @Test
@@ -317,7 +317,7 @@ class DefaultCalendarRefreshCoordinatorTest {
         var activeCalls = 0
         var maxActive = 0
 
-        override fun observeDetails(tmdbId: Long): Flow<AppResult<CachedMediaDetails?>> =
+        override fun observeDetails(tmdbId: Long, mediaType: MediaType): Flow<AppResult<CachedMediaDetails?>> =
             flowOf(AppResult.Success(null))
 
         override suspend fun refreshDetails(tmdbId: Long, mediaType: MediaType, force: Boolean): AppResult<Unit> {

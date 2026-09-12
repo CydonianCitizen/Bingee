@@ -210,6 +210,15 @@ internal fun StatisticsContent(
     val radarGenres = tasteStatistics.radarGenres
     val normalizedValues = relativeGenreNormalization(radarGenres.map(GenreStatistic::titleCount))
     var selectedRating by remember { mutableStateOf<Int?>(null) }
+    val ratingStatistics = statistics.personalRatingStatistics
+    val effectiveSelectedRating = selectedRating?.takeIf { rating ->
+        ratingStatistics.histogram.any { it.rating == rating && it.titleCount > 0 }
+    }
+    val selectedTitles = effectiveSelectedRating?.let { rating ->
+        ratingStatistics.ratedTitles.filter { it.personalRating?.value == rating }
+    }.orEmpty()
+    val selectedMovies = selectedTitles.filter { it.mediaType == MediaType.MOVIE }
+    val selectedSeries = selectedTitles.filter { it.mediaType == MediaType.SERIES }
 
     LazyColumn(
         modifier = modifier
@@ -263,18 +272,33 @@ internal fun StatisticsContent(
             }
         }
         item {
-            val ratingStatistics = statistics.personalRatingStatistics
-            val effectiveSelectedRating = selectedRating?.takeIf { rating ->
-                ratingStatistics.histogram.any { it.rating == rating && it.titleCount > 0 }
-            }
             RatingSection(
                 statistics = ratingStatistics,
                 selectedRating = effectiveSelectedRating,
                 onRatingSelected = { rating ->
                     selectedRating = if (selectedRating == rating) null else rating
-                },
-                onOpenDetails = onOpenDetails
+                }
             )
+        }
+        if (effectiveSelectedRating != null) {
+            if (selectedMovies.isNotEmpty()) {
+                item {
+                    RatingShelf(
+                        title = stringResource(R.string.statistics_rating_movies),
+                        entries = selectedMovies,
+                        onOpenDetails = onOpenDetails
+                    )
+                }
+            }
+            if (selectedSeries.isNotEmpty()) {
+                item {
+                    RatingShelf(
+                        title = stringResource(R.string.statistics_rating_series),
+                        entries = selectedSeries,
+                        onOpenDetails = onOpenDetails
+                    )
+                }
+            }
         }
     }
 }
@@ -284,7 +308,6 @@ private fun RatingSection(
     statistics: PersonalRatingStatistics,
     selectedRating: Int?,
     onRatingSelected: (Int) -> Unit,
-    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val locale = LocalConfiguration.current.locales[0]
@@ -320,25 +343,6 @@ private fun RatingSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        selectedRating?.let { rating ->
-            val selectedTitles = statistics.ratedTitles.filter { it.personalRating?.value == rating }
-            val movies = selectedTitles.filter { it.mediaType == MediaType.MOVIE }
-            val series = selectedTitles.filter { it.mediaType == MediaType.SERIES }
-            if (movies.isNotEmpty()) {
-                RatingShelf(
-                    title = stringResource(R.string.statistics_rating_movies),
-                    entries = movies,
-                    onOpenDetails = onOpenDetails
-                )
-            }
-            if (series.isNotEmpty()) {
-                RatingShelf(
-                    title = stringResource(R.string.statistics_rating_series),
-                    entries = series,
-                    onOpenDetails = onOpenDetails
-                )
-            }
-        }
     }
 }
 
@@ -350,30 +354,17 @@ private fun RatingHistogram(
     modifier: Modifier = Modifier
 ) {
     val normalized = relativeRatingNormalization(histogram)
-    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(156.dp)) {
-        val slotWidth = chartSlotWidth(maxWidth, histogram.size)
-        val scrollState = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .horizontalScroll(scrollState),
-            horizontalArrangement = Arrangement.spacedBy(CHART_SLOT_SPACING),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Spacer(Modifier.width(CHART_EDGE_PADDING))
-            histogram.forEachIndexed { index, bucket ->
-                RatingHistogramBar(
-                    bucket = bucket,
-                    normalizedValue = normalized.getOrElse(index) { 0f },
-                    isSelected = selectedRating == bucket.rating,
-                    onClick = { onRatingSelected(bucket.rating) },
-                    modifier = Modifier
-                        .width(slotWidth)
-                        .height(156.dp)
-                )
-            }
-            Spacer(Modifier.width(CHART_EDGE_PADDING))
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(CHART_SLOT_SPACING)
+    ) {
+        histogram.forEachIndexed { index, bucket ->
+            RatingHistogramBar(
+                bucket = bucket,
+                normalizedValue = normalized.getOrElse(index) { 0f },
+                isSelected = selectedRating == bucket.rating,
+                onClick = { onRatingSelected(bucket.rating) }
+            )
         }
     }
 }
@@ -399,8 +390,10 @@ private fun RatingHistogramBar(
         bucket.titleCount,
         selectedSuffix
     )
-    Column(
+    Row(
         modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(enabled = canSelect, onClick = onClick)
             .semantics {
                 contentDescription = description
@@ -408,26 +401,28 @@ private fun RatingHistogramBar(
                 selected = isSelected
                 if (!canSelect) disabled()
             },
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Text(
+            text = bucket.rating.toString(),
+            modifier = Modifier.widthIn(min = 24.dp),
+            style = if (isSelected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
         Box(
             modifier = Modifier
-                .width(20.dp)
-                .height(128.dp),
-            contentAlignment = Alignment.BottomCenter
+                .weight(1f)
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(normalizedValue.coerceIn(0f, 1f))
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(normalizedValue.coerceIn(0f, 1f))
-                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                     .background(
                         if (isSelected) {
                             MaterialTheme.colorScheme.primary
@@ -438,18 +433,12 @@ private fun RatingHistogramBar(
             )
         }
         Text(
-            text = bucket.rating.toString(),
-            style = if (isSelected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium,
+            text = bucket.titleCount.toString(),
+            modifier = Modifier.widthIn(min = 24.dp),
+            style = MaterialTheme.typography.labelLarge,
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.End,
             maxLines = 1
-        )
-        Box(
-            modifier = Modifier
-                .padding(top = 2.dp)
-                .size(width = 20.dp, height = 3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
         )
     }
 }
@@ -474,7 +463,7 @@ private fun RatingShelf(
         ) {
             items(
                 items = entries,
-                key = { "${it.mediaRef.source.name}:${it.mediaRef.externalId}" }
+                key = { "${it.mediaRef.source.name}:${it.mediaType}:${it.mediaRef.externalId}" }
             ) { entry ->
                 RatingPosterItem(
                     entry = entry,
@@ -1201,63 +1190,41 @@ private fun radarAngle(index: Int, axisCount: Int): Float = (-PI / 2.0 + index *
 
 @Composable
 private fun GenreRanking(rankedGenres: List<GenreStatistic>, modifier: Modifier = Modifier) {
-    val normalizedValues = relativeGenreNormalization(rankedGenres.map(GenreStatistic::titleCount))
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        rankedGenres.forEachIndexed { index, genre ->
-            GenreRankingRow(
-                genre = genre,
-                normalizedValue = normalizedValues[index]
-            )
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+        rankedGenres.forEach { genre ->
+            GenreRankingRow(genre = genre)
         }
     }
 }
 
 @Composable
-private fun GenreRankingRow(genre: GenreStatistic, normalizedValue: Float, modifier: Modifier = Modifier) {
+private fun GenreRankingRow(genre: GenreStatistic, modifier: Modifier = Modifier) {
     val rowDescription = pluralStringResource(
         R.plurals.statistics_genre_row_description,
         genre.titleCount,
         genre.name,
         genre.titleCount
     )
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) { contentDescription = rowDescription },
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = genre.name,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 12.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = genre.titleCount.toString(),
-                modifier = Modifier.widthIn(min = 24.dp),
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
-        Box(
+        Text(
+            text = genre.name,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(normalizedValue.coerceIn(0f, 1f))
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
+                .weight(1f)
+                .padding(end = 12.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = genre.titleCount.toString(),
+            modifier = Modifier.widthIn(min = 24.dp),
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.End
+        )
     }
 }
