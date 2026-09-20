@@ -73,23 +73,21 @@ internal sealed interface TvTimeParseResult {
 
 @Singleton
 internal class TvTimeSourceParser @Inject constructor(private val zipGateway: TvTimeZipGateway) {
-    suspend fun parse(uri: Uri): TvTimeParseResult = try {
+    suspend fun parse(uri: Uri): TvTimeParseResult = guarded {
         when (val result = zipGateway.withArchive(uri) { archive -> parseArchiveDocument(archive) }) {
             is TvTimeArchiveResult.Success -> TvTimeParseResult.Success(result.value)
             is TvTimeArchiveResult.Failure -> TvTimeParseResult.Failure(
                 TvTimeParseFailure(TvTimeParseFailureKind.ARCHIVE, result.failure.kind)
             )
         }
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (failure: TvTimeParseFailure) {
-        TvTimeParseResult.Failure(failure)
-    } catch (_: Exception) {
-        TvTimeParseResult.Failure(TvTimeParseFailure(TvTimeParseFailureKind.INVALID_STRUCTURE))
     }
 
-    internal suspend fun parseArchiveForTest(archive: TvTimeArchive): TvTimeParseResult = try {
-        TvTimeParseResult.Success(parseArchiveDocument(archive))
+    /** Parses an archive that is already open. JVM tests enter here: they cannot build an `android.net.Uri`. */
+    internal suspend fun parseArchiveForTest(archive: TvTimeArchive): TvTimeParseResult =
+        guarded { TvTimeParseResult.Success(parseArchiveDocument(archive)) }
+
+    private inline fun guarded(block: () -> TvTimeParseResult): TvTimeParseResult = try {
+        block()
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failure: TvTimeParseFailure) {
@@ -132,8 +130,6 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
         var watchedCount = 0
         var statusCount = 0
         var technicalFlagCount = 0
-        var recordsWithImdb = 0
-        var recordsWithTvdb = 0
         var watchedMovies = 0
         var watchedEpisodes = 0
         var specials = 0
@@ -176,65 +172,22 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
 
                     TvTimeRole.MOVIE -> {
                         var index = 0
-                        processMovie(first, entry.index, index, warnings, identityOwners).also { result ->
-                            if (result.warning != null) warnings.add(result.warning)
-                            if (result.value != null) {
-                                movies += result.value
-                                if (result.value.watch?.watched == true) watchedMovies++
-                                if (result.value.identities.any {
-                                        it.namespace == ImportedIdentityNamespace.IMDB
-                                    }
-                                ) {
-                                    recordsWithImdb++
-                                }
-                                if (result.value.identities.any {
-                                        it.namespace == ImportedIdentityNamespace.TVDB
-                                    }
-                                ) {
-                                    recordsWithTvdb++
-                                }
-                                if (result.value.warnings.any {
-                                        it.code == ImportWarningCode.UNSUPPORTED_FIELD
-                                    }
-                                ) {
+                        fun add(value: JsonElement, recordIndex: Int) {
+                            val result = processMovie(value, entry.index, recordIndex, warnings, identityOwners)
+                            result.warning?.let(warnings::add)
+                            result.value?.let { movie ->
+                                movies += movie
+                                if (movie.watch?.watched == true) watchedMovies++
+                                if (movie.warnings.any { it.code == ImportWarningCode.UNSUPPORTED_FIELD }) {
                                     favoriteCount++
                                 }
-                                result.value.watch?.rewatchCount?.let { rewatchCount++ }
-                            } else {
-                                invalidRecords++
-                            }
+                                movie.watch?.rewatchCount?.let { rewatchCount++ }
+                            } ?: run { invalidRecords++ }
                         }
-                        index++
+                        add(first, index++)
                         while (reader.hasNext()) {
                             if (index >= TvTimeImportLimits.MAX_MOVIE_RECORDS) fail(TvTimeParseFailureKind.TOO_LARGE)
-                            val value = readRecord(reader, guardedInput, coroutineContext, TvTimeRole.MOVIE)
-                            processMovie(value, entry.index, index, warnings, identityOwners).also { result ->
-                                result.warning?.let(warnings::add)
-                                result.value?.let { movie ->
-                                    movies += movie
-                                    if (movie.watch?.watched == true) watchedMovies++
-                                    if (movie.identities.any {
-                                            it.namespace == ImportedIdentityNamespace.IMDB
-                                        }
-                                    ) {
-                                        recordsWithImdb++
-                                    }
-                                    if (movie.identities.any {
-                                            it.namespace == ImportedIdentityNamespace.TVDB
-                                        }
-                                    ) {
-                                        recordsWithTvdb++
-                                    }
-                                    if (movie.warnings.any {
-                                            it.code == ImportWarningCode.UNSUPPORTED_FIELD
-                                        }
-                                    ) {
-                                        favoriteCount++
-                                    }
-                                    movie.watch?.rewatchCount?.let { rewatchCount++ }
-                                } ?: run { invalidRecords++ }
-                            }
-                            index++
+                            add(readRecord(reader, guardedInput, coroutineContext, TvTimeRole.MOVIE), index++)
                         }
                     }
 
@@ -252,18 +205,6 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
                                 series += parsed.hint
                                 seasonCount += parsed.seasonCount
                                 invalidRecords += parsed.invalidEpisodeCount
-                                if (parsed.hint.identities.any {
-                                        it.namespace == ImportedIdentityNamespace.IMDB
-                                    }
-                                ) {
-                                    recordsWithImdb++
-                                }
-                                if (parsed.hint.identities.any {
-                                        it.namespace == ImportedIdentityNamespace.TVDB
-                                    }
-                                ) {
-                                    recordsWithTvdb++
-                                }
                                 if (parsed.hint.warnings.any {
                                         it.code == ImportWarningCode.UNSUPPORTED_FIELD
                                     }
@@ -281,18 +222,6 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
                                     episodes += episode
                                     if (episode.watch.watched) watchedEpisodes++
                                     if (episode.special || episode.specialsSeason) specials++
-                                    if (episode.identities.any {
-                                            it.namespace == ImportedIdentityNamespace.IMDB
-                                        }
-                                    ) {
-                                        recordsWithImdb++
-                                    }
-                                    if (episode.identities.any {
-                                            it.namespace == ImportedIdentityNamespace.TVDB
-                                        }
-                                    ) {
-                                        recordsWithTvdb++
-                                    }
                                     episode.watch.rewatchCount?.let { rewatchCount++ }
                                     episode.watch.watchedCount?.let { watchedCount++ }
                                 }
@@ -369,8 +298,6 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
                 watchedMovieCount = watchedMovies,
                 watchedEpisodeCount = watchedEpisodes,
                 specialsCount = specials,
-                recordsWithImdbIds = recordsWithImdb,
-                recordsWithTvdbIds = recordsWithTvdb,
                 warningCount = warnings.values.sumOf(ImportWarning::occurrenceCount),
                 invalidRecordCount = invalidRecords,
                 unsupported = unsupported
@@ -384,12 +311,12 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
         warnUnknown(objectValue, LIST_FIELDS, ImportSourceLocation(entryIndex, 0, "$[0]"), warnings)
         val items = requiredArray(objectValue, "items", "$.items")
         if (items.size() > TvTimeImportLimits.MAX_LIST_ITEMS) fail(TvTimeParseFailureKind.TOO_LARGE)
+        requiredString(objectValue, "id", "$.id")
+        requiredString(objectValue, "name", "$.name")
+        requiredString(objectValue, "description", "$.description")
+        requiredBoolean(objectValue, "is_public", "$.is_public")
+        requiredString(objectValue, "created_at", "$.created_at").also(::parseCreatedTimestamp)
         return TvTimeListDto(
-            id = requiredString(objectValue, "id", "$.id"),
-            name = requiredString(objectValue, "name", "$.name"),
-            description = requiredString(objectValue, "description", "$.description"),
-            isPublic = requiredBoolean(objectValue, "is_public", "$.is_public"),
-            createdAt = requiredString(objectValue, "created_at", "$.created_at").also(::parseCreatedTimestamp),
             items = items.mapIndexed { index, element -> parseListItem(element, entryIndex, index, warnings) }
         )
     }
@@ -403,9 +330,9 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
         val location = ImportSourceLocation(entryIndex, index, "$.items[$index]")
         val objectValue = value.asObjectOrInvalid()
         warnUnknown(objectValue, LIST_ITEM_FIELDS, location, warnings)
+        requiredInt(objectValue, "custom_order", "${location.path}.custom_order")
+        requiredString(objectValue, "name", "${location.path}.name")
         return TvTimeListItemDto(
-            customOrder = requiredInt(objectValue, "custom_order", "${location.path}.custom_order"),
-            name = requiredString(objectValue, "name", "${location.path}.name"),
             type = requiredString(objectValue, "type", "${location.path}.type"),
             tvdbId = optionalLong(objectValue, "tvdb_id", "${location.path}.tvdb_id"),
             uuid = optionalString(objectValue, "uuid", "${location.path}.uuid")

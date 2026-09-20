@@ -8,9 +8,10 @@ import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
+import com.cydoniancitizen.bingee.core.model.releaseCalendarStartDate
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.domain.repository.BackgroundRefreshPlanner
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
@@ -38,7 +39,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
     private val credentialRepository: TmdbCredentialRepository,
     private val clock: Clock,
     private val dateSource: CalendarDateSource,
-    private val window: ReleaseCalendarWindow
+    private val backgroundPlanner: BackgroundRefreshPlanner
 ) : CalendarRefreshCoordinator {
     override suspend fun refresh(): CalendarRefreshSummary {
         val entries = when (val result = libraryRepository.observeEntries().first()) {
@@ -46,13 +47,15 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
             is AppResult.Failure -> return failureSummary(result.error)
         }.distinctBy { it.mediaRef to it.mediaType }
 
-        return refresh(entries.map { BackgroundRefreshTarget(it.mediaRef, it.mediaType) })
+        return refresh(entries.map { BackgroundRefreshTarget(it.mediaRef, it.mediaType) }, background = false)
     }
 
-    override suspend fun refresh(targets: List<BackgroundRefreshTarget>): CalendarRefreshSummary {
-        // Every target is refreshed; the semaphore below bounds concurrency. The background worker passes
-        // its own bounded batch, so only a manual refresh walks the whole Library.
-        val entries = targets.distinctBy { it.mediaRef to it.mediaType }
+    override suspend fun refresh(targets: List<BackgroundRefreshTarget>): CalendarRefreshSummary =
+        refresh(targets, background = true)
+
+    private suspend fun refresh(targets: List<BackgroundRefreshTarget>, background: Boolean): CalendarRefreshSummary {
+        val distinct = targets.distinctBy { it.mediaRef to it.mediaType }
+        val entries = if (background) distinct.take(BackgroundRefreshPlanner.TITLE_LIMIT) else distinct
         if (entries.isEmpty()) return noWorkSummary()
         val tmdbAvailable = credentialRepository.status.value.canRefresh()
         val semaphore = Semaphore(REMOTE_CONCURRENCY_LIMIT)
@@ -61,7 +64,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
                 async {
                     semaphore.withPermit {
                         try {
-                            refreshEntry(entry, tmdbAvailable)
+                            refreshEntry(entry, tmdbAvailable, background)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Throwable) {
@@ -76,7 +79,11 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         return finalized.toSummary(entries.size)
     }
 
-    private suspend fun refreshEntry(entry: BackgroundRefreshTarget, tmdbAvailable: Boolean): RefreshCounts {
+    private suspend fun refreshEntry(
+        entry: BackgroundRefreshTarget,
+        tmdbAvailable: Boolean,
+        background: Boolean
+    ): RefreshCounts {
         val tmdbId = entry.mediaRef.takeIf { it.source == MediaSource.TMDB }
             ?.externalId?.toLongOrNull()?.takeIf { it > 0 } ?: return RefreshCounts(skipped = 1)
         if (!tmdbAvailable) return RefreshCounts(skipped = 1, error = AppError.Unauthorized)
@@ -91,10 +98,31 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         val selected = selectRelevantSeasonNumbers(
             beforeRefresh = before,
             afterRefresh = after,
-            today = dateSource.currentDate(),
-            window = window
+            today = dateSource.currentDate()
         )
-        selected.forEach { seasonNumber ->
+        val batch = if (background) {
+            val today = dateSource.currentDate()
+            val candidates = (after + before).distinctBy { it.season.seasonNumber }
+                .filter { it.season.seasonNumber in selected }
+            val priority = candidates.filter { season ->
+                season.season.airDate?.isBefore(releaseCalendarStartDate(today)) == false ||
+                    season.episodes.any { it.episode.airDate?.isBefore(today) != true }
+            }.maxByOrNull { it.season.seasonNumber }
+                ?: candidates.filter { it.episodesFetchedAt == null }.maxByOrNull { it.season.seasonNumber }
+            when (
+                val result = backgroundPlanner.claimSeasons(
+                    entry.mediaRef,
+                    selected,
+                    priority?.season?.seasonNumber
+                )
+            ) {
+                is AppResult.Success -> result.value
+                is AppResult.Failure -> return counts + RefreshCounts(failed = 1, error = result.error)
+            }
+        } else {
+            selected
+        }
+        batch.forEach { seasonNumber ->
             counts += seriesRepository.refreshSeason(tmdbId, seasonNumber, force = true).toCounts()
         }
         return counts
@@ -142,11 +170,10 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
 internal fun selectRelevantSeasonNumbers(
     beforeRefresh: List<CachedSeason>,
     afterRefresh: List<CachedSeason>,
-    today: LocalDate,
-    window: ReleaseCalendarWindow
+    today: LocalDate
 ): List<Int> {
     val seasons = (afterRefresh + beforeRefresh).distinctBy { it.season.seasonNumber }
-    val recentStart = window.startDate(today)
+    val recentStart = releaseCalendarStartDate(today)
     fun CachedSeason.hasUpcomingEpisode() = episodes.any { episode ->
         episode.episode.airDate?.isBefore(today) != true
     }

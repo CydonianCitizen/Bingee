@@ -14,9 +14,4 @@ object SeriesFollowPolicy {
     fun isFollowed(entry: LibraryEntry): Boolean = entry.mediaType == MediaType.SERIES &&
         entry.serialState != SeriesTrackingState.ABANDONED &&
         entry.serialState != null
-
-    fun isFollowedSeries(mediaType: MediaType, inLibrary: Boolean, isAbandoned: Boolean = false): Boolean {
-        if (mediaType != MediaType.SERIES || !inLibrary) return false
-        return !isAbandoned
-    }
 }

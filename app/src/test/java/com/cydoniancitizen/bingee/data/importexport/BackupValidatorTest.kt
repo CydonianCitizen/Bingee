@@ -12,6 +12,40 @@ class BackupValidatorTest {
     private val today = LocalDate.of(2026, 8, 18)
 
     @Test
+    fun personalDatesBeforeUpdatedReleaseDatesSurviveBackupRoundTrip() {
+        val watchedDate = today.minusDays(2)
+        listOf(1, 2).forEach { version ->
+            val data = baseData().copy(
+                media = listOf(movie(), series()).map { it.copy(releaseDate = today) },
+                movieProgress = listOf(BackupMovieProgress(movie().primaryRef, instant, watchedDate)),
+                seriesProgress = listOf(BackupSeriesProgress(series().primaryRef, instant, watchedDate))
+            )
+            val original = document(data).copy(schemaVersion = version)
+            val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(original)) as BackupParseResult.Success
+            val result = validate(parsed.document)
+            assertTrue(
+                "v$version must preserve personal history after metadata changes",
+                result is BackupValidationResult.Success
+            )
+            assertEquals(original, (result as BackupValidationResult.Success).plan.document)
+        }
+    }
+
+    @Test
+    fun futurePersonalDatesRemainInvalidForMoviesAndSeries() {
+        val future = today.plusDays(1)
+        val data = baseData().copy(media = listOf(movie(), series()))
+        assertEquals(
+            BackupFailureKind.VALIDATION,
+            failure(data.copy(movieProgress = listOf(BackupMovieProgress(movie().primaryRef, instant, future))))
+        )
+        assertEquals(
+            BackupFailureKind.VALIDATION,
+            failure(data.copy(seriesProgress = listOf(BackupSeriesProgress(series().primaryRef, instant, future))))
+        )
+    }
+
+    @Test
     fun acceptsSeasonZeroAndCrossReferenceGraph() {
         val data = baseData().copy(
             media = listOf(series()),

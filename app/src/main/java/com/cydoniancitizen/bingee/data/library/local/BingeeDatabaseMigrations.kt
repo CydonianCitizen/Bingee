@@ -81,4 +81,41 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
-val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Background refresh keeps each title's last attempt apart from its last success, so titles that
+        // keep failing rotate behind the others instead of filling every batch.
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `background_refresh_attempts` (
+                `local_media_id` INTEGER NOT NULL,
+                `attempted_at` TEXT NOT NULL,
+                PRIMARY KEY(`local_media_id`),
+                FOREIGN KEY(`local_media_id`) REFERENCES `media_entries`(`local_media_id`)
+                    ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        // Cached TMDB text records the language it was fetched in. Existing rows stay unknown and age out.
+        db.execSQL("ALTER TABLE `media_details` ADD COLUMN `language` TEXT")
+        db.execSQL("ALTER TABLE `seasons` ADD COLUMN `episodes_language` TEXT")
+    }
+}
+
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `seasons` ADD COLUMN `is_known_empty` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            """
+            UPDATE `seasons` SET `is_known_empty` = 1
+            WHERE `episode_count` = 0 AND `episodes_fetched_at` IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM `episodes` WHERE `episodes`.`local_season_id` = `seasons`.`local_season_id`
+                )
+            """.trimIndent()
+        )
+    }
+}
+
+val ALL_MIGRATIONS: Array<Migration> =
+    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)

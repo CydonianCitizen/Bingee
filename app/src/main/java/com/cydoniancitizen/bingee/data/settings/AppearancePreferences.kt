@@ -1,15 +1,12 @@
 package com.cydoniancitizen.bingee.data.settings
 
 import android.content.Context
-import androidx.core.os.LocaleListCompat
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -27,8 +24,6 @@ enum class AppLanguage(val languageTag: String) {
     }
 }
 
-fun AppLanguage.toApplicationLocales(): LocaleListCompat = LocaleListCompat.forLanguageTags(languageTag)
-
 interface AppearancePreferences {
     fun observeTheme(): Flow<AppTheme>
     suspend fun setTheme(theme: AppTheme)
@@ -39,25 +34,17 @@ interface AppearancePreferences {
     suspend fun getEffectiveTmdbLanguage(): String
 }
 
-fun AppLanguage.toTmdbLanguageTag(systemLocale: java.util.Locale = java.util.Locale.getDefault()): String =
-    when (this) {
-        AppLanguage.ENGLISH -> "en-US"
-        AppLanguage.ITALIAN -> "it-IT"
-    }
+fun AppLanguage.toTmdbLanguageTag(): String = when (this) {
+    AppLanguage.ENGLISH -> "en-US"
+    AppLanguage.ITALIAN -> "it-IT"
+}
 
 @Singleton
 internal class DataStoreAppearancePreferences @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : AppearancePreferences {
 
-    override fun observeTheme(): Flow<AppTheme> = context.bingeePreferences.data
-        .catch { failure ->
-            if (failure is IOException) {
-                emit(androidx.datastore.preferences.core.emptyPreferences())
-            } else {
-                throw failure
-            }
-        }
+    override fun observeTheme(): Flow<AppTheme> = context.bingeePreferenceData
         .map { prefs ->
             parseTheme(prefs[KEY_THEME])
         }
@@ -68,14 +55,7 @@ internal class DataStoreAppearancePreferences @Inject constructor(
         }
     }
 
-    override fun observeLanguage(): Flow<AppLanguage> = context.bingeePreferences.data
-        .catch { failure ->
-            if (failure is IOException) {
-                emit(androidx.datastore.preferences.core.emptyPreferences())
-            } else {
-                throw failure
-            }
-        }
+    override fun observeLanguage(): Flow<AppLanguage> = context.bingeePreferenceData
         .map { prefs ->
             val raw = prefs[KEY_LANGUAGE]
             parseLanguage(raw)

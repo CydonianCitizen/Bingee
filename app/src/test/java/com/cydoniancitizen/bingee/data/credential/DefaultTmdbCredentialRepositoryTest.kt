@@ -9,6 +9,7 @@ import com.cydoniancitizen.bingee.data.tmdb.auth.TmdbCredentialRemoteValidator
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,6 +19,91 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultTmdbCredentialRepositoryTest {
+    @Test
+    fun callerCancellationRestoresStableStatusAndAllowsAnotherValidation() = runTest {
+        listOf(false, true).forEach { hasExisting ->
+            val store = FakeStore(if (hasExisting) TmdbCredential("fake_existing") else null)
+            val first = CompletableDeferred<AppResult<Unit>>()
+            val second = CompletableDeferred<AppResult<Unit>>()
+            val repository = repository(store, DeferredRemoteValidator(first, second))
+            repository.refreshLocalStatus()
+            val stable = repository.status.value
+            val request = async {
+                if (hasExisting) repository.revalidateStored() else repository.validateAndSave("fake_cancelled")
+            }
+            runCurrent()
+            assertEquals(TmdbCredentialStatus.Validating(hasExisting), repository.status.value)
+            request.cancelAndJoin()
+            assertTrue(request.isCancelled)
+            assertEquals(stable, repository.status.value)
+            assertEquals(hasExisting, store.hasCredential())
+            assertEquals(0, store.saveCount)
+
+            second.complete(AppResult.Success(Unit))
+            assertEquals(AppResult.Success(Unit), repository.validateAndSave("fake_next"))
+            assertEquals(TmdbCredentialStatus.Valid, repository.status.value)
+            assertTrue(store.matches("fake_next"))
+        }
+    }
+
+    @Test
+    fun cancellingSupersededCallerDoesNotResetNewerValidation() = runTest {
+        val first = CompletableDeferred<AppResult<Unit>>()
+        val second = CompletableDeferred<AppResult<Unit>>()
+        val store = FakeStore()
+        val repository = repository(store, DeferredRemoteValidator(first, second))
+        repository.refreshLocalStatus()
+        val old = async { repository.validateAndSave("fake_old") }
+        runCurrent()
+        val newer = async { repository.validateAndSave("fake_new") }
+        runCurrent()
+        old.cancelAndJoin()
+        assertEquals(TmdbCredentialStatus.Validating(false), repository.status.value)
+        second.complete(AppResult.Success(Unit))
+        newer.await()
+        assertEquals(TmdbCredentialStatus.Valid, repository.status.value)
+        assertTrue(store.matches("fake_new"))
+    }
+
+    @Test
+    fun cancellationAfterStorageWriteRollsBackBeforeRestoringStatus() = runTest {
+        listOf(false, true).forEach { hasExisting ->
+            val store = FakeStore(
+                if (hasExisting) TmdbCredential("fake_existing") else null,
+                saveGate = CompletableDeferred(),
+                writeBeforeSaveGate = true
+            )
+            val repository = repository(store)
+            repository.refreshLocalStatus()
+            val stable = repository.status.value
+            val request = async { repository.validateAndSave("fake_cancelled") }
+            runCurrent()
+            assertTrue(store.matches("fake_cancelled"))
+            request.cancelAndJoin()
+            assertEquals(stable, repository.status.value)
+            assertEquals(hasExisting, store.hasCredential())
+            if (hasExisting) assertTrue(store.matches("fake_existing"))
+            repository.refreshLocalStatus()
+            assertEquals(stable, repository.status.value)
+        }
+    }
+
+    @Test
+    fun cancellationAfterRemovalCannotRestoreOldStatusOrCredential() = runTest {
+        val store = FakeStore(TmdbCredential("fake_existing"))
+        val repository = repository(
+            store,
+            DeferredRemoteValidator(CompletableDeferred(), CompletableDeferred())
+        )
+        repository.refreshLocalStatus()
+        val request = async { repository.validateAndSave("fake_cancelled") }
+        runCurrent()
+        repository.remove()
+        request.cancelAndJoin()
+        assertEquals(TmdbCredentialStatus.NotConfigured, repository.status.value)
+        assertFalse(store.hasCredential())
+    }
+
     @Test
     fun missingAndCorruptedStorageProduceSafeStates() = runTest {
         val missing = repository(FakeStore())
@@ -140,13 +226,59 @@ class DefaultTmdbCredentialRepositoryTest {
         assertEquals(TmdbCredentialStatus.NotConfigured, repository.status.value)
     }
 
+    @Test
+    fun removalDuringReplacementCommitIsNotUndoneByTheRollback() = runTest {
+        val saveGate = CompletableDeferred<Unit>()
+        val store = FakeStore(TmdbCredential("fake_existing"), saveGate = saveGate)
+        val repository = repository(store, QueueRemoteValidator(AppResult.Success(Unit)))
+        repository.refreshLocalStatus()
+
+        val replacement = async { repository.validateAndSave("fake_replacement") }
+        runCurrent()
+        val removal = async { repository.remove() }
+        runCurrent()
+        saveGate.complete(Unit)
+        replacement.await()
+
+        assertEquals(AppResult.Success(Unit), removal.await())
+        assertFalse(store.hasCredential())
+        assertEquals(TmdbCredentialStatus.NotConfigured, repository.status.value)
+        repository.refreshLocalStatus()
+        assertFalse(store.hasCredential())
+        assertEquals(TmdbCredentialStatus.NotConfigured, repository.status.value)
+    }
+
+    @Test
+    fun supersededCommitRollsBackBeforeANewerValidationReadsTheStore() = runTest {
+        val saveGate = CompletableDeferred<Unit>()
+        val store = FakeStore(TmdbCredential("fake_existing"), saveGate = saveGate)
+        val remote = QueueRemoteValidator(AppResult.Success(Unit), AppResult.Failure(AppError.NetworkUnavailable))
+        val repository = repository(store, remote)
+        repository.refreshLocalStatus()
+
+        val stale = async { repository.validateAndSave("fake_stale") }
+        runCurrent()
+        val newer = async { repository.validateAndSave("fake_newer") }
+        runCurrent()
+        saveGate.complete(Unit)
+        stale.await()
+
+        assertEquals(AppResult.Failure(AppError.NetworkUnavailable), newer.await())
+        assertTrue(store.matches("fake_existing"))
+        assertEquals(
+            TmdbCredentialStatus.TemporarilyUnverifiable(AppError.NetworkUnavailable, hasStoredCredential = true),
+            repository.status.value
+        )
+    }
+
     private fun repository(store: FakeStore, remote: TmdbCredentialRemoteValidator = QueueRemoteValidator()) =
         DefaultTmdbCredentialRepository(store, TmdbCredentialValidator(), remote)
 
     private class FakeStore(
         private var credential: TmdbCredential? = null,
         private val readFailure: Boolean = false,
-        private val saveGate: CompletableDeferred<Unit>? = null
+        private val saveGate: CompletableDeferred<Unit>? = null,
+        private val writeBeforeSaveGate: Boolean = false
     ) : TmdbCredentialStore {
         var saveCount = 0
         var deleteCount = 0
@@ -158,9 +290,10 @@ class DefaultTmdbCredentialRepositoryTest {
         }
 
         override suspend fun save(credential: TmdbCredential): AppResult<Unit> {
-            saveGate?.await()
+            if (!writeBeforeSaveGate) saveGate?.await()
             saveCount++
             this.credential = credential
+            if (writeBeforeSaveGate && saveCount == 1) saveGate?.await()
             return AppResult.Success(Unit)
         }
 

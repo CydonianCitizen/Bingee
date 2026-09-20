@@ -10,8 +10,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.data.notification.NotificationDetailIntent
-import com.cydoniancitizen.bingee.data.notification.NotificationNavigationTarget
 import com.cydoniancitizen.bingee.data.settings.bingeePreferences
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -41,7 +41,7 @@ class NotificationActivityNavigationTest {
         val scenario = ActivityScenario.launch<MainActivity>(
             NotificationDetailIntent.intent(
                 context,
-                NotificationNavigationTarget(MediaType.MOVIE, 101)
+                DetailRouteArgs(MediaType.MOVIE, 101)
             )
         )
         try {
@@ -63,7 +63,7 @@ class NotificationActivityNavigationTest {
                     activity,
                     NotificationDetailIntent.intent(
                         context,
-                        NotificationNavigationTarget(MediaType.SERIES, 202)
+                        DetailRouteArgs(MediaType.SERIES, 202)
                     )
                 )
             }

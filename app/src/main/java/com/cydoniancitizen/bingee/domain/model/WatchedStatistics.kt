@@ -126,7 +126,8 @@ fun calculateWatchedStatistics(
     currentDate: LocalDate,
     selectedYear: Int
 ): WatchedStatistics {
-    val uniqueEntries = entries.distinctBy { it.mediaRef }
+    // TMDB reuses one ID for an unrelated movie and series, so identity needs the type (ADR 0028).
+    val uniqueEntries = entries.distinctBy { it.mediaRef to it.mediaType }
     val completedTitles = uniqueEntries.filter(PersonalViewingEntry::isCompletedTitle)
     val viewedTitles = uniqueEntries.filter(PersonalViewingEntry::isViewingTasteEligible)
 
@@ -162,13 +163,14 @@ fun calculateWatchedStatistics(
 fun calculatePersonalRatingStatistics(entries: List<PersonalViewingEntry>): PersonalRatingStatistics {
     val ratedTitles = entries
         .asSequence()
-        .distinctBy { it.mediaRef }
+        .distinctBy { it.mediaRef to it.mediaType }
         .filter { it.personalRating != null }
         .sortedWith(
             compareByDescending<PersonalViewingEntry> { it.personalRatingUpdatedAt != null }
                 .thenByDescending { it.personalRatingUpdatedAt ?: Instant.MIN }
                 .thenBy { it.mediaRef.source.name }
                 .thenBy { it.mediaRef.externalId }
+                .thenBy { it.mediaType }
         )
         .toList()
     val counts = ratedTitles.groupingBy { it.personalRating!!.value }.eachCount()
@@ -263,7 +265,7 @@ fun calculateTasteStatistics(
     rankedGenres = rankedGenreStatistics(
         entries
             .asSequence()
-            .distinctBy { it.mediaRef }
+            .distinctBy { it.mediaRef to it.mediaType }
             .filter(PersonalViewingEntry::isViewingTasteEligible)
             .filter { entry ->
                 when (scope) {

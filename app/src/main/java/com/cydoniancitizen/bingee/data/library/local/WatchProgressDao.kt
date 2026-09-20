@@ -92,6 +92,27 @@ internal abstract class WatchProgressDao {
     )
     protected abstract suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long>
 
+    @Query(
+        """
+        SELECT episodes.local_episode_id
+        FROM episodes
+        INNER JOIN seasons USING(local_season_id)
+        WHERE seasons.local_media_id = :localMediaId
+          AND seasons.season_number > 0
+          AND (
+              seasons.season_number < :seasonNumber
+              OR (seasons.season_number = :seasonNumber AND episodes.episode_number < :episodeNumber)
+          )
+          AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
+        """
+    )
+    protected abstract suspend fun getTrackableEpisodeIdsBefore(
+        localMediaId: Long,
+        seasonNumber: Int,
+        episodeNumber: Int,
+        today: LocalDate
+    ): List<Long>
+
     @Query("SELECT * FROM movie_watch_progress WHERE local_media_id = :localMediaId")
     protected abstract suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity?
 
@@ -124,11 +145,11 @@ internal abstract class WatchProgressDao {
                 WHERE seasons.local_media_id = :localMediaId
                   AND seasons.season_number > 0
                   AND (
-                      seasons.episodes_fetched_at IS NULL
-                      OR seasons.episode_count != (
+                      seasons.episode_count != (
                           SELECT COUNT(*) FROM episodes
                           WHERE episodes.local_season_id = seasons.local_season_id
                       )
+                      OR (seasons.episode_count = 0 AND seasons.is_known_empty = 0)
                   )
             ) THEN 1 ELSE 0 END AS has_sufficient_coverage
         """
@@ -199,6 +220,32 @@ internal abstract class WatchProgressDao {
     ): ProgressWriteOutcome {
         val season = getSeason(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
         val progress = getTrackableEpisodeIds(season.localSeasonId, today)
+            .map { EpisodeWatchProgressEntity(it, watchedAt) }
+        if (progress.isNotEmpty()) insertEpisodeProgress(progress)
+        reconcileSeriesCompletion(season.localSeasonId, today, watchedAt)
+        return ProgressWriteOutcome.SUCCESS
+    }
+
+    /**
+     * Marks every aired regular episode that precedes [externalId] in the same series, across earlier
+     * seasons too. Only episodes already stored locally are reached. Watched rows keep their timestamp.
+     */
+    @Transaction
+    open suspend fun markPreviousEpisodesWatched(
+        source: MediaSource,
+        externalId: String,
+        today: LocalDate,
+        watchedAt: Instant
+    ): ProgressWriteOutcome {
+        val episode = getEpisode(source, externalId) ?: return ProgressWriteOutcome.NOT_FOUND
+        val season = getSeasonByLocalId(episode.localSeasonId) ?: return ProgressWriteOutcome.NOT_FOUND
+        if (season.seasonNumber == 0) return ProgressWriteOutcome.NOT_TRACKABLE
+        val progress = getTrackableEpisodeIdsBefore(
+            season.localMediaId,
+            season.seasonNumber,
+            episode.episodeNumber,
+            today
+        )
             .map { EpisodeWatchProgressEntity(it, watchedAt) }
         if (progress.isNotEmpty()) insertEpisodeProgress(progress)
         reconcileSeriesCompletion(season.localSeasonId, today, watchedAt)

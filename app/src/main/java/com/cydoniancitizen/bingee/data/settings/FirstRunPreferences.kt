@@ -4,10 +4,8 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -21,16 +19,8 @@ internal interface FirstRunPreferences {
 internal class DataStoreFirstRunPreferences @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : FirstRunPreferences {
-    override suspend fun isOnboardingComplete(): Boolean = context.bingeePreferences.data
-        .catch { failure ->
-            if (failure is IOException) {
-                emit(
-                    androidx.datastore.preferences.core.emptyPreferences()
-                )
-            } else {
-                throw failure
-            }
-        }.map { preferences -> preferences[ONBOARDING_COMPLETE] ?: false }
+    override suspend fun isOnboardingComplete(): Boolean = context.bingeePreferenceData
+        .map { preferences -> preferences[ONBOARDING_COMPLETE] ?: false }
         .first()
 
     override suspend fun markOnboardingComplete() {

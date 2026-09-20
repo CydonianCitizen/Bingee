@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -50,6 +51,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -88,6 +90,43 @@ class MediaDetailsScreenTest {
         ).assertIsDisplayed()
         composeRule.onNodeWithText("Mark watched").performClick()
         assertTrue(toggled.get())
+    }
+
+    @Test
+    fun favoriteActionExposesItsCurrentToggleState() {
+        val toggled = AtomicBoolean(false)
+        setDetails(
+            content(movie()).copy(isInLibrary = true),
+            onToggleFavorite = { toggled.set(true) }
+        )
+
+        composeRule.onNodeWithContentDescription("Add to Favorites")
+            .assert(isToggleable())
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ToggleableState,
+                    ToggleableState.Off
+                )
+            )
+            .performClick()
+        assertTrue(toggled.get())
+    }
+
+    @Test
+    fun clearDateActionCommunicatesRemovalAndPassesNull() {
+        val clearedDate = AtomicReference<LocalDate?>(LocalDate.of(2026, 8, 17))
+        setDetails(
+            content(movie()).copy(
+                isInLibrary = true,
+                watchedDate = clearedDate.get(),
+                movieProgress = MovieProgressState.Ready(MovieWatchState.Watched(Instant.EPOCH))
+            ),
+            onSetWatchedDate = { clearedDate.set(it) }
+        )
+
+        scrollTo(hasText("Clear date"))
+        composeRule.onNodeWithText("Clear date").performClick()
+        assertEquals(null, clearedDate.get())
     }
 
     @Test
@@ -157,9 +196,10 @@ class MediaDetailsScreenTest {
         )
 
         scrollTo(hasText("Season 1"))
-        // Three episodes plus the season's own checkbox. Each episode publishes exactly one target:
-        // its trailing Checkbox must not add a second, or TalkBack would offer every episode twice.
-        composeRule.onAllNodes(isToggleable()).assertCountEquals(4)
+        // Three episodes plus the season's own checkbox and the Details Favorite toggle. Each episode
+        // publishes exactly one target: its trailing Checkbox must not add a second, or TalkBack would
+        // offer every episode twice.
+        composeRule.onAllNodes(isToggleable()).assertCountEquals(5)
         // The tap lands on the title, not on the checkbox: the whole row is the target.
         composeRule.onNodeWithText("Episode 2 · Unwatched episode").performScrollTo().performClick()
         assertTrue(toggled.get())
@@ -376,7 +416,9 @@ class MediaDetailsScreenTest {
         onToggleEpisode: (TrackedEpisode) -> Unit = {},
         onToggleSeasonWatched: (CachedSeason) -> Unit = {},
         onToggleSeasonExpanded: (CachedSeason) -> Unit = {},
-        onRetrySeason: (CachedSeason) -> Unit = {}
+        onRetrySeason: (CachedSeason) -> Unit = {},
+        onToggleFavorite: () -> Unit = {},
+        onSetWatchedDate: (LocalDate?) -> Unit = {}
     ) = setDetailsState(
         { state },
         onRetry,
@@ -388,7 +430,9 @@ class MediaDetailsScreenTest {
         onToggleEpisode,
         onToggleSeasonWatched,
         onToggleSeasonExpanded,
-        onRetrySeason
+        onRetrySeason,
+        onToggleFavorite,
+        onSetWatchedDate
     )
 
     private fun setDetailsState(
@@ -402,7 +446,9 @@ class MediaDetailsScreenTest {
         onToggleEpisode: (TrackedEpisode) -> Unit = {},
         onToggleSeasonWatched: (CachedSeason) -> Unit = {},
         onToggleSeasonExpanded: (CachedSeason) -> Unit = {},
-        onRetrySeason: (CachedSeason) -> Unit = {}
+        onRetrySeason: (CachedSeason) -> Unit = {},
+        onToggleFavorite: () -> Unit = {},
+        onSetWatchedDate: (LocalDate?) -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
@@ -412,6 +458,8 @@ class MediaDetailsScreenTest {
                     onRefresh = {},
                     onRetry = onRetry,
                     onToggleLibrary = onToggle,
+                    onToggleFavorite = onToggleFavorite,
+                    onSetWatchedDate = onSetWatchedDate,
                     onToggleMovieWatched = onToggleMovie,
                     onSaveRating = onSaveRating,
                     onRemoveRating = onRemoveRating,

@@ -221,7 +221,6 @@ private fun BackupFailureKind.toStringRes(): Int = when (this) {
     BackupFailureKind.MALFORMED_JSON,
     BackupFailureKind.INVALID_STRUCTURE -> R.string.backup_error_malformed
     BackupFailureKind.WRONG_FORMAT -> R.string.backup_error_wrong_format
-    BackupFailureKind.MISSING_VERSION -> R.string.backup_error_missing_version
     BackupFailureKind.UNSUPPORTED_VERSION -> R.string.backup_error_unsupported_version
     BackupFailureKind.VALIDATION -> R.string.backup_error_validation
     BackupFailureKind.DUPLICATE_IDENTITY -> R.string.backup_error_duplicate

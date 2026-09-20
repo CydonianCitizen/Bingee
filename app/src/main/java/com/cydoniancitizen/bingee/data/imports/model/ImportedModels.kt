@@ -41,8 +41,7 @@ internal enum class ImportWarningCode {
     CONFLICTING_IDENTITY,
     INVALID_RECORD,
     UNSUPPORTED_FIELD,
-    APPROXIMATE_TIMESTAMP,
-    UNRESOLVED_SOURCE_ID
+    APPROXIMATE_TIMESTAMP
 }
 
 internal data class ImportWarning(
@@ -107,12 +106,9 @@ internal data class ImportedSourceSummary(
     val watchedMovieCount: Int,
     val watchedEpisodeCount: Int,
     val specialsCount: Int,
-    val recordsWithImdbIds: Int,
-    val recordsWithTvdbIds: Int,
     val warningCount: Int,
     val invalidRecordCount: Int,
-    val unsupported: ImportedUnsupportedFields,
-    val ratingsImported: Int = 0
+    val unsupported: ImportedUnsupportedFields
 )
 
 internal data class ImportedSourceDocument(

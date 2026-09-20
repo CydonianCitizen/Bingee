@@ -86,7 +86,6 @@ class DefaultNotificationDispatchCoordinatorTest {
         assertEquals(listOf("movie"), notifier.postedSubjects)
         assertTrue(delivery.rows.contains(movie.identity(1)))
         assertEquals(1, delivery.batchLookupCalls)
-        assertEquals(0, delivery.singleLookupCalls)
         assertEquals(today.minusDays(30), delivery.prunedBefore)
         assertFalse(summary.transientFailure)
     }
@@ -252,9 +251,6 @@ class DefaultNotificationDispatchCoordinatorTest {
         val rows = linkedSetOf<NotificationDeliveryIdentity>()
         var prunedBefore: LocalDate? = null
         var batchLookupCalls = 0
-        var singleLookupCalls = 0
-        override suspend fun contains(identity: NotificationDeliveryIdentity): AppResult<Boolean> =
-            AppResult.Success(identity in rows).also { singleLookupCalls++ }
         override suspend fun findDelivered(
             identities: Set<NotificationDeliveryIdentity>
         ): AppResult<Set<NotificationDeliveryIdentity>> {

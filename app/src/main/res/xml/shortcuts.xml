@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static launcher shortcuts. MainActivity maps each destination extra to a route (AppShortcut). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutId="search"
+        android:shortcutShortLabel="@string/nav_search">
+        <intent
+            android:action="com.cydoniancitizen.bingee.action.OPEN_SHORTCUT"
+            android:targetClass="com.cydoniancitizen.bingee.MainActivity"
+            android:targetPackage="com.cydoniancitizen.bingee">
+            <extra
+                android:name="destination"
+                android:value="search" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:icon="@drawable/ic_shortcut_watching"
+        android:shortcutId="watching"
+        android:shortcutShortLabel="@string/profile_watching_title">
+        <intent
+            android:action="com.cydoniancitizen.bingee.action.OPEN_SHORTCUT"
+            android:targetClass="com.cydoniancitizen.bingee.MainActivity"
+            android:targetPackage="com.cydoniancitizen.bingee">
+            <extra
+                android:name="destination"
+                android:value="watching" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:icon="@drawable/ic_shortcut_watch_later"
+        android:shortcutId="watch_later"
+        android:shortcutShortLabel="@string/profile_collection_watch_later">
+        <intent
+            android:action="com.cydoniancitizen.bingee.action.OPEN_SHORTCUT"
+            android:targetClass="com.cydoniancitizen.bingee.MainActivity"
+            android:targetPackage="com.cydoniancitizen.bingee">
+            <extra
+                android:name="destination"
+                android:value="watch_later" />
+        </intent>
+    </shortcut>
+</shortcuts>

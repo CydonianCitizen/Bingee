@@ -27,7 +27,7 @@ internal class CalendarRefreshWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = executor.execute(runAttemptCount).toResult()
 
     internal companion object {
-        const val BATCH_SIZE = 20
+        const val BATCH_SIZE = BackgroundRefreshPlanner.TITLE_LIMIT
         const val MAX_ATTEMPTS = 3
     }
 }

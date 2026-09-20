@@ -120,14 +120,6 @@ internal data class TvTimeMatchReport(
     val episodes: List<TvTimeEpisodeReview>,
     val recoverableError: com.cydoniancitizen.bingee.core.result.AppError? = null
 ) {
-    val exactCount: Int get() = media.count { it.confidence == TvTimeMatchConfidence.EXACT } +
-        episodes.count { it.confidence == TvTimeMatchConfidence.EXACT }
-    val highConfidenceCount: Int get() = media.count { it.confidence == TvTimeMatchConfidence.HIGH_CONFIDENCE } +
-        episodes.count { it.confidence == TvTimeMatchConfidence.HIGH_CONFIDENCE }
-    val needsReviewCount: Int get() = media.count { it.confidence == TvTimeMatchConfidence.AMBIGUOUS } +
-        episodes.count { it.confidence == TvTimeMatchConfidence.AMBIGUOUS }
-    val unmatchedCount: Int get() = media.count { it.confidence == TvTimeMatchConfidence.UNMATCHED } +
-        episodes.count { it.confidence == TvTimeMatchConfidence.UNMATCHED }
     val skippedCount: Int get() = media.count { it.action == TvTimeReviewAction.SKIP } +
         episodes.count { it.action == TvTimeReviewAction.SKIP }
 }

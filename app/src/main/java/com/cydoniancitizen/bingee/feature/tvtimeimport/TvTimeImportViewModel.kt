@@ -6,31 +6,54 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.imports.model.ImportedSourceDocument
+import com.cydoniancitizen.bingee.data.imports.model.ImportedSourceSummary
 import com.cydoniancitizen.bingee.data.imports.tvtime.TmdbImportCandidate
 import com.cydoniancitizen.bingee.data.imports.tvtime.TmdbImportEpisodeCandidate
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeEpisodeReview
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPlan
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPlanBuilder
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPlanResult
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPreview
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportReport
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportStore
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchConfidence
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReport
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatcher
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMediaReview
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailure
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseResult
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimePlanFailure
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimePlanFailureReason
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeReviewAction
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeSourceParser
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeTmdbGateway
+import com.cydoniancitizen.bingee.di.DefaultDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal enum class TvTimeImportStage {
     IDLE,
@@ -78,7 +101,7 @@ internal data class TvTimeReviewUiState(
 
 internal data class TvTimeImportUiState(
     val stage: TvTimeImportStage = TvTimeImportStage.IDLE,
-    val summary: com.cydoniancitizen.bingee.data.imports.model.ImportedSourceSummary? = null,
+    val summary: ImportedSourceSummary? = null,
     val matchReport: TvTimeMatchReport? = null,
     val preview: TvTimeImportPreview? = null,
     val result: TvTimeImportReport? = null,
@@ -86,10 +109,36 @@ internal data class TvTimeImportUiState(
     val manualCandidates: Map<String, List<TmdbImportCandidate>> = emptyMap(),
     val manualSearchFailures: Set<String> = emptySet(),
     val selectedFilter: TvTimeMatchFilter = TvTimeMatchFilter.ALL,
-    val reviewState: TvTimeReviewUiState? = matchReport?.let {
-        deriveTvTimeReviewUiState(it, summary?.invalidRecordCount ?: 0, selectedFilter)
-    }
+    val reviewState: TvTimeReviewUiState? = null
 )
+
+// Projection and filter travel together; superseded calculations cannot publish stale rows.
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun Flow<TvTimeImportUiState>.projectReview(dispatcher: CoroutineDispatcher): Flow<TvTimeImportUiState> =
+    mapLatest { state ->
+        withContext(dispatcher) {
+            state.copy(
+                reviewState = state.matchReport?.let {
+                    deriveTvTimeReviewUiState(it, state.summary?.invalidRecordCount ?: 0, state.selectedFilter)
+                }
+            )
+        }
+    }
+
+internal suspend fun MutableStateFlow<TvTimeImportUiState>.updateReviewReport(
+    dispatcher: CoroutineDispatcher,
+    transform: (TvTimeMatchReport) -> TvTimeMatchReport
+) {
+    val report = value.matchReport ?: return
+    withContext(dispatcher) {
+        val updated = transform(report)
+        currentCoroutineContext().ensureActive()
+        update { state ->
+            // A cancelled/replaced archive must not be resurrected by an in-flight calculation.
+            if (state.matchReport === report) state.copy(matchReport = updated) else state
+        }
+    }
+}
 
 internal fun deriveTvTimeReviewUiState(
     report: TvTimeMatchReport,
@@ -187,14 +236,22 @@ private fun TvTimeEpisodeReview.matches(filter: TvTimeMatchFilter): Boolean = wh
 @HiltViewModel
 internal class TvTimeImportViewModel @Inject constructor(
     private val parser: TvTimeSourceParser,
-    private val matcher: com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatcher,
+    private val matcher: TvTimeMatcher,
     private val gateway: TvTimeTmdbGateway,
     private val planBuilder: TvTimeImportPlanBuilder,
     private val store: TvTimeImportStore,
-    private val clock: Clock
+    private val clock: Clock,
+    @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(TvTimeImportUiState())
-    val uiState: StateFlow<TvTimeImportUiState> = mutableState.asStateFlow()
+    val uiState: StateFlow<TvTimeImportUiState> = mutableState.projectReview(defaultDispatcher)
+        .stateIn(
+            CoroutineScope(viewModelScope.coroutineContext + defaultDispatcher),
+            SharingStarted.Eagerly,
+            TvTimeImportUiState()
+        )
+    private val reviewMutex = Mutex()
+    private var reviewGeneration = 0L
     private var document: ImportedSourceDocument? = null
     private var plan: TvTimeImportPlan? = null
     private var operation: Job? = null
@@ -205,20 +262,21 @@ internal class TvTimeImportViewModel @Inject constructor(
     fun selectArchive(uri: Uri) {
         if (isBusy()) return
         operation?.cancel()
+        reviewGeneration++
         matcher.clearSession()
         document = null
         plan = null
         mutableState.value = TvTimeImportUiState(stage = TvTimeImportStage.READING)
         operation = viewModelScope.launch {
             when (val parsed = parser.parse(uri)) {
-                is com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseResult.Success -> {
+                is TvTimeParseResult.Success -> {
                     document = parsed.document
                     mutableState.value = TvTimeImportUiState(
                         stage = TvTimeImportStage.SOURCE_SUMMARY,
                         summary = parsed.document.summary
                     )
                 }
-                is com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseResult.Failure -> {
+                is TvTimeParseResult.Failure -> {
                     mutableState.value = TvTimeImportUiState(
                         stage = TvTimeImportStage.FAILURE,
                         failure = parsed.failure.toUiFailure()
@@ -235,22 +293,17 @@ internal class TvTimeImportViewModel @Inject constructor(
         operation = viewModelScope.launch {
             val report = matcher.match(source)
             val failure = when (report.recoverableError) {
-                com.cydoniancitizen.bingee.core.result.AppError.Unauthorized -> TvTimeImportUiFailure.MISSING_CREDENTIAL
-                com.cydoniancitizen.bingee.core.result.AppError.NetworkUnavailable,
-                com.cydoniancitizen.bingee.core.result.AppError.RemoteServiceFailure -> TvTimeImportUiFailure.NETWORK
-                com.cydoniancitizen.bingee.core.result.AppError.RateLimited -> TvTimeImportUiFailure.RATE_LIMIT
+                AppError.Unauthorized -> TvTimeImportUiFailure.MISSING_CREDENTIAL
+                AppError.NetworkUnavailable,
+                AppError.RemoteServiceFailure -> TvTimeImportUiFailure.NETWORK
+                AppError.RateLimited -> TvTimeImportUiFailure.RATE_LIMIT
                 else -> null
             }
             mutableState.update { state ->
                 state.copy(
                     stage = TvTimeImportStage.REVIEW,
                     matchReport = report,
-                    failure = failure,
-                    reviewState = deriveTvTimeReviewUiState(
-                        report,
-                        state.summary?.invalidRecordCount ?: 0,
-                        state.selectedFilter
-                    )
+                    failure = failure
                 )
             }
         }
@@ -319,48 +372,36 @@ internal class TvTimeImportViewModel @Inject constructor(
 
     fun selectMediaCandidate(recordId: String, candidate: TmdbImportCandidate) {
         val source = document ?: return
-        val current = mutableState.value.matchReport ?: return
-        val sourceMedia = current.media.firstOrNull { it.source.recordId == recordId } ?: return
-        if (candidate.mediaType != sourceMedia.source.mediaType) return
-        val updatedMedia = current.media.map { review ->
-            if (review.source.recordId == recordId) {
-                review.copy(action = TvTimeReviewAction.SELECT_CANDIDATE, selectedCandidate = candidate)
-            } else {
-                review
-            }
-        }
-        if (isBusy()) return
-        val nextReport = current.copy(media = updatedMedia)
-        operation?.cancel()
-        mutableState.update {
-            it.copy(
-                stage = TvTimeImportStage.MATCHING,
-                failure = null,
-                matchReport = nextReport,
-                reviewState = deriveTvTimeReviewUiState(
-                    nextReport,
-                    it.summary?.invalidRecordCount ?: 0,
-                    it.selectedFilter
-                )
-            )
-        }
+        if (isBusy() || mutableState.value.matchReport == null) return
+        mutableState.update { it.copy(stage = TvTimeImportStage.MATCHING, failure = null) }
         operation = viewModelScope.launch {
-            val episodes = matcher.rematchEpisodes(source, updatedMedia)
-            mutableState.update { state ->
-                val report = state.matchReport?.copy(episodes = episodes)
-                if (report == null) {
-                    state
-                } else {
-                    state.copy(
-                        stage = TvTimeImportStage.REVIEW,
-                        matchReport = report,
-                        reviewState = deriveTvTimeReviewUiState(
-                            report,
-                            state.summary?.invalidRecordCount ?: 0,
-                            state.selectedFilter
+            reviewMutex.withLock {
+                val current = mutableState.value.matchReport ?: return@withLock
+                val nextReport = withContext(defaultDispatcher) {
+                    val sourceMedia = current.media.firstOrNull { it.source.recordId == recordId }
+                    if (sourceMedia == null || candidate.mediaType != sourceMedia.source.mediaType) {
+                        null
+                    } else {
+                        current.copy(
+                            media = current.media.map { review ->
+                                if (review.source.recordId == recordId) {
+                                    review.copy(
+                                        action = TvTimeReviewAction.SELECT_CANDIDATE,
+                                        selectedCandidate = candidate
+                                    )
+                                } else {
+                                    review
+                                }
+                            }
                         )
-                    )
+                    }
                 }
+                if (nextReport != null) {
+                    mutableState.update { it.copy(matchReport = nextReport) }
+                    val episodes = matcher.rematchEpisodes(source, nextReport.media)
+                    mutableState.update { it.copy(matchReport = nextReport.copy(episodes = episodes)) }
+                }
+                mutableState.update { it.copy(stage = TvTimeImportStage.REVIEW) }
             }
         }
     }
@@ -396,7 +437,7 @@ internal class TvTimeImportViewModel @Inject constructor(
         }
         mutableState.update { it.copy(manualSearchFailures = it.manualSearchFailures - recordId) }
         searchJobs[recordId] = viewModelScope.launch {
-            kotlinx.coroutines.delay(250)
+            delay(250)
             when (val result = gateway.searchMedia(mediaType, query.trim(), source.year)) {
                 is AppResult.Success -> if (searchGenerations[recordId] == generation) {
                     mutableState.update {
@@ -420,12 +461,13 @@ internal class TvTimeImportViewModel @Inject constructor(
 
     fun preparePreview() {
         val source = document ?: return
-        val report = mutableState.value.matchReport ?: return
-        if (isBusy()) return
+        if (mutableState.value.matchReport == null || isBusy()) return
         mutableState.update { it.copy(stage = TvTimeImportStage.PREPARING_PLAN, failure = null) }
         operation = viewModelScope.launch {
+            // Include edits queued before the user requested a preview.
+            val report = reviewMutex.withLock { mutableState.value.matchReport } ?: return@launch
             when (val result = planBuilder.build(source, report, clock.instant())) {
-                is com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPlanResult.Failure -> {
+                is TvTimeImportPlanResult.Failure -> {
                     mutableState.update {
                         it.copy(
                             stage = TvTimeImportStage.REVIEW,
@@ -433,7 +475,7 @@ internal class TvTimeImportViewModel @Inject constructor(
                         )
                     }
                 }
-                is com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPlanResult.Success -> {
+                is TvTimeImportPlanResult.Success -> {
                     plan = result.plan
                     val preview = store.preview(result.plan)
                     mutableState.update { it.copy(stage = TvTimeImportStage.PREVIEW, preview = preview) }
@@ -461,6 +503,7 @@ internal class TvTimeImportViewModel @Inject constructor(
     }
 
     fun cancelReview() {
+        reviewGeneration++
         operation?.cancel()
         searchJobs.values.forEach(Job::cancel)
         searchJobs.clear()
@@ -471,28 +514,16 @@ internal class TvTimeImportViewModel @Inject constructor(
         mutableState.value = TvTimeImportUiState()
     }
 
-    fun setFilter(filter: TvTimeMatchFilter) = mutableState.update { state ->
-        state.copy(
-            selectedFilter = filter,
-            reviewState = state.matchReport?.let {
-                deriveTvTimeReviewUiState(it, state.summary?.invalidRecordCount ?: 0, filter)
-            }
-        )
-    }
+    fun setFilter(filter: TvTimeMatchFilter) = mutableState.update { it.copy(selectedFilter = filter) }
 
     private fun updateReport(transform: (TvTimeMatchReport) -> TvTimeMatchReport) {
-        mutableState.update { state ->
-            state.matchReport?.let { report ->
-                val updatedReport = transform(report)
-                state.copy(
-                    matchReport = updatedReport,
-                    reviewState = deriveTvTimeReviewUiState(
-                        updatedReport,
-                        state.summary?.invalidRecordCount ?: 0,
-                        state.selectedFilter
-                    )
-                )
-            } ?: state
+        if (isBusy()) return
+        val generation = reviewGeneration
+        viewModelScope.launch {
+            reviewMutex.withLock {
+                if (generation != reviewGeneration) return@withLock
+                mutableState.updateReviewReport(defaultDispatcher, transform)
+            }
         }
     }
 
@@ -518,49 +549,47 @@ internal class TvTimeImportViewModel @Inject constructor(
         }
 }
 
-private fun com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailure.toUiFailure(): TvTimeImportUiFailure =
-    when (kind) {
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind.ARCHIVE -> when (archiveFailure) {
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.ENCRYPTED_ENTRY ->
-                TvTimeImportUiFailure.ENCRYPTED_ZIP
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.UNSUPPORTED_LAYOUT,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.UNSUPPORTED_ENTRY ->
-                TvTimeImportUiFailure.UNSUPPORTED_ARCHIVE_LAYOUT
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.PATH_TRAVERSAL,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.ABSOLUTE_PATH,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.DRIVE_PATH,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.UNC_PATH,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.NULL_BYTE_PATH,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.DUPLICATE_PATH,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.CASE_COLLISION,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.NESTED_ARCHIVE,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.OVERSIZED_INPUT,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.OVERSIZED_ENTRY,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.OVERSIZED_TOTAL,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.SUSPICIOUS_COMPRESSION,
-            com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeArchiveFailureKind.TOO_MANY_ENTRIES ->
-                TvTimeImportUiFailure.UNSAFE_ZIP
-            else -> TvTimeImportUiFailure.UNREADABLE_ZIP
-        }
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind.MISSING_ROLE,
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind.DUPLICATE_ROLE,
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind.AMBIGUOUS_ROLE,
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind.UNKNOWN_ROLE,
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeParseFailureKind.EMPTY_ARRAY -> TvTimeImportUiFailure.UNSUPPORTED_PROFILE
-        else -> TvTimeImportUiFailure.INVALID_SOURCE
+private fun TvTimeParseFailure.toUiFailure(): TvTimeImportUiFailure = when (kind) {
+    TvTimeParseFailureKind.ARCHIVE -> when (archiveFailure) {
+        TvTimeArchiveFailureKind.ENCRYPTED_ENTRY ->
+            TvTimeImportUiFailure.ENCRYPTED_ZIP
+        TvTimeArchiveFailureKind.UNSUPPORTED_LAYOUT,
+        TvTimeArchiveFailureKind.UNSUPPORTED_ENTRY ->
+            TvTimeImportUiFailure.UNSUPPORTED_ARCHIVE_LAYOUT
+        TvTimeArchiveFailureKind.PATH_TRAVERSAL,
+        TvTimeArchiveFailureKind.ABSOLUTE_PATH,
+        TvTimeArchiveFailureKind.DRIVE_PATH,
+        TvTimeArchiveFailureKind.UNC_PATH,
+        TvTimeArchiveFailureKind.NULL_BYTE_PATH,
+        TvTimeArchiveFailureKind.DUPLICATE_PATH,
+        TvTimeArchiveFailureKind.CASE_COLLISION,
+        TvTimeArchiveFailureKind.NESTED_ARCHIVE,
+        TvTimeArchiveFailureKind.OVERSIZED_INPUT,
+        TvTimeArchiveFailureKind.OVERSIZED_ENTRY,
+        TvTimeArchiveFailureKind.OVERSIZED_TOTAL,
+        TvTimeArchiveFailureKind.SUSPICIOUS_COMPRESSION,
+        TvTimeArchiveFailureKind.TOO_MANY_ENTRIES ->
+            TvTimeImportUiFailure.UNSAFE_ZIP
+        else -> TvTimeImportUiFailure.UNREADABLE_ZIP
     }
+    TvTimeParseFailureKind.MISSING_ROLE,
+    TvTimeParseFailureKind.DUPLICATE_ROLE,
+    TvTimeParseFailureKind.AMBIGUOUS_ROLE,
+    TvTimeParseFailureKind.UNKNOWN_ROLE,
+    TvTimeParseFailureKind.EMPTY_ARRAY -> TvTimeImportUiFailure.UNSUPPORTED_PROFILE
+    else -> TvTimeImportUiFailure.INVALID_SOURCE
+}
 
-private fun com.cydoniancitizen.bingee.data.imports.tvtime.TvTimePlanFailure.toUiFailure(): TvTimeImportUiFailure =
-    when (reason) {
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimePlanFailureReason.REVIEW_REQUIRED ->
-            TvTimeImportUiFailure.PLAN_REQUIRES_REVIEW
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimePlanFailureReason.INVALID_CANONICAL_DATA ->
-            TvTimeImportUiFailure.INVALID_SOURCE
-        com.cydoniancitizen.bingee.data.imports.tvtime.TvTimePlanFailureReason.PROVIDER_FAILURE -> when (error) {
-            com.cydoniancitizen.bingee.core.result.AppError.Unauthorized -> TvTimeImportUiFailure.MISSING_CREDENTIAL
-            com.cydoniancitizen.bingee.core.result.AppError.NetworkUnavailable,
-            com.cydoniancitizen.bingee.core.result.AppError.RemoteServiceFailure -> TvTimeImportUiFailure.NETWORK
-            com.cydoniancitizen.bingee.core.result.AppError.RateLimited -> TvTimeImportUiFailure.RATE_LIMIT
-            else -> TvTimeImportUiFailure.UNKNOWN
-        }
+private fun TvTimePlanFailure.toUiFailure(): TvTimeImportUiFailure = when (reason) {
+    TvTimePlanFailureReason.REVIEW_REQUIRED ->
+        TvTimeImportUiFailure.PLAN_REQUIRES_REVIEW
+    TvTimePlanFailureReason.INVALID_CANONICAL_DATA ->
+        TvTimeImportUiFailure.INVALID_SOURCE
+    TvTimePlanFailureReason.PROVIDER_FAILURE -> when (error) {
+        AppError.Unauthorized -> TvTimeImportUiFailure.MISSING_CREDENTIAL
+        AppError.NetworkUnavailable,
+        AppError.RemoteServiceFailure -> TvTimeImportUiFailure.NETWORK
+        AppError.RateLimited -> TvTimeImportUiFailure.RATE_LIMIT
+        else -> TvTimeImportUiFailure.UNKNOWN
     }
+}

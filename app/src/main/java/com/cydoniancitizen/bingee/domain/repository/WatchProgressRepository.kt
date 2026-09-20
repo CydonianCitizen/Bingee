@@ -12,6 +12,9 @@ interface WatchProgressRepository {
 
     suspend fun markEpisodeUnwatched(episodeRef: ExternalMediaRef): AppResult<Unit>
 
+    /** Marks the aired regular episodes stored before [episodeRef], not [episodeRef] itself. */
+    suspend fun markPreviousEpisodesWatched(episodeRef: ExternalMediaRef): AppResult<Unit>
+
     suspend fun markSeasonWatched(seasonRef: ExternalMediaRef): AppResult<Unit>
 
     suspend fun markSeasonUnwatched(seasonRef: ExternalMediaRef): AppResult<Unit>

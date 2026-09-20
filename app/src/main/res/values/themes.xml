@@ -1,15 +1,15 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Bingee" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+<resources>
+    <!--
+        Compose draws every screen, so the window only needs a plain framework theme. The platform splash
+        (API 31+) reads the two windowSplashScreen items; the window background matches it so nothing
+        flashes before the first Compose frame.
+    -->
+    <style name="Theme.Bingee" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F7F7FA</item>
+        <item name="android:windowSplashScreenBackground">#F7F7FA</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 
-    <style name="Theme.Bingee" parent="Base.Theme.Bingee" />
-
-    <style name="Theme.Bingee.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#F7F7FA</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="postSplashScreenTheme">@style/Theme.Bingee</item>
-    </style>
+    <!-- Tint of poster_placeholder: the Material 3 onSurfaceVariant it used to read from the theme. -->
+    <color name="poster_placeholder_tint">#49454F</color>
 </resources>

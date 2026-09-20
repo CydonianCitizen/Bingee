@@ -16,17 +16,6 @@ import kotlinx.coroutines.CancellationException
 @Singleton
 internal class RoomNotificationDeliveryRepository @Inject constructor(private val dao: NotificationDeliveryDao) :
     NotificationDeliveryRepository {
-    override suspend fun contains(identity: NotificationDeliveryIdentity): AppResult<Boolean> = read {
-        dao.contains(
-            identity.source,
-            identity.subjectType,
-            identity.subjectExternalId,
-            identity.eventType,
-            identity.eventDate,
-            identity.leadDays
-        )
-    }
-
     override suspend fun findDelivered(
         identities: Set<NotificationDeliveryIdentity>
     ): AppResult<Set<NotificationDeliveryIdentity>> {

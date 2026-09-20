@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Bingee</string>
+    <string name="label_value">%1$s: %2$s</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
     <string name="nav_settings">Settings</string>
@@ -264,11 +265,16 @@
     <string name="detail_refresh_season">Refresh season metadata</string>
     <string name="detail_mark_season_watched">Mark trackable episodes watched</string>
     <string name="detail_mark_season_unwatched">Mark season unwatched</string>
+    <string name="detail_mark_previous_title">Mark earlier episodes too?</string>
+    <string name="detail_mark_previous_body">Every aired episode before this one will be marked watched, including seasons you have not opened yet. Specials are left out.</string>
+    <string name="detail_mark_previous_confirm">Mark watched</string>
+    <string name="detail_mark_previous_dismiss">Only this one</string>
     <string name="detail_season_watched_state">All trackable episodes watched</string>
     <string name="detail_season_partial_state">Partly watched</string>
     <string name="detail_season_unwatched_state">Not watched</string>
     <string name="detail_episodes_empty">No episodes are available for this season.</string>
     <string name="detail_episode_title">Episode %1$d · %2$s</string>
+    <string name="detail_episode_title_hidden">Episode %1$d</string>
     <string name="detail_episode_air_date">Air date: %1$s</string>
     <string name="detail_episode_air_date_unknown">Air date unknown · trackable</string>
     <string name="detail_episode_future">Not aired yet</string>
@@ -352,7 +358,6 @@
     <string name="backup_error_too_large">Backup file is too large.</string>
     <string name="backup_error_malformed">Backup JSON is malformed or has invalid data.</string>
     <string name="backup_error_wrong_format">This is not a Bingee backup.</string>
-    <string name="backup_error_missing_version">Backup schema version is missing.</string>
     <string name="backup_error_unsupported_version">This backup uses a newer unsupported version.</string>
     <string name="backup_error_validation">Backup failed validation and was not imported.</string>
     <string name="backup_error_duplicate">Backup contains duplicate identities.</string>
@@ -426,6 +431,8 @@
     <string name="tvtime_import_confidence_unmatched">Unmatched</string>
     <string name="tvtime_import_confidence_invalid">Invalid source record</string>
     <string name="tvtime_import_confidence_skipped">Skipped</string>
+    <string name="tvtime_import_confidence_reason">%1$s. %2$s</string>
+    <string name="tvtime_import_media_confidence">%1$s · %2$s</string>
     <string name="tvtime_import_reason_exact_external_id">A qualified external ID resolved to one compatible TMDB title.</string>
     <string name="tvtime_import_reason_exact_episode_id">A qualified episode ID resolved in the accepted series context.</string>
     <string name="tvtime_import_reason_exact_numbering">The accepted series and season resolved one regular episode by number.</string>
@@ -464,6 +471,7 @@
     <string name="watched_date_release_date">Release date</string>
     <string name="watched_date_custom">Custom date</string>
     <string name="watched_date_edit">Edit watched date</string>
+    <string name="watched_date_clear">Clear date</string>
     <string name="watched_date_future_error">Date cannot be in the future (today is %1$s)</string>
     <string name="watched_date_before_release_error">Date cannot be before release date (%1$s)</string>
     <string name="completion_date_label">Completion Date</string>
@@ -476,6 +484,9 @@
     <string name="settings_language_title">Language</string>
     <string name="settings_language_en">English</string>
     <string name="settings_language_it">Italiano</string>
+    <string name="settings_spoilers_title">Spoilers</string>
+    <string name="settings_spoilers_body">In series details, episodes you have not watched yet show a blurred image and no title.</string>
+    <string name="settings_spoilers_hide">Hide episode spoilers</string>
     <string name="settings_open_source_title">Open Source</string>
     <string name="settings_open_source_description">Bingee is open source. You can help improve the app by reporting issues, suggesting features, or contributing code on GitHub.</string>
     <string name="settings_open_source_github_action">View on GitHub</string>

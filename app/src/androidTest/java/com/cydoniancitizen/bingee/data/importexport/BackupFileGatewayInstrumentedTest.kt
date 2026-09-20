@@ -86,7 +86,7 @@ class BackupFileGatewayInstrumentedTest {
         val bytes = "{\"synthetic\":true}".toByteArray()
         val file = store.create(bytes)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.backup-files", file)
-        val result = AndroidBackupFileGateway(context, store).read(uri)
+        val result = BackupFileGateway(context, store).read(uri)
 
         assertTrue(result is BackupParseResult.Failure)
         assertEquals(BackupFailureKind.INVALID_STRUCTURE, (result as BackupParseResult.Failure).failure.kind)

@@ -14,12 +14,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-internal interface BackupFileGateway {
-    suspend fun read(uri: Uri): BackupParseResult
-    suspend fun write(uri: Uri, bytes: ByteArray): BackupFailureKind?
-    suspend fun share(bytes: ByteArray): BackupFailureKind?
-}
-
 internal fun buildBackupShareIntent(uri: Uri): Intent = Intent(Intent.ACTION_SEND).apply {
     type = BACKUP_MIME_TYPE
     putExtra(Intent.EXTRA_STREAM, uri)
@@ -51,11 +45,11 @@ internal class BackupShareFileStore @Inject constructor(@ApplicationContext cont
 }
 
 @Singleton
-internal class AndroidBackupFileGateway @Inject constructor(
+internal class BackupFileGateway @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val shareFileStore: BackupShareFileStore
-) : BackupFileGateway {
-    override suspend fun read(uri: Uri): BackupParseResult = withContext(Dispatchers.IO) {
+) {
+    suspend fun read(uri: Uri): BackupParseResult = withContext(Dispatchers.IO) {
         try {
             val stream = context.contentResolver.openInputStream(uri)
                 ?: return@withContext BackupParseResult.Failure(BackupParseFailure(BackupFailureKind.UNREADABLE))
@@ -67,7 +61,7 @@ internal class AndroidBackupFileGateway @Inject constructor(
         }
     }
 
-    override suspend fun write(uri: Uri, bytes: ByteArray): BackupFailureKind? = withContext(Dispatchers.IO) {
+    suspend fun write(uri: Uri, bytes: ByteArray): BackupFailureKind? = withContext(Dispatchers.IO) {
         try {
             val output = context.contentResolver.openOutputStream(uri, "wt")
                 ?: return@withContext BackupFailureKind.WRITE_FAILED
@@ -83,7 +77,7 @@ internal class AndroidBackupFileGateway @Inject constructor(
         }
     }
 
-    override suspend fun share(bytes: ByteArray): BackupFailureKind? = withContext(Dispatchers.IO) {
+    suspend fun share(bytes: ByteArray): BackupFailureKind? = withContext(Dispatchers.IO) {
         val file = try {
             shareFileStore.create(bytes)
         } catch (_: IOException) {

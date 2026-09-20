@@ -1,6 +1,7 @@
 package com.cydoniancitizen.bingee.app
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,20 +32,18 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.navigation.AppRoute
 import com.cydoniancitizen.bingee.core.navigation.BingeeNavHost
-import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.navigation.TopLevelDestination
 import com.cydoniancitizen.bingee.core.navigation.topLevelDestinationForRoute
-import com.cydoniancitizen.bingee.data.notification.NotificationNavigationTarget
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 internal fun BingeeApp(
     startupViewModel: StartupViewModel = hiltViewModel(),
-    notificationTarget: StateFlow<NotificationNavigationTarget?>? = null,
-    onNotificationTargetConsumed: () -> Unit = {}
+    pendingRoute: StateFlow<String?>? = null,
+    onPendingRouteConsumed: () -> Unit = {}
 ) {
     val startupState by startupViewModel.uiState.collectAsStateWithLifecycle()
-    val pendingTarget by notificationTarget
+    val route by pendingRoute
         ?.collectAsStateWithLifecycle()
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
     when (val state = startupState) {
@@ -57,8 +56,8 @@ internal fun BingeeApp(
             BingeeNavigation(
                 startDestination = startRouteFor(state.destination),
                 onOnboardingComplete = startupViewModel::completeOnboarding,
-                notificationTarget = pendingTarget,
-                onNotificationTargetConsumed = onNotificationTargetConsumed
+                pendingRoute = route,
+                onPendingRouteConsumed = onPendingRouteConsumed
             )
     }
 }
@@ -67,62 +66,68 @@ internal fun BingeeApp(
 private fun BingeeNavigation(
     startDestination: String,
     onOnboardingComplete: () -> Unit,
-    notificationTarget: NotificationNavigationTarget?,
-    onNotificationTargetConsumed: () -> Unit,
+    pendingRoute: String?,
+    onPendingRouteConsumed: () -> Unit,
     navController: NavHostController = rememberNavController()
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = topLevelDestinationForRoute(backStackEntry?.destination?.route)
 
-    LaunchedEffect(startDestination, notificationTarget) {
-        val target = notificationTarget ?: return@LaunchedEffect
+    LaunchedEffect(startDestination, pendingRoute) {
+        val route = pendingRoute ?: return@LaunchedEffect
         if (startDestination == AppRoute.ONBOARDING) return@LaunchedEffect
-        navController.navigate(DetailRoute.create(target.mediaType, target.tmdbId)) {
-            launchSingleTop = true
-        }
-        onNotificationTargetConsumed()
+        navController.navigate(route) { launchSingleTop = true }
+        onPendingRouteConsumed()
     }
 
-    // Wide windows (tablets, landscape, large multi-window panes) move the destinations to a side rail, so
-    // content keeps its full height instead of sharing it with a phone-style bottom bar.
+    BingeeShell(currentDestination, onSelect = navController::navigateTopLevel) { innerPadding ->
+        BingeeNavHost(
+            navController = navController,
+            startDestination = startDestination,
+            onOnboardingFinished = {
+                onOnboardingComplete()
+                navController.navigate(TopLevelDestination.HOME.route) {
+                    popUpTo(AppRoute.ONBOARDING) { inclusive = true }
+                    launchSingleTop = true
+                }
+            },
+            onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
+            modifier = Modifier.padding(innerPadding)
+        )
+    }
+}
+
+/**
+ * Wide windows (tablets, landscape, large multi-window panes) move the destinations to a side rail, so content
+ * keeps its full height instead of sharing it with a phone-style bottom bar. Only top-level routes show either.
+ */
+@Composable
+internal fun BingeeShell(
+    currentDestination: TopLevelDestination?,
+    onSelect: (TopLevelDestination) -> Unit,
+    content: @Composable (PaddingValues) -> Unit
+) {
     BoxWithConstraints {
         val useRail = maxWidth >= WIDE_WINDOW_MIN_WIDTH
+        val railDestination = currentDestination?.takeIf { useRail }
         Row {
-            if (useRail && currentDestination != null) {
-                BingeeNavigationRail(currentDestination, navController::navigateTopLevel)
-            }
+            railDestination?.let { BingeeNavigationRail(it, onSelect) }
             Scaffold(
                 modifier = Modifier.weight(1f),
-                // The rail already pads the start edge for the cutout and system bars; applying it again here
-                // doubles the gap between the rail and the content.
-                contentWindowInsets = if (useRail) {
+                // A visible rail already pads the start edge for the cutout and system bars; applying it again
+                // doubles the gap. Without the rail (Details, Settings) the content keeps that inset.
+                contentWindowInsets = if (railDestination != null) {
                     ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
                 } else {
                     ScaffoldDefaults.contentWindowInsets
                 },
                 bottomBar = {
                     if (!useRail && currentDestination != null) {
-                        BingeeBottomBar(
-                            currentDestination = currentDestination,
-                            onSelect = navController::navigateTopLevel
-                        )
+                        BingeeBottomBar(currentDestination = currentDestination, onSelect = onSelect)
                     }
-                }
-            ) { innerPadding ->
-                BingeeNavHost(
-                    navController = navController,
-                    startDestination = startDestination,
-                    onOnboardingFinished = {
-                        onOnboardingComplete()
-                        navController.navigate(TopLevelDestination.HOME.route) {
-                            popUpTo(AppRoute.ONBOARDING) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    },
-                    onOpenSettings = { navController.navigate(AppRoute.SETTINGS) },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
+                },
+                content = content
+            )
         }
     }
 }

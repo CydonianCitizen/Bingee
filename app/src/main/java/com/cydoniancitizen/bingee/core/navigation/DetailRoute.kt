@@ -2,7 +2,11 @@ package com.cydoniancitizen.bingee.core.navigation
 
 import com.cydoniancitizen.bingee.core.model.MediaType
 
-data class DetailRouteArgs(val mediaType: MediaType, val tmdbId: Long)
+data class DetailRouteArgs(val mediaType: MediaType, val tmdbId: Long) {
+    init {
+        require(tmdbId > 0) { "TMDB ID must be positive" }
+    }
+}
 
 object DetailRoute {
     const val MEDIA_TYPE_ARG = "mediaType"
@@ -14,9 +18,9 @@ object DetailRoute {
         return "details/${mediaType.name}/$tmdbId"
     }
 
-    fun parse(mediaType: String?, tmdbId: String?): DetailRouteArgs? = runCatching {
+    fun parse(mediaType: String?, tmdbId: String?): DetailRouteArgs? {
         val parsedType = MediaType.entries.firstOrNull { it.name == mediaType } ?: return null
         val parsedId = tmdbId?.toLongOrNull()?.takeIf { it > 0 } ?: return null
-        DetailRouteArgs(parsedType, parsedId)
-    }.getOrNull()
+        return DetailRouteArgs(parsedType, parsedId)
+    }
 }

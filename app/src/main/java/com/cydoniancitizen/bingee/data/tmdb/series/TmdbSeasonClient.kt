@@ -42,7 +42,7 @@ internal class TmdbSeasonClient @Inject constructor(
                         seasonNumber,
                         it
                     )
-                )
+                ).copy(language = language)
             }
         )
     }

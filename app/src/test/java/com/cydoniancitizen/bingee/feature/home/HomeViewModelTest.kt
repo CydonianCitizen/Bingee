@@ -13,7 +13,6 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
-import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
@@ -209,7 +208,7 @@ class HomeViewModelTest {
             repository,
             FakeCoordinator(success()),
             dates,
-            ReleaseCalendarWindow(),
+
             FakeFeaturedRepo(),
             FakeLibraryRepo(),
             FakeWatchProgressRepository()
@@ -360,6 +359,7 @@ class HomeViewModelTest {
             return result
         }
 
+        override suspend fun markPreviousEpisodesWatched(episodeRef: ExternalMediaRef) = result
         override suspend fun markSeasonWatched(seasonRef: ExternalMediaRef) = result
         override suspend fun markSeasonUnwatched(seasonRef: ExternalMediaRef) = result
         override suspend fun markMovieWatched(reference: ExternalMediaRef) = result
@@ -405,7 +405,7 @@ class HomeViewModelTest {
         repository,
         coordinator,
         FakeDateSource(today),
-        ReleaseCalendarWindow(),
+
         featuredRepository,
         libraryRepository,
         watchProgressRepository

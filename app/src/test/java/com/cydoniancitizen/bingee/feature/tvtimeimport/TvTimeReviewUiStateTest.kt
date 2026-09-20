@@ -13,11 +13,102 @@ import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReport
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMediaReview
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeReviewAction
+import java.util.concurrent.Executors
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 
 class TvTimeReviewUiStateTest {
+    @Test
+    fun largeReviewIsNotDerivedByStateConstructionAndRunsOnComputeDispatcher() = runTest {
+        val review = report().episodes.first()
+        var reads = 0
+        val episodes = object : AbstractList<TvTimeEpisodeReview>() {
+            override val size = 100_000
+            override fun get(index: Int): TvTimeEpisodeReview {
+                assertEquals("review-compute", Thread.currentThread().name.substringBefore(" @"))
+                reads++
+                return review
+            }
+        }
+        val state = TvTimeImportUiState(matchReport = report().copy(episodes = episodes))
+        assertNull(state.reviewState)
+        assertEquals(0, reads)
+
+        Executors.newSingleThreadExecutor { Runnable -> Thread(Runnable, "review-compute") }
+            .asCoroutineDispatcher().use { dispatcher ->
+                val projected = flowOf(state).projectReview(dispatcher).first()
+                assertEquals(100_004, projected.reviewState!!.filterCounts.getValue(TvTimeMatchFilter.ALL))
+                assertEquals(100_000, projected.reviewState.visibleEpisodeGroups.sumOf { it.reviews.size })
+                val editable = MutableStateFlow(state)
+                editable.updateReviewReport(dispatcher) { report ->
+                    report.copy(episodes = report.episodes.map { it.copy(action = TvTimeReviewAction.SKIP) })
+                }
+                assertEquals(100_001, editable.value.matchReport!!.skippedCount)
+            }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun pendingEditPreservesNewFilterAndCannotResurrectResetArchive() = runTest {
+        val source = MutableStateFlow(TvTimeImportUiState(matchReport = report()))
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val edit = launch(UnconfinedTestDispatcher(testScheduler)) {
+            source.updateReviewReport(dispatcher) { it.copy(episodes = emptyList()) }
+        }
+        source.value = source.value.copy(selectedFilter = TvTimeMatchFilter.SKIPPED)
+        runCurrent()
+        edit.join()
+        assertEquals(TvTimeMatchFilter.SKIPPED, source.value.selectedFilter)
+        assertEquals(emptyList<TvTimeEpisodeReview>(), source.value.matchReport!!.episodes)
+
+        launch(UnconfinedTestDispatcher(testScheduler)) {
+            source.updateReviewReport(dispatcher) { it.copy(media = emptyList()) }
+        }
+        source.value = TvTimeImportUiState()
+        runCurrent()
+        assertEquals(TvTimeImportUiState(), source.value)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun rapidFilterChangesPublishMatchingRowsForLatestFilterAndResetClearsReview() = runTest {
+        val source = MutableStateFlow(TvTimeImportUiState(matchReport = report()))
+        val emitted = mutableListOf<TvTimeImportUiState>()
+        val job = backgroundScope.launch {
+            source.projectReview(StandardTestDispatcher(testScheduler)).collect { emitted += it }
+        }
+        runCurrent()
+        source.value = source.value.copy(selectedFilter = TvTimeMatchFilter.EXACT)
+        source.value = source.value.copy(selectedFilter = TvTimeMatchFilter.SKIPPED)
+        runCurrent()
+
+        val latest = emitted.last()
+        assertEquals(TvTimeMatchFilter.SKIPPED, latest.selectedFilter)
+        assertEquals(listOf("m-skip"), latest.reviewState!!.visibleMedia.map { it.source.recordId })
+        assertEquals(
+            listOf("z-2-1"),
+            latest.reviewState.visibleEpisodeGroups.flatMap {
+                it.reviews
+            }.map { it.source.recordId }
+        )
+        source.value = TvTimeImportUiState()
+        runCurrent()
+        assertNull(emitted.last().reviewState)
+        job.cancel()
+    }
+
     @Test
     fun derivationKeepsCountsVisibleRowsGroupingAndOrdering() {
         val report = report()

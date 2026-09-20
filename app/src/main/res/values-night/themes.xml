@@ -1,13 +1,9 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Bingee" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+<resources>
+    <style name="Theme.Bingee" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#141824</item>
+        <item name="android:windowSplashScreenBackground">#141824</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_monochrome</item>
     </style>
 
-    <style name="Theme.Bingee.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#141824</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_monochrome</item>
-        <item name="postSplashScreenTheme">@style/Theme.Bingee</item>
-    </style>
+    <color name="poster_placeholder_tint">#CAC4D0</color>
 </resources>

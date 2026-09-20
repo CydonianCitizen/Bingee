@@ -10,7 +10,8 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
-internal data class TmdbSeasonPayload(val season: Season, val episodes: List<Episode>)
+/** [language] is the TMDB language tag the text was requested in; null when unknown. */
+internal data class TmdbSeasonPayload(val season: Season, val episodes: List<Episode>, val language: String? = null)
 
 internal object TmdbSeasonSummaryMapper {
     fun mapAll(seriesRef: ExternalMediaRef, rows: List<TmdbSeasonSummaryDto>?): List<Season> {

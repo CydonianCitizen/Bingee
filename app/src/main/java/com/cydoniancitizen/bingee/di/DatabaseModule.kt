@@ -2,7 +2,6 @@ package com.cydoniancitizen.bingee.di
 
 import android.content.Context
 import androidx.room.Room
-import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.data.library.local.ALL_MIGRATIONS
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
@@ -71,8 +70,4 @@ internal object DatabaseModule {
     @Provides
     @Singleton
     fun provideClock(): Clock = Clock.systemUTC()
-
-    @Provides
-    @Singleton
-    fun provideReleaseCalendarWindow(): ReleaseCalendarWindow = ReleaseCalendarWindow()
 }

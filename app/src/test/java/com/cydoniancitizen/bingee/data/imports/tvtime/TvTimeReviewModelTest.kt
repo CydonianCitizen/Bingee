@@ -57,10 +57,6 @@ class TvTimeReviewModelTest {
             episodes = emptyList()
         )
 
-        assertEquals(1, report.exactCount)
-        assertEquals(1, report.highConfidenceCount)
-        assertEquals(1, report.needsReviewCount)
-        assertEquals(1, report.unmatchedCount)
         assertEquals(1, report.skippedCount)
     }
 

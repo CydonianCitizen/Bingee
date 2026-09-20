@@ -20,6 +20,10 @@ import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
 import com.cydoniancitizen.bingee.data.series.toEntity
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
+import com.cydoniancitizen.bingee.data.settings.toTmdbLanguageTag
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload
@@ -33,6 +37,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -162,13 +167,84 @@ class DefaultMediaDetailsRepositoryTest {
         assertTrue(second.await() is AppResult.Success)
     }
 
-    private fun repository(dao: FakeDetailsDao, remote: FakeRemote) = DefaultMediaDetailsRepository(
+    @Test
+    fun notFoundLeavesCachedDetailsAndSuccessTimestampUntouched() = runTest {
+        val old = now.minusSeconds(90_000)
+        val dao = FakeDetailsDao(cached(movieRef, old, "Cached"))
+        val repository = repository(dao, FakeRemote { _, _ -> AppResult.Failure(AppError.MissingData) })
+
+        assertEquals(AppResult.Failure(AppError.MissingData), repository.refreshDetails(movieId, MediaType.MOVIE))
+        assertEquals("Cached", dao.cache.value?.media?.title)
+        assertEquals(old, dao.cache.value?.details?.detailsFetchedAt)
+    }
+
+    @Test
+    fun languageChangeKeepsCachedTextVisibleButStaleUntilRefreshedInTheNewLanguage() = runTest {
+        val appearance = FakeAppearancePreferences()
+        val fetchedAt = now.minusSeconds(60)
+        val dao = FakeDetailsDao(cached(movieRef, fetchedAt, "English title", language = "en-US"))
+        val remote = FakeRemote { _, _ -> AppResult.Failure(AppError.NetworkUnavailable) }
+        val repository = repository(dao, remote, appearance)
+
+        // No language change: the young cache stays fresh and skips the network.
+        assertEquals(CacheFreshness.FRESH, observed(repository)?.freshness)
+        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE))
+        assertTrue(remote.calls.isEmpty())
+
+        appearance.language.value = AppLanguage.ITALIAN
+        val switched = observed(repository)
+        assertEquals("English title", switched?.details?.title)
+        assertEquals(CacheFreshness.STALE, switched?.freshness)
+
+        // A failed Italian refresh keeps the English text and its success timestamp.
+        assertEquals(
+            AppResult.Failure(AppError.NetworkUnavailable),
+            repository.refreshDetails(movieId, MediaType.MOVIE)
+        )
+        assertEquals("English title", observed(repository)?.details?.title)
+        assertEquals(fetchedAt, dao.cache.value?.details?.detailsFetchedAt)
+
+        // A reply to a request made in English before the change is stored as English, so it stays stale.
+        remote.language = "en-US"
+        remote.result = { ref, type -> AppResult.Success(details(ref, type, "English title")) }
+        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE))
+        assertEquals(CacheFreshness.STALE, observed(repository)?.freshness)
+
+        remote.language = "it-IT"
+        remote.result = { ref, type -> AppResult.Success(details(ref, type, "Titolo italiano")) }
+        assertEquals(AppResult.Success(Unit), repository.refreshDetails(movieId, MediaType.MOVIE))
+        val italian = observed(repository)
+        assertEquals("Titolo italiano", italian?.details?.title)
+        assertEquals(CacheFreshness.FRESH, italian?.freshness)
+        assertEquals(3, remote.calls.size)
+    }
+
+    private suspend fun observed(repository: DefaultMediaDetailsRepository) =
+        (repository.observeDetails(movieId, MediaType.MOVIE).first() as AppResult.Success).value
+
+    private fun repository(
+        dao: FakeDetailsDao,
+        remote: FakeRemote,
+        appearance: AppearancePreferences = FakeAppearancePreferences()
+    ) = DefaultMediaDetailsRepository(
         detailsDao = dao,
         client = remote,
         freshnessPolicy = CacheFreshnessPolicy(clock),
         clock = clock,
-        metadataStore = FakeMetadataStore(dao, FakeSeasonSummaryStore())
+        metadataStore = FakeMetadataStore(dao, FakeSeasonSummaryStore()),
+        appearancePreferences = appearance
     )
+
+    private class FakeAppearancePreferences : AppearancePreferences {
+        val language = MutableStateFlow(AppLanguage.ENGLISH)
+        override fun observeTheme(): Flow<AppTheme> = flowOf(AppTheme.SYSTEM_DEFAULT)
+        override suspend fun setTheme(theme: AppTheme) = Unit
+        override fun observeLanguage(): Flow<AppLanguage> = language
+        override suspend fun setLanguage(language: AppLanguage) {
+            this.language.value = language
+        }
+        override suspend fun getEffectiveTmdbLanguage(): String = language.value.toTmdbLanguageTag()
+    }
 
     private fun details(ref: ExternalMediaRef, type: MediaType, title: String) = MediaDetails(
         externalRef = ref,
@@ -177,7 +253,12 @@ class DefaultMediaDetailsRepositoryTest {
         productionStatus = ProductionStatus.RELEASED
     )
 
-    private fun cached(ref: ExternalMediaRef, fetchedAt: Instant, title: String): CachedDetailsRelation {
+    private fun cached(
+        ref: ExternalMediaRef,
+        fetchedAt: Instant,
+        title: String,
+        language: String? = null
+    ): CachedDetailsRelation {
         val localId = ref.externalId.toLong()
         return CachedDetailsRelation(
             media = MediaEntity(
@@ -200,21 +281,23 @@ class DefaultMediaDetailsRepositoryTest {
                 episodeRuntimeMinutes = null,
                 numberOfSeasons = null,
                 numberOfEpisodes = null,
-                detailsFetchedAt = fetchedAt
+                detailsFetchedAt = fetchedAt,
+                language = language
             ),
             genres = emptyList(),
             externalRefs = listOf(ExternalRefEntity(localId, ref.source, MediaType.MOVIE, ref.externalId))
         )
     }
 
-    private class FakeRemote(private val result: suspend (ExternalMediaRef, MediaType) -> AppResult<MediaDetails>) :
+    private class FakeRemote(var result: suspend (ExternalMediaRef, MediaType) -> AppResult<MediaDetails>) :
         TmdbDetailsRemoteDataSource {
         val calls = mutableListOf<Pair<ExternalMediaRef, MediaType>>()
+        var language: String? = null
         override suspend fun load(tmdbId: Long, mediaType: MediaType): AppResult<TmdbMediaDetailsPayload> {
             val reference = ExternalMediaRef(MediaSource.TMDB, tmdbId.toString())
             calls += reference to mediaType
             return when (val loaded = result(reference, mediaType)) {
-                is AppResult.Success -> AppResult.Success(TmdbMediaDetailsPayload(loaded.value))
+                is AppResult.Success -> AppResult.Success(TmdbMediaDetailsPayload(loaded.value, language = language))
                 is AppResult.Failure -> loaded
             }
         }
@@ -234,9 +317,10 @@ class DefaultMediaDetailsRepositoryTest {
             reference: ExternalMediaRef,
             details: MediaDetails,
             seasons: List<Season>,
-            fetchedAt: Instant
+            fetchedAt: Instant,
+            language: String?
         ) {
-            val write = details.toCacheWrite(fetchedAt)
+            val write = details.toCacheWrite(fetchedAt, language)
             dao.storeDetails(write.media, reference.source, reference.externalId, write.details, write.genres)
             this.seasons.upsertSeasonSummaries(
                 reference.source,

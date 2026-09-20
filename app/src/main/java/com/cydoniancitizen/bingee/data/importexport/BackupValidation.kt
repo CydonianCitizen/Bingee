@@ -101,6 +101,7 @@ internal object BackupValidator {
             require(media.primaryRef.source == season.externalRef.source, BackupFailureKind.CONFLICTING_REFERENCE)
             require(season.seasonNumber >= 0, BackupFailureKind.VALIDATION)
             require(season.episodeCount >= 0, BackupFailureKind.VALIDATION)
+            require(!season.isKnownEmpty || season.episodeCount == 0, BackupFailureKind.VALIDATION)
             checkText(season.name)
             checkText(season.overview)
             checkUrl(season.posterUrl)
@@ -129,6 +130,7 @@ internal object BackupValidator {
             require(episode.seasonRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
             require(episode.externalRef.source == MediaSource.TMDB, BackupFailureKind.CONFLICTING_REFERENCE)
             val season = seasonsByRef[episode.seasonRef.key()] ?: missing()
+            require(!season.isKnownEmpty, BackupFailureKind.VALIDATION)
             require(season.externalRef.source == episode.externalRef.source, BackupFailureKind.CONFLICTING_REFERENCE)
             require(episode.episodeNumber > 0, BackupFailureKind.VALIDATION)
             checkText(episode.title)
@@ -170,35 +172,17 @@ internal object BackupValidator {
 
         val movieProgressRefs = hashSetOf<String>()
         data.movieProgress.forEach { progress ->
-            val media = mediaByRef.mediaFor(progress.mediaRef, MediaType.MOVIE)
-            if (progress.watchedDate != null) {
-                val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
-                    progress.watchedDate,
-                    media.releaseDate,
-                    today
-                )
-                require(
-                    validation is com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult.Valid,
-                    BackupFailureKind.VALIDATION
-                )
-            }
+            mediaByRef.mediaFor(progress.mediaRef, MediaType.MOVIE)
+            // Provider release dates can change after a personal date was saved. Restore preserves
+            // that history independently of metadata, while still rejecting future personal dates.
+            require(progress.watchedDate?.isAfter(today) != true, BackupFailureKind.VALIDATION)
             require(movieProgressRefs.add(progress.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 
         val seriesProgressRefs = hashSetOf<String>()
         data.seriesProgress.forEach { progress ->
-            val media = mediaByRef.mediaFor(progress.mediaRef, MediaType.SERIES)
-            if (progress.watchedDate != null) {
-                val validation = com.cydoniancitizen.bingee.core.model.validateWatchedDate(
-                    progress.watchedDate,
-                    media.releaseDate,
-                    today
-                )
-                require(
-                    validation is com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult.Valid,
-                    BackupFailureKind.VALIDATION
-                )
-            }
+            mediaByRef.mediaFor(progress.mediaRef, MediaType.SERIES)
+            require(progress.watchedDate?.isAfter(today) != true, BackupFailureKind.VALIDATION)
             require(seriesProgressRefs.add(progress.mediaRef.key()), BackupFailureKind.DUPLICATE_IDENTITY)
         }
 

@@ -3,17 +3,7 @@ package com.cydoniancitizen.bingee.core.model
 import java.time.LocalDate
 import java.util.Locale
 
-data class ReleaseCalendarWindow(val lookbackDays: Long = DEFAULT_LOOKBACK_DAYS) {
-    init {
-        require(lookbackDays >= 0) { "Calendar lookback must not be negative" }
-    }
-
-    fun startDate(today: LocalDate): LocalDate = today.minusDays(lookbackDays)
-
-    companion object {
-        const val DEFAULT_LOOKBACK_DAYS = 7L
-    }
-}
+fun releaseCalendarStartDate(today: LocalDate): LocalDate = today.minusDays(7)
 
 enum class ReleaseDateCategory { RECENT, TODAY, UPCOMING }
 

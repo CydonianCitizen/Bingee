@@ -3,7 +3,6 @@ package com.cydoniancitizen.bingee.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.room.withTransaction
 import com.cydoniancitizen.bingee.core.model.ReleaseNotificationLeadTime
@@ -13,11 +12,9 @@ import com.cydoniancitizen.bingee.data.library.local.PortablePreferencesEntity
 import com.cydoniancitizen.bingee.data.library.local.PortableSnapshotDao
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterNotNull
@@ -57,11 +54,15 @@ internal class DataStoreReleaseNotificationPreferences @Inject constructor(
         updatePortable { it.copy(notificationLeadDays = leadTime.days) }
     }
 
-    override suspend fun setMovieReleases(enabled: Boolean) = update(MOVIES, enabled)
+    override suspend fun setMovieReleases(enabled: Boolean) = updatePortable { it.copy(notifyMovieReleases = enabled) }
 
-    override suspend fun setSeasonPremieres(enabled: Boolean) = update(SEASONS, enabled)
+    override suspend fun setSeasonPremieres(enabled: Boolean) = updatePortable {
+        it.copy(notifySeasonPremieres = enabled)
+    }
 
-    override suspend fun setEpisodeAirings(enabled: Boolean) = update(EPISODES, enabled)
+    override suspend fun setEpisodeAirings(enabled: Boolean) = updatePortable {
+        it.copy(notifyEpisodeAirings = enabled)
+    }
 
     private suspend fun updatePortable(update: (PortablePreferencesEntity) -> PortablePreferencesEntity) {
         ensureLegacyBridge()
@@ -91,10 +92,7 @@ internal class DataStoreReleaseNotificationPreferences @Inject constructor(
         }
     }
 
-    private fun dataStoreValues(): Flow<LegacyValues> = context.bingeePreferences.data
-        .catch { failure ->
-            if (failure is IOException) emit(emptyPreferences()) else throw failure
-        }
+    private fun dataStoreValues(): Flow<LegacyValues> = context.bingeePreferenceData
         .map { values ->
             LegacyValues(
                 enabled = values[ENABLED] ?: false,
@@ -106,15 +104,6 @@ internal class DataStoreReleaseNotificationPreferences @Inject constructor(
                 episodeAirings = values[EPISODES] ?: true
             )
         }
-
-    private suspend fun update(key: androidx.datastore.preferences.core.Preferences.Key<Boolean>, value: Boolean) {
-        when (key) {
-            MOVIES -> updatePortable { it.copy(notifyMovieReleases = value) }
-            SEASONS -> updatePortable { it.copy(notifySeasonPremieres = value) }
-            EPISODES -> updatePortable { it.copy(notifyEpisodeAirings = value) }
-            else -> error("Unsupported portable notification key")
-        }
-    }
 
     private data class LegacyValues(
         val enabled: Boolean,

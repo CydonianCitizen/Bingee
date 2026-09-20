@@ -24,6 +24,7 @@ import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,26 @@ class ProfileViewModelTest {
         assertFalse(watchedMovie.belongsToCategory(ProfileCategory.TV_SERIES))
         assertTrue(inProgressSeries.belongsToCategory(ProfileCategory.TV_SERIES))
         assertFalse(inProgressSeries.belongsToCategory(ProfileCategory.MOVIES))
+    }
+
+    @Test
+    fun failedViewModeWriteKeepsTheStoredModeAndReportsItUntilARetrySucceeds() = runTest {
+        val prefs = FakeDisplayModePrefs().apply { writeFailure = IOException("synthetic write failure") }
+        val viewModel = createViewModel(FakeLibraryRepo(emptyList()), prefs)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.setViewMode(ProfileViewMode.GRID)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ProfileViewMode.LIST, viewModel.uiState.value.currentViewMode)
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.actionError)
+        viewModel.clearActionError()
+        assertEquals(null, viewModel.uiState.value.actionError)
+
+        prefs.writeFailure = null
+        viewModel.setViewMode(ProfileViewMode.GRID)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ProfileViewMode.GRID, viewModel.uiState.value.currentViewMode)
+        assertEquals(null, viewModel.uiState.value.actionError)
     }
 
     @Test
@@ -550,12 +571,14 @@ class ProfileViewModelTest {
 
     private class FakeDisplayModePrefs : ProfileDisplayModePreferences {
         val modes = MutableStateFlow(ProfileDisplayModes())
+        var writeFailure: Exception? = null
         override fun observeDisplayModes(): Flow<ProfileDisplayModes> = modes
         override suspend fun setDisplayMode(
             collection: ProfileCollection,
             category: ProfileCategory,
             mode: ProfileViewMode
         ) {
+            writeFailure?.let { throw it }
             val current = modes.value
             val updated = when (collection) {
                 ProfileCollection.WATCHED -> when (category) {

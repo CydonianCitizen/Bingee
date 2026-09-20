@@ -5,8 +5,6 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
@@ -19,6 +17,67 @@ class BackupJsonCodecTest {
     private val validationDate = LocalDate.of(2026, 8, 18)
 
     @Test
+    fun emptySeasonEvidenceRoundTripsAndOlderBackupsDefaultToUnknown() {
+        val document = emptySeasonDocument()
+        val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
+        assertEquals(document, parsed.document)
+        assertTrue(validate(parsed.document) is BackupValidationResult.Success)
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
+        val payload = JsonParser.parseString(BackupJsonCodec.encode(document).toString(Charsets.UTF_8)).asJsonObject
+        assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
+        val season = payload.getAsJsonObject("data").getAsJsonArray("seasons")[0].asJsonObject
+        season.remove("isKnownEmpty")
+        listOf(1, 2).forEach { version ->
+            payload.addProperty("schemaVersion", version)
+            val legacy = BackupJsonCodec.parse(payload.toString().toByteArray()) as BackupParseResult.Success
+            assertFalse(legacy.document.data.seasons.single().isKnownEmpty)
+            assertTrue(validate(legacy.document) is BackupValidationResult.Success)
+        }
+        listOf("null", "1", "\"true\"").forEach { invalid ->
+            season.add("isKnownEmpty", JsonParser.parseString(invalid))
+            assertTrue(BackupJsonCodec.parse(payload.toString().toByteArray()) is BackupParseResult.Failure)
+        }
+    }
+
+    @Test
+    fun contradictoryEmptySeasonEvidenceIsRejectedBeforeRestore() {
+        val document = emptySeasonDocument()
+        val empty = document.data.seasons.single()
+        val declaredEpisode = document.copy(data = document.data.copy(seasons = listOf(empty.copy(episodeCount = 1))))
+        assertTrue(validate(declaredEpisode) is BackupValidationResult.Failure)
+        val storedEpisode = BackupEpisode(
+            empty.externalRef,
+            BackupRef(MediaSource.TMDB, "30"),
+            1,
+            "Episode",
+            null,
+            null,
+            null,
+            null
+        )
+        assertTrue(
+            validate(document.copy(data = document.data.copy(episodes = listOf(storedEpisode))))
+                is BackupValidationResult.Failure
+        )
+    }
+
+    private fun emptySeasonDocument(): BackupDocument = fullDocument().let { document ->
+        val series = document.data.media.single().copy(mediaType = MediaType.SERIES)
+        document.copy(
+            data = document.data.copy(
+                media = listOf(series),
+                seasons = listOf(
+                    BackupSeason(
+                        series.primaryRef, BackupRef(MediaSource.TMDB, "20"), 1,
+                        null, null, null, null, 0, isKnownEmpty = true
+                    )
+                ),
+                movieProgress = emptyList()
+            )
+        )
+    }
+
+    @Test
     fun genreIdentityNamesAndOrderRoundTripIncludingLegacyNames() {
         val genres = listOf(
             BackupGenre("Dramma", MediaSource.TMDB, 18),
@@ -29,7 +88,7 @@ class BackupJsonCodecTest {
         val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
         assertEquals(document, parsed.document)
         assertTrue(validate(parsed.document) is BackupValidationResult.Success)
-        val schema = JsonParser.parseString(Files.readString(schemaPath()))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
         val payload = JsonParser.parseString(BackupJsonCodec.encode(document).toString(Charsets.UTF_8))
         assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
     }
@@ -104,7 +163,7 @@ class BackupJsonCodecTest {
     fun productionPayloadMatchesCanonicalV2SchemaAndParser() {
         val encoded = BackupJsonCodec.encode(fullDocument())
         val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
-        val schema = JsonParser.parseString(Files.readString(schemaPath()))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
         val errors = validateSchema(schema, payload, schema.asJsonObject, "$")
 
         assertTrue(errors.joinToString("\n"), errors.isEmpty())
@@ -212,7 +271,7 @@ class BackupJsonCodecTest {
         val encoded = BackupJsonCodec.encode(document)
         val parsed = BackupJsonCodec.parse(encoded) as BackupParseResult.Success
         assertEquals(document, parsed.document)
-        val schema = JsonParser.parseString(Files.readString(schemaPath()))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
         val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
         assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
     }
@@ -236,11 +295,7 @@ class BackupJsonCodecTest {
 
     @Test
     fun committedV1FixtureRemainsAccepted() {
-        val fixture = listOf(
-            Path.of("docs", "backup", "fixtures", "valid-full.json"),
-            Path.of("..", "docs", "backup", "fixtures", "valid-full.json")
-        ).first { Files.isRegularFile(it) }
-        val parsed = BackupJsonCodec.parse(Files.readAllBytes(fixture))
+        val parsed = BackupJsonCodec.parse(resource("backup/valid-full.json"))
 
         assertTrue(parsed is BackupParseResult.Success)
         val document = (parsed as BackupParseResult.Success).document
@@ -357,10 +412,9 @@ class BackupJsonCodecTest {
         )
     )
 
-    private fun schemaPath(): Path = listOf(
-        Path.of("docs", "backup", "bingee-backup-v2.schema.json"),
-        Path.of("..", "docs", "backup", "bingee-backup-v2.schema.json")
-    ).first { Files.isRegularFile(it) }
+    private fun resource(name: String): ByteArray =
+        checkNotNull(javaClass.classLoader?.getResourceAsStream(name)) { "Missing test resource: $name" }
+            .use { it.readBytes() }
 
     // ponytail: validator covers schema keywords used here; add a library if contract grows beyond this subset.
     private fun validateSchema(schema: JsonElement, value: JsonElement, root: JsonObject, path: String): List<String> {

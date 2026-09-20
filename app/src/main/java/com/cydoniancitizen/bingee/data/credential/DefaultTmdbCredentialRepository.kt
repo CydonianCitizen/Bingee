@@ -11,11 +11,14 @@ import com.cydoniancitizen.bingee.domain.repository.TmdbCredentialRepository
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 @Singleton
 internal class DefaultTmdbCredentialRepository @Inject constructor(
@@ -37,7 +40,8 @@ internal class DefaultTmdbCredentialRepository @Inject constructor(
 
     override suspend fun refreshLocalStatus() {
         generation.incrementAndGet()
-        when (val stored = store.read()) {
+        // Read under the commit lock so a half-finished save or rollback is never reported.
+        when (val stored = commitMutex.withLock { store.read() }) {
             is AppResult.Success -> {
                 hasStoredCredential = stored.value != null
                 setStableStatus(
@@ -81,17 +85,21 @@ internal class DefaultTmdbCredentialRepository @Inject constructor(
     }
 
     override suspend fun remove(): AppResult<Unit> {
+        // A removal outranks every earlier save: the new generation makes an in-flight commit roll back,
+        // and the commit lock runs this delete after that rollback, so the removed secret never returns.
         generation.incrementAndGet()
-        return when (val result = store.delete()) {
-            is AppResult.Success -> {
-                hasStoredCredential = false
-                setStableStatus(TmdbCredentialStatus.NotConfigured)
-                result
-            }
+        return commitMutex.withLock {
+            when (val result = store.delete()) {
+                is AppResult.Success -> {
+                    hasStoredCredential = false
+                    setStableStatus(TmdbCredentialStatus.NotConfigured)
+                    result
+                }
 
-            is AppResult.Failure -> {
-                setStableStatus(TmdbCredentialStatus.StorageUnreadable)
-                result
+                is AppResult.Failure -> {
+                    setStableStatus(TmdbCredentialStatus.StorageUnreadable)
+                    result
+                }
             }
         }
     }
@@ -105,43 +113,51 @@ internal class DefaultTmdbCredentialRepository @Inject constructor(
 
     private suspend fun validateAndSave(credential: TmdbCredential): AppResult<Unit> {
         val requestGeneration = generation.incrementAndGet()
-        val previousCredential =
-            if (hasStoredCredential) {
-                when (val stored = store.read()) {
-                    is AppResult.Success -> stored.value
-                    is AppResult.Failure -> {
-                        setStableStatus(TmdbCredentialStatus.StorageUnreadable)
-                        return stored
+        try {
+            val previousCredential =
+                if (hasStoredCredential) {
+                    when (val stored = commitMutex.withLock { store.read() }) {
+                        is AppResult.Success -> stored.value
+                        is AppResult.Failure -> {
+                            setStableStatus(TmdbCredentialStatus.StorageUnreadable)
+                            return stored
+                        }
                     }
+                } else {
+                    null
                 }
-            } else {
-                null
+            if (mutableStatus.value !is TmdbCredentialStatus.Validating) {
+                fallbackStatus = mutableStatus.value
             }
-        if (mutableStatus.value !is TmdbCredentialStatus.Validating) {
-            fallbackStatus = mutableStatus.value
-        }
-        mutableStatus.value = TmdbCredentialStatus.Validating(hasStoredCredential)
+            mutableStatus.value = TmdbCredentialStatus.Validating(hasStoredCredential)
 
-        val remoteResult = remoteValidator.validate(credential)
-        if (generation.get() != requestGeneration) {
-            return remoteResult
-        }
+            val remoteResult = remoteValidator.validate(credential)
+            if (generation.get() != requestGeneration) {
+                return remoteResult
+            }
 
-        return when (remoteResult) {
-            is AppResult.Success ->
-                saveCurrent(requestGeneration, credential, previousCredential)
-            is AppResult.Failure -> {
-                val nextStatus =
-                    if (remoteResult.error == AppError.Unauthorized) {
-                        TmdbCredentialStatus.Rejected(hasStoredCredential)
-                    } else {
-                        TmdbCredentialStatus.TemporarilyUnverifiable(
-                            error = remoteResult.error,
-                            hasStoredCredential = hasStoredCredential
-                        )
-                    }
-                setStableStatus(nextStatus)
-                remoteResult
+            return when (remoteResult) {
+                is AppResult.Success ->
+                    saveCurrent(requestGeneration, credential, previousCredential)
+                is AppResult.Failure -> {
+                    val nextStatus =
+                        if (remoteResult.error == AppError.Unauthorized) {
+                            TmdbCredentialStatus.Rejected(hasStoredCredential)
+                        } else {
+                            TmdbCredentialStatus.TemporarilyUnverifiable(
+                                error = remoteResult.error,
+                                hasStoredCredential = hasStoredCredential
+                            )
+                        }
+                    setStableStatus(nextStatus)
+                    remoteResult
+                }
+            }
+        } finally {
+            // Back cancels the ViewModel's job without calling cancelValidation(). Only this
+            // generation may release its loading state; a newer validation or removal owns its own.
+            if (generation.get() == requestGeneration && mutableStatus.value is TmdbCredentialStatus.Validating) {
+                mutableStatus.value = fallbackStatus
             }
         }
     }
@@ -154,9 +170,19 @@ internal class DefaultTmdbCredentialRepository @Inject constructor(
         if (generation.get() != requestGeneration) {
             return@withLock AppResult.Success(Unit)
         }
-        val saved = store.save(credential)
+        val saved = try {
+            store.save(credential)
+        } catch (cancelled: CancellationException) {
+            // IO may have committed before cancellation is delivered. Finish rollback while the
+            // commit lock still excludes a newer save or removal, even though the caller is gone.
+            val restored = withContext(NonCancellable) { rollback(previousCredential) }
+            if (restored is AppResult.Failure && generation.get() == requestGeneration) {
+                setStableStatus(TmdbCredentialStatus.StorageUnreadable)
+            }
+            throw cancelled
+        }
         if (generation.get() != requestGeneration) {
-            return@withLock rollback(previousCredential)
+            return@withLock withContext(NonCancellable) { rollback(previousCredential) }
         }
         when (saved) {
             is AppResult.Success -> {

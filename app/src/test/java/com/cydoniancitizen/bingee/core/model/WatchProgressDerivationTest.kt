@@ -58,6 +58,34 @@ class WatchProgressDerivationTest {
     }
 
     @Test
+    fun restoredSeasonsProveCoverageThroughStoredRowsWithoutAFetchTimestamp() {
+        val restored = cachedSeason(1, SeasonProgress(2, 2, true), fetchedAt = null)
+        val restoredEmpty = cachedSeason(2, SeasonProgress.EMPTY, fetchedAt = null)
+        val fetchedEmpty = cachedSeason(2, SeasonProgress.EMPTY)
+
+        assertTrue(restored.hasSufficientEpisodeCoverage())
+        assertTrue(deriveSeriesProgress(listOf(restored)).isComplete)
+        // A declared zero may be unknown: only a season fetch proves the season is really empty.
+        assertFalse(restoredEmpty.hasSufficientEpisodeCoverage())
+        assertFalse(deriveSeriesProgress(listOf(restored, restoredEmpty)).isComplete)
+        assertTrue(deriveSeriesProgress(listOf(restored, fetchedEmpty)).isComplete)
+        val provenEmpty = fetchedEmpty.copy(episodesFetchedAt = null, episodeCacheFreshness = null)
+        assertTrue(provenEmpty.hasSufficientEpisodeCoverage())
+        assertTrue(deriveSeriesProgress(listOf(restored, provenEmpty)).isComplete)
+        assertFalse(deriveSeriesProgress(listOf(provenEmpty)).isComplete)
+        assertFalse(
+            provenEmpty.copy(episodes = listOf(tracked(1, EpisodeWatchState.Unwatched)))
+                .hasSufficientEpisodeCoverage()
+        )
+        // Partial rows or an available unwatched episode keep the series open.
+        val partial =
+            cachedSeason(1, SeasonProgress(2, 2, true), episodeCount = 3, cachedEpisodes = 2, fetchedAt = null)
+        assertFalse(deriveSeriesProgress(listOf(partial)).isComplete)
+        val unwatchedAvailable = cachedSeason(1, SeasonProgress(1, 2, false), fetchedAt = null)
+        assertFalse(deriveSeriesProgress(listOf(unwatchedAvailable)).isComplete)
+    }
+
+    @Test
     fun specialsAndFutureEpisodesKeepExistingCompletionSemantics() {
         val specials = cachedSeason(0, SeasonProgress.EMPTY, fetchedAt = null)
         val regular = cachedSeason(1, SeasonProgress(1, 1, true), episodeCount = 2)
@@ -96,7 +124,8 @@ class WatchProgressDerivationTest {
         episodesFetchedAt = fetchedAt,
         episodes = List(cachedEpisodes) { tracked(it + 1, EpisodeWatchState.Unwatched) },
         progress = progress,
-        episodeCacheFreshness = CacheFreshness.FRESH
+        episodeCacheFreshness = CacheFreshness.FRESH,
+        isKnownEmpty = episodeCount == 0 && cachedEpisodes == 0 && fetchedAt != null
     )
 
     private fun ref(id: String) = ExternalMediaRef(MediaSource.TMDB, id)

@@ -46,6 +46,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -63,12 +65,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,6 +90,7 @@ import com.cydoniancitizen.bingee.core.model.LibraryProgress
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.isWatched
+import com.cydoniancitizen.bingee.core.ui.formatLocalized
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
@@ -589,20 +595,24 @@ private fun ProfileGridItem(
                     // The card owns the combined description of this item.
                     contentDescription = null
                 )
-                IconButton(
-                    onClick = { onToggleFavorite(entry) },
-                    modifier = Modifier.align(Alignment.TopEnd)
+                IconToggleButton(
+                    checked = entry.isFavorite,
+                    onCheckedChange = { onToggleFavorite(entry) },
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    colors = IconButtonDefaults.iconToggleButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        contentColor = if (entry.isFavorite) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
                 ) {
                     Icon(
                         imageVector = if (entry.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = stringResource(
                             if (entry.isFavorite) R.string.favorite_remove else R.string.favorite_add
-                        ),
-                        tint = if (entry.isFavorite) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
+                        )
                     )
                 }
             }
@@ -643,6 +653,10 @@ private fun ProfileGridItem(
                                         if (entry.isFavorite) R.string.favorite_remove else R.string.favorite_add
                                     )
                                 )
+                            },
+                            modifier = Modifier.semantics {
+                                toggleableState =
+                                    if (entry.isFavorite) ToggleableState.On else ToggleableState.Off
                             },
                             onClick = {
                                 showMenu = false
@@ -701,7 +715,7 @@ private fun ProfileGridItem(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "${rating.value}/10",
+                            text = stringResource(R.string.detail_rating_value, rating.value),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -780,7 +794,10 @@ private fun ProfileListItem(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(entry.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { onToggleFavorite(entry) }) {
+                    IconToggleButton(
+                        checked = entry.isFavorite,
+                        onCheckedChange = { onToggleFavorite(entry) }
+                    ) {
                         Icon(
                             imageVector = if (entry.isFavorite) {
                                 Icons.Filled.Favorite
@@ -810,6 +827,7 @@ private fun ProfileListItem(
                 entry.releaseDate?.let { Text(stringResource(R.string.search_release_year, it.year)) }
                 Text(entry.progress.displayText(), style = MaterialTheme.typography.labelLarge)
                 entry.watchedDate?.let {
+                    val locale = LocalConfiguration.current.locales[0]
                     val label = if (entry.mediaType ==
                         MediaType.MOVIE
                     ) {
@@ -817,7 +835,10 @@ private fun ProfileListItem(
                     } else {
                         R.string.completion_date_label
                     }
-                    Text("${stringResource(label)}: $it", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        stringResource(R.string.label_value, stringResource(label), it.formatLocalized(locale)),
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 val ratingText = entry.personalRating?.let {
                     stringResource(R.string.library_rating_value, it.value)

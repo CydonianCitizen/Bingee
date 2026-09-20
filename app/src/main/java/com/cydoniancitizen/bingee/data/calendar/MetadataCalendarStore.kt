@@ -21,7 +21,8 @@ internal interface MetadataCalendarStore {
         reference: ExternalMediaRef,
         details: MediaDetails,
         seasons: List<Season>,
-        fetchedAt: Instant
+        fetchedAt: Instant,
+        language: String?
     )
 
     suspend fun storeSeason(seriesRef: ExternalMediaRef, payload: TmdbSeasonPayload, fetchedAt: Instant)
@@ -39,9 +40,10 @@ internal class RoomMetadataCalendarStore @Inject constructor(
         reference: ExternalMediaRef,
         details: MediaDetails,
         seasons: List<Season>,
-        fetchedAt: Instant
+        fetchedAt: Instant,
+        language: String?
     ) {
-        val write = details.toCacheWrite(fetchedAt)
+        val write = details.toCacheWrite(fetchedAt, language)
         database.withTransaction {
             detailsDao.storeDetails(
                 candidate = write.media,
@@ -72,7 +74,8 @@ internal class RoomMetadataCalendarStore @Inject constructor(
                 seriesExternalId = seriesRef.externalId,
                 season = payload.season.toEntity(fetchedAt),
                 episodes = payload.episodes.map { it.toEntity(fetchedAt) },
-                fetchedAt = fetchedAt
+                fetchedAt = fetchedAt,
+                language = payload.language
             )
             releaseEventDao.reconcileSeason(
                 stored.season,

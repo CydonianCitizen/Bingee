@@ -20,7 +20,6 @@ class SeriesFollowPolicyTest {
             inLibrary = true
         )
         assertTrue(SeriesFollowPolicy.isFollowed(entry))
-        assertTrue(SeriesFollowPolicy.isFollowedSeries(MediaType.SERIES, inLibrary = true))
     }
 
     @Test
@@ -30,7 +29,6 @@ class SeriesFollowPolicyTest {
             inLibrary = true
         )
         assertFalse(SeriesFollowPolicy.isFollowed(entry))
-        assertFalse(SeriesFollowPolicy.isFollowedSeries(MediaType.MOVIE, inLibrary = true))
     }
 
     @Test
@@ -40,7 +38,6 @@ class SeriesFollowPolicyTest {
             inLibrary = false
         )
         assertFalse(SeriesFollowPolicy.isFollowed(entry))
-        assertFalse(SeriesFollowPolicy.isFollowedSeries(MediaType.SERIES, inLibrary = false))
     }
 
     @Test
@@ -100,7 +97,6 @@ class SeriesFollowPolicyTest {
     @Test
     fun abandonedSeriesIsNotFollowed() {
         assertFalse(SeriesFollowPolicy.isFollowed(createEntry(MediaType.SERIES, true).copy(isAbandoned = true)))
-        assertFalse(SeriesFollowPolicy.isFollowedSeries(MediaType.SERIES, true, isAbandoned = true))
     }
 
     private fun createEntry(

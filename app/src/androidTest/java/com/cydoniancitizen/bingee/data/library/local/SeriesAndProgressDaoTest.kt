@@ -53,6 +53,30 @@ class SeriesAndProgressDaoTest {
     fun closeDatabase() = database.close()
 
     @Test
+    fun emptySeasonEvidenceNeedsAResponseAndIsInvalidatedByNewMetadata() = runBlocking {
+        val empty = season("11", 1).copy(episodeCount = 0)
+        seriesDao.upsertSeasonSummaries(MediaSource.TMDB, "100", listOf(empty))
+        assertFalse(storedSeason("11").season.isKnownEmpty)
+
+        val result = seriesDao.storeSeasonEpisodes(MediaSource.TMDB, "100", empty, emptyList(), now)
+        assertTrue(result.season.isKnownEmpty)
+        assertTrue(storedSeason("11").season.isKnownEmpty)
+        seriesDao.upsertSeasonSummaries(MediaSource.TMDB, "100", listOf(empty.copy(name = "Updated")))
+        assertTrue(storedSeason("11").season.isKnownEmpty)
+
+        seriesDao.upsertSeasonSummaries(MediaSource.TMDB, "100", listOf(empty.copy(episodeCount = 1)))
+        assertFalse(storedSeason("11").season.isKnownEmpty)
+        seriesDao.upsertSeasonSummaries(MediaSource.TMDB, "100", listOf(empty))
+        assertFalse(storedSeason("11").season.isKnownEmpty)
+
+        // A contradictory response must not claim empty while retained episode rows still exist.
+        seriesDao.storeSeasonEpisodes(MediaSource.TMDB, "100", empty, listOf(episode("101", 1)), now)
+        val contradictory = seriesDao.storeSeasonEpisodes(MediaSource.TMDB, "100", empty, emptyList(), now)
+        assertFalse(contradictory.season.isKnownEmpty)
+        assertFalse(storedSeason("11").season.isKnownEmpty)
+    }
+
+    @Test
     fun seasonZeroAndRegularEpisodesAreOrderedObservedAndProviderAware() = runBlocking {
         seriesDao.upsertSeasonSummaries(
             MediaSource.TMDB,
@@ -92,7 +116,7 @@ class SeriesAndProgressDaoTest {
             now.plusSeconds(60)
         )
 
-        val refreshed = seriesDao.observeSeason(MediaSource.TMDB, "100", "11").first()!!
+        val refreshed = storedSeason("11")
         assertEquals(listOf(1, 2, 3), refreshed.episodes.map { it.episode.episodeNumber })
         assertEquals("Updated first", refreshed.episodes.first().episode.title)
         assertEquals(firstWatchedAt, refreshed.episodes.first().progress?.watchedAt)
@@ -114,7 +138,7 @@ class SeriesAndProgressDaoTest {
             // The transaction must restore both metadata and freshness.
         }
 
-        val rolledBack = seriesDao.observeSeason(MediaSource.TMDB, "100", "11").first()!!
+        val rolledBack = storedSeason("11")
         assertEquals("Updated", rolledBack.season.name)
         assertEquals("Updated first", rolledBack.episodes.first().episode.title)
         assertEquals(now.plusSeconds(60), rolledBack.season.episodesFetchedAt)
@@ -141,7 +165,7 @@ class SeriesAndProgressDaoTest {
             )
         }
 
-        val stored = seriesDao.observeSeason(MediaSource.TMDB, "100", "11").first()!!
+        val stored = storedSeason("11")
         assertEquals(listOf(1, 2, 3, 4), stored.episodes.map { it.episode.episodeNumber })
         assertEquals("Updated first", stored.episodes.first().episode.title)
         assertEquals("New fourth", stored.episodes.last().episode.title)
@@ -251,29 +275,63 @@ class SeriesAndProgressDaoTest {
             progressDao.markSeasonWatched(MediaSource.TMDB, "11", today, bulk)
         )
 
-        val regular = seriesDao.observeSeason(MediaSource.TMDB, "100", "11").first()!!
+        val regular = storedSeason("11")
         assertEquals(original, regular.episodes[0].progress?.watchedAt)
         assertEquals(bulk, regular.episodes[1].progress?.watchedAt)
         assertNull(regular.episodes[2].progress)
-        assertNull(seriesDao.observeSeason(MediaSource.TMDB, "100", "10").first()!!.episodes[0].progress)
+        assertNull(storedSeason("10").episodes[0].progress)
 
         progressDao.markSeasonWatched(MediaSource.TMDB, "10", today, bulk.plusSeconds(1))
         assertEquals(
             bulk.plusSeconds(1),
-            seriesDao.observeSeason(MediaSource.TMDB, "100", "10").first()!!.episodes[0].progress?.watchedAt
+            storedSeason("10").episodes[0].progress?.watchedAt
         )
         progressDao.markSeasonUnwatched(MediaSource.TMDB, "11")
         assertTrue(
-            seriesDao.observeSeason(MediaSource.TMDB, "100", "11").first()!!
+            storedSeason("11")
                 .episodes.all { it.progress == null }
         )
         assertFalse(
-            seriesDao.observeSeason(MediaSource.TMDB, "100", "10").first()!!
+            storedSeason("10")
                 .episodes.all { it.progress == null }
         )
         assertEquals(
             ProgressWriteOutcome.SUCCESS,
             progressDao.markEpisodeUnwatched(MediaSource.TMDB, "101")
+        )
+    }
+
+    @Test
+    fun previousEpisodesCatchUpSpansEarlierSeasonsAndSkipsSpecialsFutureAndWatchedRows() = runBlocking {
+        storeRegularEpisodes()
+        seriesDao.storeSeasonEpisodes(
+            MediaSource.TMDB,
+            "100",
+            season("12", 2),
+            listOf(episode("201", 1), episode("202", 2), episode("203", 3)),
+            now
+        )
+        seriesDao.storeSeasonEpisodes(MediaSource.TMDB, "100", season("10", 0), listOf(episode("91", 1)), now)
+        val original = now.minusSeconds(600)
+        progressDao.markEpisodeWatched(MediaSource.TMDB, "101", today, original)
+
+        assertEquals(
+            ProgressWriteOutcome.SUCCESS,
+            progressDao.markPreviousEpisodesWatched(MediaSource.TMDB, "202", today, now)
+        )
+
+        val first = storedSeason("11")
+        assertEquals(original, first.episodes[0].progress?.watchedAt)
+        assertEquals(now, first.episodes[1].progress?.watchedAt)
+        assertNull(first.episodes[2].progress)
+        val second = storedSeason("12")
+        assertEquals(now, second.episodes[0].progress?.watchedAt)
+        assertNull(second.episodes[1].progress)
+        assertNull(second.episodes[2].progress)
+        assertNull(storedSeason("10").episodes[0].progress)
+        assertEquals(
+            ProgressWriteOutcome.NOT_TRACKABLE,
+            progressDao.markPreviousEpisodesWatched(MediaSource.TMDB, "91", today, now)
         )
     }
 
@@ -410,6 +468,9 @@ class SeriesAndProgressDaoTest {
         assertEquals(0, row.watchedEpisodes)
         assertEquals(0, row.trackableEpisodes)
     }
+
+    private suspend fun storedSeason(externalId: String) =
+        seriesDao.observeSeriesSeasons(MediaSource.TMDB, "100").first().single { it.season.externalId == externalId }
 
     private suspend fun storeRegularEpisodes() {
         seriesDao.storeSeasonEpisodes(

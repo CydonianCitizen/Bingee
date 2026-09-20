@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.data.series
 
-import android.database.sqlite.SQLiteException
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedSeason
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -10,7 +9,10 @@ import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
+import com.cydoniancitizen.bingee.data.settings.toTmdbLanguageTag
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
+import com.cydoniancitizen.bingee.data.toPersistenceError
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
 import java.time.Clock
@@ -32,7 +34,8 @@ internal class DefaultSeriesRepository @Inject constructor(
     private val remote: TmdbSeasonRemoteDataSource,
     private val freshnessPolicy: CacheFreshnessPolicy,
     private val clock: Clock,
-    private val dateSource: CalendarDateSource
+    private val dateSource: CalendarDateSource,
+    private val appearancePreferences: AppearancePreferences
 ) : SeriesRepository {
     private val inFlightLock = Mutex()
     private val inFlight = mutableMapOf<SeasonRefreshKey, CompletableDeferred<AppResult<Unit>>>()
@@ -41,9 +44,12 @@ internal class DefaultSeriesRepository @Inject constructor(
         val seriesRef = tmdbReferenceOrNull(tmdbId) ?: return flowOf(AppResult.Failure(AppError.InvalidInput))
         return combine(
             seriesDao.observeSeriesSeasons(seriesRef.source, seriesRef.externalId),
-            dateSource.observeDate()
-        ) { rows, today ->
-            AppResult.Success(rows.map { it.toDomain(seriesRef, today, freshnessPolicy) })
+            dateSource.observeDate(),
+            appearancePreferences.observeLanguage()
+        ) { rows, today, language ->
+            AppResult.Success(
+                rows.map { it.toDomain(seriesRef, today, freshnessPolicy, language.toTmdbLanguageTag()) }
+            )
         }
             .catchPersistence()
     }
@@ -79,16 +85,18 @@ internal class DefaultSeriesRepository @Inject constructor(
         seasonNumber: Int,
         force: Boolean
     ): AppResult<Unit> {
-        val cached = try {
+        val freshness = try {
+            val language = appearancePreferences.getEffectiveTmdbLanguage()
             seriesDao.getSeasonForSeries(seriesRef.source, seriesRef.externalId, seasonNumber)
+                ?.let { cached ->
+                    cached.episodesFetchedAt?.let { freshnessPolicy.classify(it, cached.episodesLanguage, language) }
+                }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (throwable: Throwable) {
             return AppResult.Failure(throwable.toPersistenceError())
         }
-        if (!force && cached?.episodesFetchedAt?.let(freshnessPolicy::classify) == CacheFreshness.FRESH) {
-            return AppResult.Success(Unit)
-        }
+        if (!force && freshness == CacheFreshness.FRESH) return AppResult.Success(Unit)
         val remoteResult = remote.load(tmdbId, seasonNumber)
         if (remoteResult is AppResult.Failure) return remoteResult
         val payload = (remoteResult as AppResult.Success).value
@@ -115,11 +123,4 @@ private fun tmdbReferenceOrNull(tmdbId: Long): ExternalMediaRef? =
 private fun <T> Flow<AppResult<T>>.catchPersistence(): Flow<AppResult<T>> = catch { throwable ->
     if (throwable is CancellationException) throw throwable
     emit(AppResult.Failure(throwable.toPersistenceError()))
-}
-
-private fun Throwable.toPersistenceError(): AppError = when (this) {
-    is IllegalArgumentException,
-    is IllegalStateException -> AppError.CorruptedData
-    is SQLiteException -> AppError.LocalStorageFailure
-    else -> AppError.Unknown
 }

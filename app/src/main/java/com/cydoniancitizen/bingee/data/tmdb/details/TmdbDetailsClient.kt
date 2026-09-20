@@ -11,7 +11,12 @@ import com.cydoniancitizen.bingee.data.tmdb.executeTmdbRequest
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonSummaryMapper
 import javax.inject.Inject
 
-internal data class TmdbMediaDetailsPayload(val details: MediaDetails, val seasons: List<Season> = emptyList())
+/** [language] is the TMDB language tag the text was requested in; null when unknown. */
+internal data class TmdbMediaDetailsPayload(
+    val details: MediaDetails,
+    val seasons: List<Season> = emptyList(),
+    val language: String? = null
+)
 
 internal interface TmdbDetailsRemoteDataSource {
     suspend fun load(tmdbId: Long, mediaType: MediaType): AppResult<TmdbMediaDetailsPayload>
@@ -35,7 +40,9 @@ internal class TmdbDetailsClient @Inject constructor(
                 request = {
                     service.movieDetails(authorization, tmdbId, language)
                 },
-                transform = { TmdbMediaDetailsPayload(requireNotNull(TmdbMovieDetailsMapper.map(it))) }
+                transform = {
+                    TmdbMediaDetailsPayload(requireNotNull(TmdbMovieDetailsMapper.map(it)), language = language)
+                }
             )
             MediaType.SERIES -> executeTmdbRequest(
                 request = {
@@ -45,7 +52,8 @@ internal class TmdbDetailsClient @Inject constructor(
                     val details = requireNotNull(TmdbTvDetailsMapper.map(it))
                     TmdbMediaDetailsPayload(
                         details = details,
-                        seasons = TmdbSeasonSummaryMapper.mapAll(details.externalRef, it.seasons)
+                        seasons = TmdbSeasonSummaryMapper.mapAll(details.externalRef, it.seasons),
+                        language = language
                     )
                 }
             )

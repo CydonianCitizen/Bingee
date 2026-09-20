@@ -9,10 +9,7 @@ data class MediaSearchResult(
     val originalTitle: String? = null,
     val posterUrl: String? = null,
     val releaseDate: LocalDate? = null,
-    val overview: String? = null,
-    val episodes: Int? = null,
-    val status: String? = null,
-    val score: Double? = null
+    val overview: String? = null
 ) {
     init {
         require(title.isNotBlank()) { "Media title must not be blank" }

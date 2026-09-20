@@ -21,6 +21,7 @@ import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.settings.SpoilerPreferences
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.RatingRepository
@@ -39,6 +40,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -212,6 +214,116 @@ class MediaDetailsViewModelTest {
         viewModel.toggleSeasonWatched(season)
         runCurrent()
         assertEquals(listOf("episode-watched", "season-watched"), progress.actions)
+        // Season 1 episode 1 has nothing before it, so no catch-up is offered.
+        assertNull(viewModel.uiState.value.series.previousEpisodesPrompt)
+    }
+
+    @Test
+    fun laterEpisodeOffersCatchUpThatLoadsUnopenedSeasonsBeforeWriting() = runTest(mainDispatcherRule.dispatcher) {
+        val (unopened, current) = seasonsWithUnopenedFirst()
+        val series = FakeSeriesRepository(listOf(unopened, current))
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            args(mediaType = MediaType.SERIES),
+            FakeDetailsRepository(cachedSeries()),
+            series = series,
+            progress = progress
+        )
+        runCurrent()
+
+        val target = current.episodes.single()
+        viewModel.toggleEpisode(target)
+        runCurrent()
+        assertEquals(target.episode, viewModel.uiState.value.series.previousEpisodesPrompt)
+
+        viewModel.markPreviousEpisodesWatched()
+        runCurrent()
+        assertNull(viewModel.uiState.value.series.previousEpisodesPrompt)
+        assertEquals(listOf(Triple(550L, 1, false)), series.refreshes)
+        assertEquals(listOf("episode-watched", "previous-watched"), progress.actions)
+        assertTrue(viewModel.uiState.value.series.pendingEpisodes.isEmpty())
+    }
+
+    @Test
+    fun catchUpWritesNothingWhenAnUnopenedSeasonFailsToLoad() = runTest(mainDispatcherRule.dispatcher) {
+        val (unopened, current) = seasonsWithUnopenedFirst()
+        val series = FakeSeriesRepository(listOf(unopened, current))
+        series.refreshResult = AppResult.Failure(AppError.NetworkUnavailable)
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            args(mediaType = MediaType.SERIES),
+            FakeDetailsRepository(cachedSeries()),
+            series = series,
+            progress = progress
+        )
+        runCurrent()
+
+        viewModel.toggleEpisode(current.episodes.single())
+        runCurrent()
+        viewModel.markPreviousEpisodesWatched()
+        runCurrent()
+
+        assertEquals(listOf("episode-watched"), progress.actions)
+        assertEquals(AppError.NetworkUnavailable, viewModel.uiState.value.progressError)
+    }
+
+    @Test
+    fun restoredEarlierSeasonIsCheckedFromItsStoredRows() {
+        val (_, current) = seasonsWithUnopenedFirst()
+        val firstRef = ExternalMediaRef(MediaSource.TMDB, "11")
+        val pilot = Episode(ref, firstRef, ExternalMediaRef(MediaSource.TMDB, "101"), 1, 1, "Pilot")
+        // A restore stores every episode row but no fetch timestamp.
+        val restored = CachedSeason(
+            season = Season(ref, firstRef, 1, name = "Season 1", episodeCount = 1),
+            metadataUpdatedAt = Instant.parse("2026-08-03T10:00:00Z"),
+            episodesFetchedAt = null,
+            episodes = listOf(TrackedEpisode(pilot, EpisodeWatchState.Watched(Instant.parse("2026-08-01T10:00:00Z")))),
+            progress = SeasonProgress(1, 1, true),
+            episodeCacheFreshness = null
+        )
+        val target = current.episodes.single().episode
+
+        assertFalse(listOf(restored, current).hasUnwatchedBefore(target))
+        val unwatched = restored.copy(
+            episodes = listOf(TrackedEpisode(pilot, EpisodeWatchState.Unwatched)),
+            progress = SeasonProgress(0, 1, false)
+        )
+        assertTrue(listOf(unwatched, current).hasUnwatchedBefore(target))
+    }
+
+    @Test
+    fun seriesStateCarriesTheSpoilerPreference() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel(
+            args(mediaType = MediaType.SERIES),
+            FakeDetailsRepository(cachedSeries()),
+            series = FakeSeriesRepository(listOf(cachedSeason())),
+            hideSpoilers = true
+        )
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.series.hideSpoilers)
+    }
+
+    @Test
+    fun dismissingCatchUpKeepsOnlyTheTappedEpisode() = runTest(mainDispatcherRule.dispatcher) {
+        val (unopened, current) = seasonsWithUnopenedFirst()
+        val progress = FakeWatchProgressRepository()
+        val viewModel = viewModel(
+            args(mediaType = MediaType.SERIES),
+            FakeDetailsRepository(cachedSeries()),
+            series = FakeSeriesRepository(listOf(unopened, current)),
+            progress = progress
+        )
+        runCurrent()
+
+        viewModel.toggleEpisode(current.episodes.single())
+        runCurrent()
+        viewModel.dismissPreviousEpisodesPrompt()
+        viewModel.markPreviousEpisodesWatched()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.series.previousEpisodesPrompt)
+        assertEquals(listOf("episode-watched"), progress.actions)
     }
 
     @Test
@@ -291,7 +403,8 @@ class MediaDetailsViewModelTest {
         library: LibraryRepository = FakeLibraryRepository(),
         series: SeriesRepository = FakeSeriesRepository(),
         progress: WatchProgressRepository = FakeWatchProgressRepository(),
-        rating: RatingRepository = FakeRatingRepository()
+        rating: RatingRepository = FakeRatingRepository(),
+        hideSpoilers: Boolean = false
     ) = MediaDetailsViewModel(
         state,
         details,
@@ -299,7 +412,11 @@ class MediaDetailsViewModelTest {
         series,
         progress,
         rating,
-        TestCalendarDateSource(LocalDate.of(2026, 8, 18))
+        TestCalendarDateSource(LocalDate.of(2026, 8, 18)),
+        object : SpoilerPreferences {
+            override fun observeHideSpoilers() = flowOf(hideSpoilers)
+            override suspend fun setHideSpoilers(hide: Boolean) = Unit
+        }
     )
 
     private fun args(mediaType: MediaType = MediaType.MOVIE) = SavedStateHandle(
@@ -339,6 +456,34 @@ class MediaDetailsViewModelTest {
             progress = SeasonProgress(0, 1, false),
             episodeCacheFreshness = null
         )
+    }
+
+    /** Season 1 summarized but never opened, and season 2 loaded with one aired, unwatched episode. */
+    private fun seasonsWithUnopenedFirst(): Pair<CachedSeason, CachedSeason> {
+        val fetchedAt = Instant.parse("2026-08-03T10:00:00Z")
+        val unopened = CachedSeason(
+            season = Season(ref, ExternalMediaRef(MediaSource.TMDB, "11"), 1, name = "Season 1", episodeCount = 8),
+            metadataUpdatedAt = fetchedAt,
+            episodesFetchedAt = null,
+            episodes = emptyList(),
+            progress = SeasonProgress(0, 0, false),
+            episodeCacheFreshness = null
+        )
+        val secondRef = ExternalMediaRef(MediaSource.TMDB, "12")
+        val current = CachedSeason(
+            season = Season(ref, secondRef, 2, name = "Season 2", episodeCount = 1),
+            metadataUpdatedAt = fetchedAt,
+            episodesFetchedAt = fetchedAt,
+            episodes = listOf(
+                TrackedEpisode(
+                    Episode(ref, secondRef, ExternalMediaRef(MediaSource.TMDB, "201"), 2, 1, "Premiere"),
+                    EpisodeWatchState.Unwatched
+                )
+            ),
+            progress = SeasonProgress(0, 1, false),
+            episodeCacheFreshness = null
+        )
+        return unopened to current
     }
 
     private class FakeDetailsRepository(
@@ -428,11 +573,12 @@ class MediaDetailsViewModelTest {
     private class FakeSeriesRepository(initial: List<CachedSeason> = emptyList()) : SeriesRepository {
         private val seasons = MutableStateFlow<AppResult<List<CachedSeason>>>(AppResult.Success(initial))
         val refreshes = mutableListOf<Triple<Long, Int, Boolean>>()
+        var refreshResult: AppResult<Unit> = AppResult.Success(Unit)
         override fun observeSeasons(tmdbId: Long): Flow<AppResult<List<CachedSeason>>> = seasons
 
         override suspend fun refreshSeason(tmdbId: Long, seasonNumber: Int, force: Boolean): AppResult<Unit> {
             refreshes += Triple(tmdbId, seasonNumber, force)
-            return AppResult.Success(Unit)
+            return refreshResult
         }
     }
 
@@ -445,6 +591,7 @@ class MediaDetailsViewModelTest {
 
         override suspend fun markEpisodeWatched(episodeRef: ExternalMediaRef) = success("episode-watched")
         override suspend fun markEpisodeUnwatched(episodeRef: ExternalMediaRef) = success("episode-unwatched")
+        override suspend fun markPreviousEpisodesWatched(episodeRef: ExternalMediaRef) = success("previous-watched")
         override suspend fun markSeasonWatched(seasonRef: ExternalMediaRef) = success("season-watched")
         override suspend fun markSeasonUnwatched(seasonRef: ExternalMediaRef) = success("season-unwatched")
         override suspend fun markMovieWatched(reference: ExternalMediaRef): AppResult<Unit> {

@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.data.details
 
-import android.database.sqlite.SQLiteException
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -10,9 +9,11 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.CacheFreshnessPolicy
 import com.cydoniancitizen.bingee.data.calendar.MetadataCalendarStore
-import com.cydoniancitizen.bingee.data.library.local.CachedDetailsRelation
 import com.cydoniancitizen.bingee.data.library.local.DetailsDao
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
+import com.cydoniancitizen.bingee.data.settings.toTmdbLanguageTag
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
+import com.cydoniancitizen.bingee.data.toPersistenceError
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import java.time.Clock
 import javax.inject.Inject
@@ -21,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -32,7 +34,8 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
     private val metadataStore: MetadataCalendarStore,
     private val client: TmdbDetailsRemoteDataSource,
     private val freshnessPolicy: CacheFreshnessPolicy,
-    private val clock: Clock
+    private val clock: Clock,
+    private val appearancePreferences: AppearancePreferences
 ) : MediaDetailsRepository {
     private val inFlightLock = Mutex()
 
@@ -42,10 +45,12 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
     override fun observeDetails(tmdbId: Long, mediaType: MediaType): Flow<AppResult<CachedMediaDetails?>> {
         val reference = tmdbReferenceOrNull(tmdbId)
             ?: return flowOf(AppResult.Failure(AppError.InvalidInput))
+        // Freshness depends on the app language too, so a language change re-emits the cached row as stale.
         return detailsDao.observeCachedDetails(reference.source, mediaType, reference.externalId)
-            .map<CachedDetailsRelation?, AppResult<CachedMediaDetails?>> { row ->
-                AppResult.Success(row?.toDomain(reference, freshnessPolicy))
+            .combine(appearancePreferences.observeLanguage()) { row, language ->
+                row?.toDomain(reference, freshnessPolicy, language.toTmdbLanguageTag())
             }
+            .map<CachedMediaDetails?, AppResult<CachedMediaDetails?>> { AppResult.Success(it) }
             .catch { throwable ->
                 if (throwable is CancellationException) throw throwable
                 emit(AppResult.Failure(throwable.toPersistenceError()))
@@ -85,8 +90,9 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         force: Boolean
     ): AppResult<Unit> {
         val cached = try {
+            val language = appearancePreferences.getEffectiveTmdbLanguage()
             detailsDao.getCachedDetails(reference.source, mediaType, reference.externalId)
-                ?.toDomain(reference, freshnessPolicy)
+                ?.toDomain(reference, freshnessPolicy, language)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (throwable: Throwable) {
@@ -106,7 +112,9 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
         }
         return try {
             val fetchedAt = clock.instant()
-            metadataStore.storeDetails(reference, details, payload.seasons, fetchedAt)
+            // The payload names the language the client actually requested, so a response to a request
+            // made before a language change is stored as such and stays stale for the new language.
+            metadataStore.storeDetails(reference, details, payload.seasons, fetchedAt, payload.language)
             AppResult.Success(Unit)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -118,10 +126,3 @@ internal class DefaultMediaDetailsRepository @Inject constructor(
 
 private fun tmdbReferenceOrNull(tmdbId: Long): ExternalMediaRef? =
     tmdbId.takeIf { it > 0 }?.let { ExternalMediaRef(MediaSource.TMDB, it.toString()) }
-
-private fun Throwable.toPersistenceError(): AppError = when (this) {
-    is IllegalArgumentException,
-    is IllegalStateException -> AppError.CorruptedData
-    is SQLiteException -> AppError.LocalStorageFailure
-    else -> AppError.Unknown
-}

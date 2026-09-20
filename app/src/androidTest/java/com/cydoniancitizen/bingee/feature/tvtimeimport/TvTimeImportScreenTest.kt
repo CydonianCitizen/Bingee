@@ -57,8 +57,6 @@ class TvTimeImportScreenTest {
             watchedMovieCount = 1,
             watchedEpisodeCount = 1,
             specialsCount = 0,
-            recordsWithImdbIds = 1,
-            recordsWithTvdbIds = 2,
             warningCount = 1,
             invalidRecordCount = 0,
             unsupported = ImportedUnsupportedFields(favoriteRecords = 1, customLists = 1)

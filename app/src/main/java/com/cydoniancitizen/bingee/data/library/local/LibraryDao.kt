@@ -312,7 +312,6 @@ internal abstract class LibraryDao {
                            AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
                            AND episode_watch_progress.local_episode_id IS NULL
                      )
-                     AND seasons.episodes_fetched_at IS NOT NULL
                      AND seasons.episode_count = (
                          SELECT COUNT(*)
                          FROM episodes
@@ -336,12 +335,12 @@ internal abstract class LibraryDao {
                    WHERE seasons.local_media_id = media_entries.local_media_id
                      AND seasons.season_number > 0
                      AND (
-                         seasons.episodes_fetched_at IS NULL
-                         OR seasons.episode_count != (
+                         seasons.episode_count != (
                              SELECT COUNT(*)
                              FROM episodes
                              WHERE episodes.local_season_id = seasons.local_season_id
                          )
+                         OR (seasons.episode_count = 0 AND seasons.is_known_empty = 0)
                      )
                    ) THEN 1 ELSE 0 END AS has_sufficient_coverage,
                CASE WHEN EXISTS (
@@ -444,12 +443,16 @@ internal abstract class LibraryDao {
 
     @Query(
         """
-        SELECT external_refs.source, external_refs.external_id, media_entries.media_type
+        SELECT media_entries.local_media_id, external_refs.source, external_refs.external_id,
+               media_entries.media_type
         FROM library_entries
         INNER JOIN media_entries USING(local_media_id)
         INNER JOIN external_refs USING(local_media_id)
         LEFT JOIN media_details USING(local_media_id)
-        ORDER BY CASE WHEN media_details.details_fetched_at IS NULL THEN 0 ELSE 1 END ASC,
+        LEFT JOIN background_refresh_attempts USING(local_media_id)
+        ORDER BY CASE WHEN background_refresh_attempts.attempted_at IS NULL THEN 0 ELSE 1 END ASC,
+                 background_refresh_attempts.attempted_at ASC,
+                 CASE WHEN media_details.details_fetched_at IS NULL THEN 0 ELSE 1 END ASC,
                  media_details.details_fetched_at ASC,
                  media_entries.metadata_updated_at ASC,
                  external_refs.source ASC,
@@ -458,7 +461,24 @@ internal abstract class LibraryDao {
         LIMIT :limit
         """
     )
-    abstract suspend fun getBackgroundRefreshCandidates(limit: Int): List<BackgroundRefreshCandidateRow>
+    protected abstract suspend fun getBackgroundRefreshCandidates(limit: Int): List<BackgroundRefreshCandidateRow>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun upsertBackgroundRefreshAttempts(attempts: List<BackgroundRefreshAttemptEntity>)
+
+    /**
+     * Picks the least recently attempted titles and records the attempt in the same transaction, so a
+     * failing, cancelled, or retried batch moves behind the rest and every title is reached in turn.
+     */
+    @Transaction
+    open suspend fun claimBackgroundRefreshCandidates(
+        limit: Int,
+        attemptedAt: Instant
+    ): List<BackgroundRefreshCandidateRow> {
+        val candidates = getBackgroundRefreshCandidates(limit)
+        upsertBackgroundRefreshAttempts(candidates.map { BackgroundRefreshAttemptEntity(it.localMediaId, attemptedAt) })
+        return candidates
+    }
 
     @Query(
         """
@@ -482,7 +502,6 @@ internal abstract class LibraryDao {
             SELECT seasons.local_media_id,
                    seasons.local_season_id,
                    seasons.episode_count,
-                   seasons.episodes_fetched_at,
                    (
                        SELECT COUNT(*)
                        FROM episodes AS cached_episodes
@@ -507,7 +526,6 @@ internal abstract class LibraryDao {
                    SUM(season_progress.trackable_episodes) AS trackable_episodes,
                    SUM(
                        CASE WHEN season_progress.watched_episodes = season_progress.trackable_episodes
-                                     AND season_progress.episodes_fetched_at IS NOT NULL
                                      AND season_progress.episode_count = season_progress.cached_episode_count
                             THEN 1 ELSE 0 END
                    ) AS completed_seasons,
@@ -530,12 +548,12 @@ internal abstract class LibraryDao {
                    WHERE seasons.local_media_id = media_entries.local_media_id
                      AND seasons.season_number > 0
                      AND (
-                         seasons.episodes_fetched_at IS NULL
-                         OR seasons.episode_count != (
+                         seasons.episode_count != (
                              SELECT COUNT(*)
                              FROM episodes
                              WHERE episodes.local_season_id = seasons.local_season_id
                          )
+                         OR (seasons.episode_count = 0 AND seasons.is_known_empty = 0)
                      )
                ) THEN 1 ELSE 0 END AS has_sufficient_coverage,
                CASE WHEN series_state_overrides.is_abandoned = 1 THEN 1 ELSE 0 END AS is_abandoned,

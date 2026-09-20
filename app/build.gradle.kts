@@ -18,8 +18,8 @@ android {
         applicationId = "com.cydoniancitizen.bingee"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -46,7 +46,6 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
 
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.work)
@@ -56,17 +55,14 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.core.splashscreen)
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.google.hilt.android)
-    implementation(libs.material)
     implementation(libs.okhttp)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
@@ -80,7 +76,6 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
 
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.work.testing)

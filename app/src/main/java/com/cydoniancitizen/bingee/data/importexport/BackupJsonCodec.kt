@@ -176,6 +176,7 @@ internal object BackupJsonCodec {
         writeNullable(writer, "posterUrl", season.posterUrl)
         writeNullable(writer, "airDate", season.airDate?.toString())
         writer.name("episodeCount").value(season.episodeCount)
+        writer.name("isKnownEmpty").value(season.isKnownEmpty)
         writer.endObject()
     }
 
@@ -358,7 +359,8 @@ internal object BackupJsonCodec {
             overview = nullableString(objectValue, "overview"),
             posterUrl = nullableString(objectValue, "posterUrl"),
             airDate = nullableDate(objectValue, "airDate"),
-            episodeCount = requiredInt(objectValue, "episodeCount")
+            episodeCount = requiredInt(objectValue, "episodeCount"),
+            isKnownEmpty = booleanOrDefault(objectValue, "isKnownEmpty", false)
         )
     }
 

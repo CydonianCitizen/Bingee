@@ -33,25 +33,6 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         seriesExternalId: String
     ): Flow<List<SeasonWithEpisodesRelation>>
 
-    @Transaction
-    @Query(
-        """
-        SELECT seasons.* FROM seasons
-        INNER JOIN external_refs USING(local_media_id)
-        WHERE external_refs.source = :source
-          AND external_refs.media_type = 'SERIES'
-          AND external_refs.external_id = :seriesExternalId
-          AND seasons.source = :source
-          AND seasons.external_id = :seasonExternalId
-        LIMIT 1
-        """
-    )
-    abstract fun observeSeason(
-        source: MediaSource,
-        seriesExternalId: String,
-        seasonExternalId: String
-    ): Flow<SeasonWithEpisodesRelation?>
-
     @Query(
         """
         SELECT * FROM seasons
@@ -142,11 +123,14 @@ internal abstract class SeriesDao : SeasonSummaryStore {
     @Query(
         """
         UPDATE seasons
-        SET episodes_fetched_at = :fetchedAt
+        SET episodes_fetched_at = :fetchedAt, episodes_language = :language,
+            is_known_empty = (episode_count = 0 AND NOT EXISTS (
+                SELECT 1 FROM episodes WHERE episodes.local_season_id = :localSeasonId
+            ))
         WHERE local_season_id = :localSeasonId
         """
     )
-    protected abstract suspend fun updateEpisodesFetchedAt(localSeasonId: Long, fetchedAt: Instant)
+    protected abstract suspend fun updateEpisodesFetchedAt(localSeasonId: Long, fetchedAt: Instant, language: String?)
 
     @Transaction
     open override suspend fun upsertSeasonSummaries(
@@ -165,7 +149,8 @@ internal abstract class SeriesDao : SeasonSummaryStore {
         seriesExternalId: String,
         season: SeasonEntity,
         episodes: List<EpisodeEntity>,
-        fetchedAt: Instant
+        fetchedAt: Instant,
+        language: String? = null
     ): StoredSeasonEpisodes {
         val media = checkNotNull(getMedia(source, seriesExternalId)) { "Series metadata is missing" }
         check(media.mediaType == MediaType.SERIES) { "Episode metadata requires a TV series" }
@@ -231,9 +216,13 @@ internal abstract class SeriesDao : SeasonSummaryStore {
                 state.episode = state.episode.copy(localEpisodeId = ids[index])
             }
         }
-        updateEpisodesFetchedAt(storedSeason.localSeasonId, fetchedAt)
+        updateEpisodesFetchedAt(storedSeason.localSeasonId, fetchedAt, language)
         return StoredSeasonEpisodes(
-            season = storedSeason.copy(episodesFetchedAt = fetchedAt),
+            season = storedSeason.copy(
+                episodesFetchedAt = fetchedAt,
+                episodesLanguage = language,
+                isKnownEmpty = storedSeason.episodeCount == 0 && storedEpisodes.isEmpty() && episodes.isEmpty()
+            ),
             episodes = candidateStates.map { it.episode }
         )
     }
@@ -263,7 +252,10 @@ internal abstract class SeriesDao : SeasonSummaryStore {
             val updated = candidate.copy(
                 localSeasonId = existing.localSeasonId,
                 localMediaId = localMediaId,
-                episodesFetchedAt = candidate.episodesFetchedAt ?: existing.episodesFetchedAt
+                episodesFetchedAt = candidate.episodesFetchedAt ?: existing.episodesFetchedAt,
+                episodesLanguage = candidate.episodesLanguage ?: existing.episodesLanguage,
+                isKnownEmpty = existing.isKnownEmpty && candidate.episodeCount == 0 &&
+                    candidate.externalId == existing.externalId
             )
             updateSeason(updated)
             updated

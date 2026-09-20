@@ -1,7 +1,12 @@
 package com.cydoniancitizen.bingee.feature.profile
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -19,6 +24,7 @@ import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
 import java.time.Instant
 import java.time.LocalDate
@@ -277,5 +283,54 @@ class ProfileScreenTest {
         composeRule.onNodeWithText("Interstellar").assertIsDisplayed()
         composeRule.onNodeWithText("Remove from library").performClick()
         assertTrue(itemRemoved.get())
+    }
+
+    @Test
+    fun gridFavoriteActionExposesItsCurrentToggleState() {
+        val toggled = AtomicBoolean(false)
+        val testEntry = LibraryEntry(
+            mediaRef = ExternalMediaRef(MediaSource.TMDB, "300"),
+            mediaType = MediaType.MOVIE,
+            title = "Favorite candidate",
+            addedAt = Instant.EPOCH,
+            isFavorite = false
+        )
+
+        composeRule.setContent {
+            BingeeTheme {
+                ProfileContent(
+                    state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
+                        isLoading = false,
+                        displayModes = ProfileDisplayModes(watchedMovies = ProfileViewMode.GRID),
+                        entries = listOf(testEntry)
+                    ),
+                    onCollectionSelected = {},
+                    onCategorySelected = {},
+                    onSortSelected = {},
+                    onViewModeSelected = {},
+                    onSearchQueryChanged = {},
+                    onClearSearch = {},
+                    onRemove = {},
+                    onToggleFavorite = { toggled.set(true) },
+                    onOpenSettings = {},
+                    onOpenDetails = { _, _ -> },
+                    onNavigateToSearch = {},
+                    onDismissActionError = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Add to Favorites")
+            .assertIsDisplayed()
+            .assert(isToggleable())
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ToggleableState,
+                    ToggleableState.Off
+                )
+            )
+            .performClick()
+        assertTrue(toggled.get())
     }
 }

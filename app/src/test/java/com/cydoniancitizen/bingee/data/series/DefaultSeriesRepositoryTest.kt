@@ -15,6 +15,10 @@ import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonWithEpisodesRelation
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.library.local.StoredSeasonEpisodes
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
+import com.cydoniancitizen.bingee.data.settings.toTmdbLanguageTag
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonPayload
 import com.cydoniancitizen.bingee.data.tmdb.series.TmdbSeasonRemoteDataSource
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
@@ -27,6 +31,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -133,14 +138,61 @@ class DefaultSeriesRepositoryTest {
         assertEquals(null, dao.storedAt)
     }
 
-    private fun repository(dao: FakeSeriesDao, remote: FakeRemote) = DefaultSeriesRepository(
+    @Test
+    fun languageChangeMakesFreshEpisodesStaleWithoutDiscardingThem() = runTest {
+        val appearance = FakeAppearancePreferences()
+        val dao = FakeSeriesDao(cachedAt = now.minusSeconds(60), cachedLanguage = "en-US")
+        var remoteResult: AppResult<TmdbSeasonPayload> = AppResult.Failure(AppError.NetworkUnavailable)
+        val remote = FakeRemote { remoteResult }
+        val repository = repository(dao, remote, appearance)
+
+        // Same language: the young cache is fresh and no request is made.
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1))
+        assertTrue(remote.calls.isEmpty())
+
+        appearance.language.value = AppLanguage.ITALIAN
+        assertEquals(AppResult.Failure(AppError.NetworkUnavailable), repository.refreshSeason(seriesId, 1))
+        assertEquals(listOf(1), remote.calls)
+        assertEquals("en-US", dao.cachedLanguage)
+        assertEquals(null, dao.storedAt)
+
+        // A reply requested in English before the change is stored as English, so it stays stale.
+        remoteResult = AppResult.Success(payload(1).copy(language = "en-US"))
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1))
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1))
+        assertEquals(listOf(1, 1, 1), remote.calls)
+
+        remoteResult = AppResult.Success(payload(1).copy(language = "it-IT"))
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1))
+        assertEquals(AppResult.Success(Unit), repository.refreshSeason(seriesId, 1))
+        assertEquals(listOf(1, 1, 1, 1), remote.calls)
+        assertEquals("it-IT", dao.cachedLanguage)
+    }
+
+    private fun repository(
+        dao: FakeSeriesDao,
+        remote: FakeRemote,
+        appearance: AppearancePreferences = FakeAppearancePreferences()
+    ) = DefaultSeriesRepository(
         seriesDao = dao,
         metadataStore = FakeMetadataStore(dao),
         remote = remote,
         freshnessPolicy = CacheFreshnessPolicy(clock),
         clock = clock,
-        dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3))
+        dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3)),
+        appearancePreferences = appearance
     )
+
+    private class FakeAppearancePreferences : AppearancePreferences {
+        val language = MutableStateFlow(AppLanguage.ENGLISH)
+        override fun observeTheme(): Flow<AppTheme> = flowOf(AppTheme.SYSTEM_DEFAULT)
+        override suspend fun setTheme(theme: AppTheme) = Unit
+        override fun observeLanguage(): Flow<AppLanguage> = language
+        override suspend fun setLanguage(language: AppLanguage) {
+            this.language.value = language
+        }
+        override suspend fun getEffectiveTmdbLanguage(): String = language.value.toTmdbLanguageTag()
+    }
 
     private fun payload(number: Int): TmdbSeasonPayload {
         val seasonRef = ref((10 + number).toString())
@@ -166,7 +218,8 @@ class DefaultSeriesRepositoryTest {
             reference: ExternalMediaRef,
             details: MediaDetails,
             seasons: List<Season>,
-            fetchedAt: Instant
+            fetchedAt: Instant,
+            language: String?
         ) = error("Not used")
 
         override suspend fun storeSeason(seriesRef: ExternalMediaRef, payload: TmdbSeasonPayload, fetchedAt: Instant) {
@@ -175,12 +228,17 @@ class DefaultSeriesRepositoryTest {
                 seriesRef.externalId,
                 payload.season.toEntity(fetchedAt),
                 payload.episodes.map { it.toEntity(fetchedAt) },
-                fetchedAt
+                fetchedAt,
+                payload.language
             )
         }
     }
 
-    private class FakeSeriesDao(var cachedAt: Instant? = null, private val failWrites: Boolean = false) : SeriesDao() {
+    private class FakeSeriesDao(
+        var cachedAt: Instant? = null,
+        var cachedLanguage: String? = null,
+        private val failWrites: Boolean = false
+    ) : SeriesDao() {
         var storedAt: Instant? = null
         private val rows = MutableStateFlow<List<SeasonWithEpisodesRelation>>(emptyList())
 
@@ -188,12 +246,6 @@ class DefaultSeriesRepositoryTest {
             source: MediaSource,
             seriesExternalId: String
         ): Flow<List<SeasonWithEpisodesRelation>> = rows
-
-        override fun observeSeason(
-            source: MediaSource,
-            seriesExternalId: String,
-            seasonExternalId: String
-        ): Flow<SeasonWithEpisodesRelation?> = MutableStateFlow(null)
 
         override suspend fun getSeason(source: MediaSource, seasonExternalId: String): SeasonEntity? = null
 
@@ -208,11 +260,13 @@ class DefaultSeriesRepositoryTest {
             seriesExternalId: String,
             season: SeasonEntity,
             episodes: List<EpisodeEntity>,
-            fetchedAt: Instant
+            fetchedAt: Instant,
+            language: String?
         ): StoredSeasonEpisodes {
             if (failWrites) throw RuntimeException("persistence failed")
             storedAt = fetchedAt
             cachedAt = fetchedAt
+            cachedLanguage = language
             return StoredSeasonEpisodes(season, episodes)
         }
 
@@ -238,7 +292,7 @@ class DefaultSeriesRepositoryTest {
             episodes.indices.map { it + 1L }
 
         override suspend fun updateEpisodes(episodes: List<EpisodeEntity>) = Unit
-        override suspend fun updateEpisodesFetchedAt(localSeasonId: Long, fetchedAt: Instant) = Unit
+        override suspend fun updateEpisodesFetchedAt(localSeasonId: Long, fetchedAt: Instant, language: String?) = Unit
 
         private fun seasonEntity(number: Int, fetchedAt: Instant) = SeasonEntity(
             localSeasonId = 1,
@@ -252,7 +306,8 @@ class DefaultSeriesRepositoryTest {
             airDate = null,
             episodeCount = 1,
             metadataUpdatedAt = fetchedAt,
-            episodesFetchedAt = fetchedAt
+            episodesFetchedAt = fetchedAt,
+            episodesLanguage = cachedLanguage
         )
     }
 }

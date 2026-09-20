@@ -22,9 +22,10 @@ import androidx.room.TypeConverters
         NotificationDeliveryEntity::class,
         PortablePreferencesEntity::class,
         ImportProvenanceRefEntity::class,
-        SeriesStateOverrideEntity::class
+        SeriesStateOverrideEntity::class,
+        BackgroundRefreshAttemptEntity::class
     ],
-    version = 5,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)

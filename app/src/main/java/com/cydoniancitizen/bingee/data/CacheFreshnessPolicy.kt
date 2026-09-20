@@ -17,6 +17,13 @@ internal class CacheFreshnessPolicy @Inject constructor(private val clock: Clock
         }
     }
 
+    /**
+     * Text cached in another language than the one now requested is stale however young it is, so a
+     * language change refreshes it while the old text stays readable. An unknown language ages normally.
+     */
+    fun classify(fetchedAt: Instant, cachedLanguage: String?, requestedLanguage: String): CacheFreshness =
+        if (cachedLanguage != null && cachedLanguage != requestedLanguage) CacheFreshness.STALE else classify(fetchedAt)
+
     companion object {
         val MAX_AGE: Duration = Duration.ofHours(24)
     }

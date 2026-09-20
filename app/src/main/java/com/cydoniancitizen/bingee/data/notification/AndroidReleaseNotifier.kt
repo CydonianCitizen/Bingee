@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
+import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationCapability
@@ -33,7 +34,7 @@ internal class AndroidReleaseNotifier @Inject constructor(
             capability.ensureChannel()
             val pendingIntent = NotificationDetailIntent.pendingIntent(
                 context = context,
-                target = NotificationNavigationTarget(
+                target = DetailRouteArgs(
                     mediaType = event.mediaType,
                     tmdbId = event.mediaRef.takeIf { it.source == MediaSource.TMDB }
                         ?.externalId?.toLongOrNull()?.takeIf { it > 0 }

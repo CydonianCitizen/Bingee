@@ -96,5 +96,12 @@ fun deriveSeriesProgress(seasons: List<CachedSeason>): SeriesProgress {
     )
 }
 
-private fun CachedSeason.hasSufficientEpisodeCoverage(): Boolean =
-    episodesFetchedAt != null && episodes.size == season.episodeCount
+/**
+ * Every episode the provider declares for the season is stored. Episode rows come only from provider
+ * season data or a validated backup of it, so a positive declared count matched by stored rows is the
+ * proof, and a restored season keeps it offline. A declared zero may mean unknown, so an empty season
+ * needs portable evidence from an empty season response. Freshness plays no part: the LibraryDao and WatchProgressDao coverage
+ * SQL mirrors this rule.
+ */
+fun CachedSeason.hasSufficientEpisodeCoverage(): Boolean =
+    episodes.size == season.episodeCount && (season.episodeCount > 0 || isKnownEmpty)

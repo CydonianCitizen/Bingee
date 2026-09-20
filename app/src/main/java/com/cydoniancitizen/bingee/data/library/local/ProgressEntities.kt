@@ -47,7 +47,12 @@ internal data class SeasonEntity(
     @ColumnInfo(name = "metadata_updated_at")
     val metadataUpdatedAt: Instant,
     @ColumnInfo(name = "episodes_fetched_at")
-    val episodesFetchedAt: Instant?
+    val episodesFetchedAt: Instant?,
+    /** TMDB language tag of the cached episode text; null when unknown. */
+    @ColumnInfo(name = "episodes_language")
+    val episodesLanguage: String? = null,
+    @ColumnInfo(name = "is_known_empty", defaultValue = "0")
+    val isKnownEmpty: Boolean = false
 ) {
     init {
         require(localSeasonId >= 0) { "Local season ID must not be negative" }

@@ -29,7 +29,7 @@ class DetailsCacheMappersTest {
 
     @Test
     fun canonicalRowWithoutDetailsIsNoCache() {
-        assertNull(relation(details = null).toDomain(ref, policy))
+        assertNull(relation(details = null).toDomain(ref, policy, "en-US"))
     }
 
     @Test
@@ -45,7 +45,7 @@ class DetailsCacheMappersTest {
                     MediaGenreEntity(1, 0, "First"),
                     MediaGenreEntity(1, 1, "Second")
                 )
-            ).toDomain(ref, policy)
+            ).toDomain(ref, policy, "en-US")
         )
 
         assertEquals(MediaType.MOVIE, cached.details.mediaType)
@@ -61,7 +61,7 @@ class DetailsCacheMappersTest {
             relation(
                 details = detailEntity(status = ProductionStatus.RELEASED.name),
                 genres = listOf(MediaGenreEntity(1, 0, "Dramma"))
-            ).toDomain(ref, policy)
+            ).toDomain(ref, policy, "en-US")
         )
 
         assertEquals("Dramma", cached.details.genres.single().name)
@@ -80,7 +80,7 @@ class DetailsCacheMappersTest {
                     seasons = -2,
                     episodes = 0
                 )
-            ).toDomain(ref, policy)
+            ).toDomain(ref, policy, "en-US")
         )
 
         assertEquals(ProductionStatus.UNKNOWN, cached.details.productionStatus)
@@ -112,7 +112,9 @@ class DetailsCacheMappersTest {
         assertEquals(listOf("Drama", "Comedy"), write.genres.map { it.name })
         assertEquals(listOf(18L, 35L), write.genres.map { it.genreId })
         assertEquals(listOf(MediaSource.TMDB, MediaSource.TMDB), write.genres.map { it.source })
-        val cached = requireNotNull(relation(details = write.details, genres = write.genres).toDomain(ref, policy))
+        val cached = requireNotNull(
+            relation(details = write.details, genres = write.genres).toDomain(ref, policy, "en-US")
+        )
         assertEquals(details.genres, cached.details.genres)
     }
 

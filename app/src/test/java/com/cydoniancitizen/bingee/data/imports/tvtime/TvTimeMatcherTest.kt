@@ -244,7 +244,18 @@ class TvTimeMatcherTest {
         movies = movies,
         series = series,
         episodes = episodes,
-        summary = ImportedSourceSummary(movies.size, series.size, 0, episodes.size, 0, episodes.size, 0, 0, 0, 0, 0, ImportedUnsupportedFields()),
+        summary = ImportedSourceSummary(
+            movieRecordCount = movies.size,
+            seriesCount = series.size,
+            seasonCount = 0,
+            episodeCount = episodes.size,
+            watchedMovieCount = 0,
+            watchedEpisodeCount = episodes.size,
+            specialsCount = 0,
+            warningCount = 0,
+            invalidRecordCount = 0,
+            unsupported = ImportedUnsupportedFields()
+        ),
         warnings = emptyList()
     )
 

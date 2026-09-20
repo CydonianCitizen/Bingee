@@ -242,7 +242,8 @@ class DefaultLibraryRepositoryTest {
         )
         assertEquals(
             now,
-            database.seriesDao().observeSeason(MediaSource.TMDB, "100", "11").first()!!
+            database.seriesDao().observeSeriesSeasons(MediaSource.TMDB, "100").first()
+                .single { it.season.externalId == "11" }
                 .episodes.first().progress?.watchedAt
         )
     }
@@ -799,7 +800,8 @@ class DefaultLibraryRepositoryTest {
             airDates = listOf(futureDate, null, futureDate)
         )
 
-        val refreshed = database.seriesDao().observeSeason(MediaSource.TMDB, "100", "100-season-1").first()!!
+        val refreshed = database.seriesDao().observeSeriesSeasons(MediaSource.TMDB, "100").first()
+            .single { it.season.externalId == "100-season-1" }
         assertEquals(futureDate, refreshed.episodes[0].episode.airDate)
         assertNull(refreshed.episodes[1].episode.airDate)
         assertEquals(firstWatchedAt, refreshed.episodes[0].progress?.watchedAt)

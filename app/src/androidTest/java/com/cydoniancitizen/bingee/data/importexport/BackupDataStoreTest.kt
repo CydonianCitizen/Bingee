@@ -6,12 +6,22 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
+import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.library.DefaultLibraryRepository
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
+import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
+import com.cydoniancitizen.bingee.data.library.local.MediaEntity
+import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
+import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -109,17 +119,61 @@ class BackupDataStoreTest {
     fun exportedBackupRestoresToTheSameSemanticData() = runBlocking {
         store.restore(roundTripPlan())
         val clock = Clock.fixed(exportedAt, ZoneOffset.UTC)
-        val first = exportedDocument(BackupExporter(store, clock).export().bytes)
+        val first = exportedDocument(store.createPortableBackup(clock.instant()))
 
         assertEquals(exportedAt, first.exportedAt)
         val validated = validate(first)
         assertTrue(validated is BackupValidationResult.Success)
         store.restore((validated as BackupValidationResult.Success).plan)
 
-        val secondBytes = BackupExporter(store, clock).export().bytes
+        val secondBytes = store.createPortableBackup(clock.instant())
         val second = exportedDocument(secondBytes)
         assertEquals(first.data, second.data)
         assertArrayEquals(BackupJsonCodec.encode(first), secondBytes)
+    }
+
+    @Test
+    fun personalDatesSurviveMetadataRefreshAndExportRestoreForMoviesAndSeries() = runBlocking {
+        val initial = plan("800", includeSeries = true).document
+        val watchedDate = validationDate.minusDays(2)
+        val seriesRef = initial.data.media.single { it.mediaType == MediaType.SERIES }.primaryRef
+        val dated = initial.copy(
+            data = initial.data.copy(
+                movieProgress = initial.data.movieProgress.map { it.copy(watchedDate = watchedDate) },
+                seriesProgress = listOf(BackupSeriesProgress(seriesRef, exportedAt, watchedDate))
+            )
+        )
+        store.restore((validate(dated) as BackupValidationResult.Success).plan)
+        val before = store.readPortableData()
+        val snapshot = database.portableSnapshotDao().readSnapshot()
+        snapshot.media.forEach { media ->
+            val ref = snapshot.refs.single { it.localMediaId == media.localMediaId }
+            database.detailsDao().storeDetails(
+                candidate = media.copy(releaseDate = validationDate),
+                source = ref.source,
+                externalId = ref.externalId,
+                details = MediaDetailsEntity(
+                    localMediaId = media.localMediaId,
+                    backdropUrl = null,
+                    productionStatus = "UNKNOWN",
+                    originalLanguage = null,
+                    runtimeMinutes = null,
+                    episodeRuntimeMinutes = null,
+                    numberOfSeasons = null,
+                    numberOfEpisodes = null,
+                    detailsFetchedAt = exportedAt
+                ),
+                genres = emptyList()
+            )
+        }
+        val exported = exportedDocument(store.createPortableBackup(exportedAt))
+        assertTrue(exported.data.media.all { it.releaseDate == validationDate })
+        assertEquals(before.movieProgress, exported.data.movieProgress)
+        assertEquals(before.seriesProgress, exported.data.seriesProgress)
+        val validated = validate(exported)
+        assertTrue(validated is BackupValidationResult.Success)
+        store.restore((validated as BackupValidationResult.Success).plan)
+        assertEquals(exported.data, store.readPortableData())
     }
 
     @Test
@@ -172,7 +226,7 @@ class BackupDataStoreTest {
             ).plan
 
         store.restore(plan)
-        val exported = exportedDocument(BackupExporter(store, Clock.fixed(exportedAt, ZoneOffset.UTC)).export().bytes)
+        val exported = exportedDocument(store.createPortableBackup(exportedAt))
         val reimported = (validate(exported) as BackupValidationResult.Success).plan
         store.restore(reimported)
 
@@ -217,7 +271,7 @@ class BackupDataStoreTest {
                     as BackupValidationResult.Success
                 ).plan
         )
-        val exported = exportedDocument(BackupExporter(store, Clock.fixed(exportedAt, ZoneOffset.UTC)).export().bytes)
+        val exported = exportedDocument(store.createPortableBackup(exportedAt))
         store.restore((validate(exported) as BackupValidationResult.Success).plan)
 
         val snapshot = database.portableSnapshotDao().readSnapshot()
@@ -229,6 +283,142 @@ class BackupDataStoreTest {
         assertNull(series.runtimeMinutes)
         assertEquals(series.localMediaId, snapshot.ratings.single().localMediaId)
         assertEquals(movie.localMediaId, snapshot.movieProgress.single().localMediaId)
+    }
+
+    @Test
+    fun seriesCompletenessSurvivesAnOfflineRoundTripInLibraryAndStatistics() = runBlocking {
+        val watchedAt = Instant.parse("2026-08-01T20:00:00Z")
+        // Production write paths, so the seasons carry a real fetch timestamp before export.
+        addSeries("1399", "Complete")
+        storeSeason("1399", "13990", 0, declared = 2, episodes = listOf("139901"))
+        storeSeason("1399", "13991", 1, declared = 2, episodes = listOf("139911", "139912"))
+        storeSeason("1399", "13992", 2, declared = 0, episodes = emptyList())
+        addSeries("1400", "Partial season")
+        storeSeason("1400", "14001", 1, declared = 3, episodes = listOf("140011", "140012"))
+        addSeries("1401", "Unwatched episode")
+        storeSeason("1401", "14011", 1, declared = 2, episodes = listOf("140111", "140112"))
+        val progress = database.watchProgressDao()
+        progress.markSeasonWatched(MediaSource.TMDB, "13991", validationDate, watchedAt)
+        progress.markSeasonWatched(MediaSource.TMDB, "14001", validationDate, watchedAt)
+        progress.markEpisodeWatched(MediaSource.TMDB, "140111", validationDate, watchedAt)
+        val expected = mapOf("1399" to true, "1400" to false, "1401" to false)
+        assertEquals(expected, seriesCompleteness())
+
+        val exported = exportedDocument(store.createPortableBackup(exportedAt))
+        store.restore((validate(exported) as BackupValidationResult.Success).plan)
+
+        assertEquals(expected, seriesCompleteness())
+        // Freshness is not faked: a restored season has no fetch timestamp until TMDB answers again.
+        assertTrue(database.portableSnapshotDao().readSnapshot().seasons.all { it.episodesFetchedAt == null })
+
+        val reexported = exportedDocument(store.createPortableBackup(exportedAt))
+        assertEquals(exported.data.seasons, reexported.data.seasons)
+        assertTrue(reexported.data.seasons.single { it.externalRef.externalId == "13992" }.isKnownEmpty)
+        store.restore((validate(reexported) as BackupValidationResult.Success).plan)
+        assertEquals(expected, seriesCompleteness())
+
+        progress.markEpisodeUnwatched(MediaSource.TMDB, "139911")
+        assertEquals(expected + ("1399" to false), seriesCompleteness())
+        assertTrue(database.portableSnapshotDao().readSnapshot().seriesProgress.isEmpty())
+        progress.markEpisodeWatched(MediaSource.TMDB, "139911", validationDate, watchedAt.plusSeconds(60))
+        assertEquals(expected, seriesCompleteness())
+        assertEquals(1, database.portableSnapshotDao().readSnapshot().seriesProgress.size)
+
+        // Older files lack empty-season evidence. Positive counts still work; zero must stay unknown.
+        val legacy = exported.copy(
+            schemaVersion = BACKUP_SCHEMA_VERSION_V1,
+            data = exported.data.copy(
+                media = exported.data.media.map { it.copy(genres = emptyList(), runtimeMinutes = null) },
+                seasons = exported.data.seasons.map { it.copy(isKnownEmpty = false) },
+                library = exported.data.library.map { it.copy(mediaType = null) }
+            )
+        )
+        store.restore((validate(legacy) as BackupValidationResult.Success).plan)
+        assertEquals(expected + ("1399" to false), seriesCompleteness())
+    }
+
+    /** Library state and the statistics projection must agree on which series are complete. */
+    private suspend fun seriesCompleteness(): Map<String, Boolean> {
+        val repository = DefaultLibraryRepository(
+            database.libraryDao(),
+            database.watchProgressDao(),
+            database.ratingDao(),
+            Clock.fixed(exportedAt, ZoneOffset.UTC),
+            TestCalendarDateSource(validationDate)
+        )
+        val library = (repository.observeEntries().first() as AppResult.Success).value
+            .associate { it.mediaRef.externalId to (it.serialState == SeriesTrackingState.WATCHED) }
+        val viewing = (repository.observePersonalViewing().first() as AppResult.Success).value
+        assertEquals(library, viewing.associate { it.mediaRef.externalId to it.isCompletedTitle })
+        val continueWatching = database.libraryDao().observeContinueWatchingRows(MediaSource.TMDB, validationDate)
+            .first().associate {
+                it.externalId to (
+                    it.trackableEpisodes > 0 && it.watchedEpisodes == it.trackableEpisodes &&
+                        it.hasSufficientCoverage
+                    )
+            }
+        assertEquals(library, continueWatching)
+        assertEquals(library.count { it.value }, calculateWatchedStatistics(viewing).tvSeriesCompletedCount)
+        return library
+    }
+
+    private suspend fun addSeries(externalId: String, title: String) {
+        database.libraryDao().addToLibrary(
+            MediaEntity(
+                mediaType = MediaType.SERIES,
+                title = title,
+                originalTitle = null,
+                overview = null,
+                posterUrl = null,
+                releaseDate = null,
+                createdAt = exportedAt,
+                metadataUpdatedAt = exportedAt
+            ),
+            MediaSource.TMDB,
+            externalId,
+            exportedAt
+        )
+    }
+
+    private suspend fun storeSeason(
+        seriesId: String,
+        seasonId: String,
+        number: Int,
+        declared: Int,
+        episodes: List<String>
+    ) {
+        database.seriesDao().storeSeasonEpisodes(
+            MediaSource.TMDB,
+            seriesId,
+            SeasonEntity(
+                localMediaId = 0,
+                source = MediaSource.TMDB,
+                externalId = seasonId,
+                seasonNumber = number,
+                name = null,
+                overview = null,
+                posterUrl = null,
+                airDate = null,
+                episodeCount = declared,
+                metadataUpdatedAt = exportedAt,
+                episodesFetchedAt = null
+            ),
+            episodes.mapIndexed { index, episodeId ->
+                EpisodeEntity(
+                    localSeasonId = 0,
+                    source = MediaSource.TMDB,
+                    externalId = episodeId,
+                    episodeNumber = index + 1,
+                    title = "Episode ${index + 1}",
+                    overview = null,
+                    airDate = LocalDate.of(2026, 7, 1),
+                    runtimeMinutes = 45,
+                    stillUrl = null,
+                    metadataUpdatedAt = exportedAt
+                )
+            },
+            exportedAt
+        )
     }
 
     private fun exportedDocument(bytes: ByteArray): BackupDocument =

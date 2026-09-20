@@ -30,4 +30,14 @@ class CacheFreshnessPolicyTest {
     fun futureTimestampIsStaleInsteadOfIndefinitelyFresh() {
         assertEquals(CacheFreshness.STALE, policy.classify(now.plusSeconds(1)))
     }
+
+    @Test
+    fun textCachedInAnotherLanguageIsStaleWhileSameOrUnknownLanguageAgesNormally() {
+        val young = now.minusSeconds(60)
+
+        assertEquals(CacheFreshness.STALE, policy.classify(young, "en-US", "it-IT"))
+        assertEquals(CacheFreshness.FRESH, policy.classify(young, "it-IT", "it-IT"))
+        assertEquals(CacheFreshness.FRESH, policy.classify(young, null, "it-IT"))
+        assertEquals(CacheFreshness.STALE, policy.classify(now.minusSeconds(86_400), "it-IT", "it-IT"))
+    }
 }

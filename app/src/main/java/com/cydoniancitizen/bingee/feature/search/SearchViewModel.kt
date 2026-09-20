@@ -219,7 +219,7 @@ internal class SearchViewModel @Inject constructor(
             if (!isCurrent(generation, request)) return@launch
 
             mutableUiState.update { it.copy(content = SearchContentState.Loading) }
-            when (val result = search(request)) {
+            when (val result = mediaRepository.search(request)) {
                 is AppResult.Success -> {
                     if (!isCurrent(generation, request)) return@launch
                     val unique = result.value.results.distinctBy { it.externalRef }
@@ -275,7 +275,7 @@ internal class SearchViewModel @Inject constructor(
             it.copy(content = results.copy(nextPage = NextPageState.Loading))
         }
         nextPageJob = viewModelScope.launch {
-            when (val result = search(request)) {
+            when (val result = mediaRepository.search(request)) {
                 is AppResult.Success -> {
                     if (!isCurrent(generation, request)) return@launch
                     val latest = mutableUiState.value.content as? SearchContentState.Results ?: return@launch
@@ -321,8 +321,6 @@ internal class SearchViewModel @Inject constructor(
 
     private fun hasCredential(): Boolean =
         mutableUiState.value.credentialAvailability == SearchCredentialAvailability.AVAILABLE
-
-    private suspend fun search(query: MediaSearchQuery) = mediaRepository.search(query)
 
     private fun isCurrent(generation: Long, request: MediaSearchQuery): Boolean {
         val current = mutableUiState.value

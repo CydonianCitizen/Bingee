@@ -6,8 +6,6 @@ import com.cydoniancitizen.bingee.core.result.AppResult
 import java.time.LocalDate
 
 interface NotificationDeliveryRepository {
-    suspend fun contains(identity: NotificationDeliveryIdentity): AppResult<Boolean>
-
     suspend fun findDelivered(
         identities: Set<NotificationDeliveryIdentity>
     ): AppResult<Set<NotificationDeliveryIdentity>>

@@ -114,7 +114,8 @@ internal class BackupDataStore @Inject constructor(
                     overview = season.overview,
                     posterUrl = season.posterUrl,
                     airDate = season.airDate,
-                    episodeCount = season.episodeCount
+                    episodeCount = season.episodeCount,
+                    isKnownEmpty = season.isKnownEmpty
                 )
             }.sortedWith(
                 compareBy({
@@ -281,7 +282,8 @@ internal class BackupDataStore @Inject constructor(
                         airDate = season.airDate,
                         episodeCount = season.episodeCount,
                         metadataUpdatedAt = exportedAt,
-                        episodesFetchedAt = null
+                        episodesFetchedAt = null,
+                        isKnownEmpty = season.isKnownEmpty
                     )
                 )
                 seasonIds[season.externalRef.key()] = localId

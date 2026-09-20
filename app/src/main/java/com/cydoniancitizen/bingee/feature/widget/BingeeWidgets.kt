@@ -59,8 +59,8 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
+import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.data.notification.NotificationDetailIntent
-import com.cydoniancitizen.bingee.data.notification.NotificationNavigationTarget
 import com.cydoniancitizen.bingee.data.settings.AppTheme
 import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
@@ -180,7 +180,7 @@ private fun markNextEpisode(ref: ExternalMediaRef): Action = actionRunCallback<M
 private fun openDetails(context: Context, ref: ExternalMediaRef, mediaType: MediaType): Action {
     val tmdbId = ref.externalId.toLongOrNull()?.takeIf { ref.source == MediaSource.TMDB && it > 0 }
     return if (tmdbId != null) {
-        actionStartActivity(NotificationDetailIntent.intent(context, NotificationNavigationTarget(mediaType, tmdbId)))
+        actionStartActivity(NotificationDetailIntent.intent(context, DetailRouteArgs(mediaType, tmdbId)))
     } else {
         actionStartActivity<MainActivity>()
     }

@@ -44,6 +44,7 @@ import com.cydoniancitizen.bingee.data.imports.tvtime.TmdbImportCandidate
 import com.cydoniancitizen.bingee.data.imports.tvtime.TmdbImportEpisodeCandidate
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeEpisodeReview
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchConfidence
+import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMediaReview
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeReviewAction
 
@@ -349,6 +350,11 @@ private fun MediaReviewCard(
     }
     val confidenceLabel = stringResource(displayedConfidence.labelRes())
     val reasonLabel = stringResource(review.reason.labelRes())
+    val stateDescriptionText = stringResource(
+        R.string.tvtime_import_confidence_reason,
+        confidenceLabel,
+        reasonLabel
+    )
     val mediaLabel = stringResource(
         if (review.source.mediaType == MediaType.MOVIE) {
             R.string.tvtime_import_media_movie
@@ -358,7 +364,7 @@ private fun MediaReviewCard(
     )
     Column(
         modifier = Modifier.fillMaxWidth().padding(8.dp).semantics {
-            stateDescription = "$confidenceLabel. $reasonLabel"
+            stateDescription = stateDescriptionText
         }
     ) {
         if (review.source.year != null) {
@@ -369,7 +375,7 @@ private fun MediaReviewCard(
         } else {
             Text(review.source.title, style = MaterialTheme.typography.titleMedium)
         }
-        Text("$mediaLabel · $confidenceLabel")
+        Text(stringResource(R.string.tvtime_import_media_confidence, mediaLabel, confidenceLabel))
         Text(reasonLabel, style = MaterialTheme.typography.bodySmall)
         if (review.source.warnings.isNotEmpty()) {
             Text(
@@ -460,9 +466,14 @@ private fun EpisodeReviewCard(
     }
     val confidenceLabel = stringResource(displayedConfidence.labelRes())
     val reasonLabel = stringResource(review.reason.labelRes())
+    val stateDescriptionText = stringResource(
+        R.string.tvtime_import_confidence_reason,
+        confidenceLabel,
+        reasonLabel
+    )
     Column(
         modifier = Modifier.fillMaxWidth().padding(8.dp).semantics {
-            stateDescription = "$confidenceLabel. $reasonLabel"
+            stateDescription = stateDescriptionText
         }
     ) {
         Text(
@@ -609,20 +620,20 @@ private fun TvTimeMatchConfidence.labelRes(): Int = when (this) {
     TvTimeMatchConfidence.SKIPPED -> R.string.tvtime_import_confidence_skipped
 }
 
-private fun com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.labelRes(): Int = when (this) {
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.EXACT_EXTERNAL_ID -> R.string.tvtime_import_reason_exact_external_id
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.EXACT_EPISODE_ID -> R.string.tvtime_import_reason_exact_episode_id
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.EXACT_NUMBERING -> R.string.tvtime_import_reason_exact_numbering
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.TITLE_AND_YEAR_UNIQUE -> R.string.tvtime_import_reason_title_year
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.SERIES_ID_REQUIRED -> R.string.tvtime_import_reason_series_id
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.CONFLICTING_EXTERNAL_IDS -> R.string.tvtime_import_reason_conflicting_ids
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.MULTIPLE_CANDIDATES -> R.string.tvtime_import_reason_multiple
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.NO_CANDIDATE -> R.string.tvtime_import_reason_none
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.MEDIA_TYPE_MISMATCH -> R.string.tvtime_import_reason_type
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.MISSING_PARENT -> R.string.tvtime_import_reason_parent
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.MISSING_SEASON -> R.string.tvtime_import_reason_season
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.MISSING_EPISODE -> R.string.tvtime_import_reason_episode
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.SPECIAL_REQUIRES_REVIEW -> R.string.tvtime_import_reason_special
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.PROVIDER_ERROR -> R.string.tvtime_import_reason_provider
-    com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeMatchReason.INVALID_SOURCE -> R.string.tvtime_import_reason_invalid
+private fun TvTimeMatchReason.labelRes(): Int = when (this) {
+    TvTimeMatchReason.EXACT_EXTERNAL_ID -> R.string.tvtime_import_reason_exact_external_id
+    TvTimeMatchReason.EXACT_EPISODE_ID -> R.string.tvtime_import_reason_exact_episode_id
+    TvTimeMatchReason.EXACT_NUMBERING -> R.string.tvtime_import_reason_exact_numbering
+    TvTimeMatchReason.TITLE_AND_YEAR_UNIQUE -> R.string.tvtime_import_reason_title_year
+    TvTimeMatchReason.SERIES_ID_REQUIRED -> R.string.tvtime_import_reason_series_id
+    TvTimeMatchReason.CONFLICTING_EXTERNAL_IDS -> R.string.tvtime_import_reason_conflicting_ids
+    TvTimeMatchReason.MULTIPLE_CANDIDATES -> R.string.tvtime_import_reason_multiple
+    TvTimeMatchReason.NO_CANDIDATE -> R.string.tvtime_import_reason_none
+    TvTimeMatchReason.MEDIA_TYPE_MISMATCH -> R.string.tvtime_import_reason_type
+    TvTimeMatchReason.MISSING_PARENT -> R.string.tvtime_import_reason_parent
+    TvTimeMatchReason.MISSING_SEASON -> R.string.tvtime_import_reason_season
+    TvTimeMatchReason.MISSING_EPISODE -> R.string.tvtime_import_reason_episode
+    TvTimeMatchReason.SPECIAL_REQUIRES_REVIEW -> R.string.tvtime_import_reason_special
+    TvTimeMatchReason.PROVIDER_ERROR -> R.string.tvtime_import_reason_provider
+    TvTimeMatchReason.INVALID_SOURCE -> R.string.tvtime_import_reason_invalid
 }

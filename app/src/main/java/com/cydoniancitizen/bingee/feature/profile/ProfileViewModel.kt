@@ -35,6 +35,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -179,8 +180,16 @@ internal class ProfileViewModel @Inject constructor(
 
     fun setViewMode(mode: ProfileViewMode) {
         val current = mutableUiState.value
+        mutableUiState.update { it.copy(actionError = null) }
         viewModelScope.launch {
-            displayModePreferences.setDisplayMode(current.collection, current.category, mode)
+            // The mode shown is the one the preferences emit, so a failed write keeps the previous one.
+            try {
+                displayModePreferences.setDisplayMode(current.collection, current.category, mode)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                mutableUiState.update { it.copy(actionError = AppError.LocalStorageFailure) }
+            }
         }
     }
 

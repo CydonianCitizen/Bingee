@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Bingee</string>
+    <string name="label_value">%1$s: %2$s</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Cerca</string>
     <string name="nav_settings">Impostazioni</string>
@@ -18,7 +19,7 @@
     <string name="error_media_type_mismatch">Questa azione non è disponibile per questo tipo di titolo.</string>
     <string name="error_unknown">Si è verificato un errore.</string>
     <string name="action_retry">Riprova</string>
-    <string name="action_undo">Annulla</string>
+    <string name="action_undo">Ripristina</string>
     <string name="action_cancel">Annulla</string>
     <string name="action_dismiss">Chiudi</string>
     <string name="onboarding_title">Connettiti a TMDB</string>
@@ -248,6 +249,7 @@
     <string name="watched_date_release_date">Data di uscita</string>
     <string name="watched_date_custom">Data personalizzata</string>
     <string name="watched_date_edit">Modifica data di visione</string>
+    <string name="watched_date_clear">Cancella data</string>
     <string name="watched_date_future_error">La data non può essere futura (oggi è %1$s)</string>
     <string name="watched_date_before_release_error">La data non può precedere la data di uscita (%1$s)</string>
     <string name="completion_date_label">Data di completamento</string>
@@ -260,6 +262,9 @@
     <string name="settings_language_title">Lingua</string>
     <string name="settings_language_en">Inglese</string>
     <string name="settings_language_it">Italiano</string>
+    <string name="settings_spoilers_title">Spoiler</string>
+    <string name="settings_spoilers_body">Nei dettagli delle serie, gli episodi che non hai ancora visto mostrano l\'immagine sfocata e nessun titolo.</string>
+    <string name="settings_spoilers_hide">Nascondi gli spoiler degli episodi</string>
     <string name="settings_open_source_title">Open Source</string>
     <string name="settings_open_source_description">Bingee è open source. Puoi contribuire a migliorare l’app segnalando problemi, proponendo nuove funzionalità o collaborando al codice su GitHub.</string>
     <string name="settings_open_source_github_action">Visualizza su GitHub</string>
@@ -384,11 +389,16 @@
     <string name="detail_refresh_season">Aggiorna metadati stagione</string>
     <string name="detail_mark_season_watched">Segna come visti gli episodi tracciabili</string>
     <string name="detail_mark_season_unwatched">Segna stagione come non vista</string>
+    <string name="detail_mark_previous_title">Segnare anche gli episodi precedenti?</string>
+    <string name="detail_mark_previous_body">Tutti gli episodi già usciti prima di questo verranno segnati come visti, anche nelle stagioni che non hai ancora aperto. Gli speciali restano esclusi.</string>
+    <string name="detail_mark_previous_confirm">Segna come visti</string>
+    <string name="detail_mark_previous_dismiss">Solo questo</string>
     <string name="detail_season_watched_state">Tutti gli episodi tracciabili visti</string>
     <string name="detail_season_partial_state">Visto in parte</string>
     <string name="detail_season_unwatched_state">Non visto</string>
     <string name="detail_episodes_empty">Nessun episodio disponibile per questa stagione.</string>
     <string name="detail_episode_title">Episodio %1$d · %2$s</string>
+    <string name="detail_episode_title_hidden">Episodio %1$d</string>
     <string name="detail_episode_air_date">Data di uscita: %1$s</string>
     <string name="detail_episode_air_date_unknown">Data di uscita sconosciuta · tracciabile</string>
     <string name="detail_episode_future">Non ancora trasmesso</string>
@@ -472,7 +482,6 @@
     <string name="backup_error_too_large">Il file di backup è troppo grande.</string>
     <string name="backup_error_malformed">Il JSON del backup è malformato o contiene dati non validi.</string>
     <string name="backup_error_wrong_format">Questo non è un backup Bingee.</string>
-    <string name="backup_error_missing_version">La versione dello schema del backup è assente.</string>
     <string name="backup_error_unsupported_version">Questo backup usa una versione più recente non supportata.</string>
     <string name="backup_error_validation">La validazione del backup è fallita e il file non è stato importato.</string>
     <string name="backup_error_duplicate">Il backup contiene identità duplicate.</string>
@@ -546,6 +555,8 @@
     <string name="tvtime_import_confidence_unmatched">Non abbinato</string>
     <string name="tvtime_import_confidence_invalid">Record sorgente non valido</string>
     <string name="tvtime_import_confidence_skipped">Saltato</string>
+    <string name="tvtime_import_confidence_reason">%1$s. %2$s</string>
+    <string name="tvtime_import_media_confidence">%1$s · %2$s</string>
     <string name="tvtime_import_reason_exact_external_id">Un ID esterno qualificato ha risolto un titolo TMDB compatibile.</string>
     <string name="tvtime_import_reason_exact_episode_id">Un ID episodio qualificato è stato risolto nel contesto della serie accettata.</string>
     <string name="tvtime_import_reason_exact_numbering">La serie e la stagione accettate hanno risolto un episodio regolare tramite numero.</string>

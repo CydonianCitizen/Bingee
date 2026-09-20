@@ -67,6 +67,9 @@ class DefaultWatchProgressRepositoryTest {
         assertEquals(AppResult.Success(Unit), repository.markEpisodeUnwatched(ref("101")))
         assertEquals(AppResult.Success(Unit), repository.markSeasonWatched(ref("11")))
         assertEquals(AppResult.Success(Unit), repository.markSeasonUnwatched(ref("11")))
+        assertEquals(AppResult.Success(Unit), repository.markPreviousEpisodesWatched(ref("102")))
+        assertEquals(LocalDate.of(2026, 8, 3), dao.lastDate)
+        assertEquals(now, dao.lastInstant)
 
         dao.outcome = ProgressWriteOutcome.NOT_TRACKABLE
         assertEquals(
@@ -127,6 +130,13 @@ class DefaultWatchProgressRepositoryTest {
         override suspend fun markSeasonUnwatched(source: MediaSource, externalId: String): ProgressWriteOutcome =
             record()
 
+        override suspend fun markPreviousEpisodesWatched(
+            source: MediaSource,
+            externalId: String,
+            today: LocalDate,
+            watchedAt: Instant
+        ): ProgressWriteOutcome = record(today, watchedAt)
+
         override suspend fun markMovieWatched(
             source: MediaSource,
             externalId: String,
@@ -157,6 +167,12 @@ class DefaultWatchProgressRepositoryTest {
         override suspend fun getMedia(source: MediaSource, mediaType: MediaType, externalId: String): MediaEntity? =
             null
         override suspend fun getTrackableEpisodeIds(localSeasonId: Long, today: LocalDate): List<Long> = emptyList()
+        override suspend fun getTrackableEpisodeIdsBefore(
+            localMediaId: Long,
+            seasonNumber: Int,
+            episodeNumber: Int,
+            today: LocalDate
+        ): List<Long> = emptyList()
         override suspend fun getMovieProgressByMediaId(localMediaId: Long): MovieWatchProgressEntity? = null
         override suspend fun getSeriesProgressByMediaId(localMediaId: Long): SeriesWatchProgressEntity? = null
         override suspend fun getSeriesCompletion(localMediaId: Long, today: LocalDate): SeriesCompletionRow =

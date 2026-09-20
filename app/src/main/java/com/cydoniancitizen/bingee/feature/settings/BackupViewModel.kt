@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.data.importexport.BackupDataStore
-import com.cydoniancitizen.bingee.data.importexport.BackupExporter
 import com.cydoniancitizen.bingee.data.importexport.BackupFailureKind
 import com.cydoniancitizen.bingee.data.importexport.BackupFileGateway
 import com.cydoniancitizen.bingee.data.importexport.BackupParseResult
@@ -12,13 +11,16 @@ import com.cydoniancitizen.bingee.data.importexport.BackupPreview
 import com.cydoniancitizen.bingee.data.importexport.BackupValidationResult
 import com.cydoniancitizen.bingee.data.importexport.BackupValidator
 import com.cydoniancitizen.bingee.data.importexport.ValidatedBackupPlan
+import com.cydoniancitizen.bingee.di.DefaultDispatcher
 import com.cydoniancitizen.bingee.domain.background.BackgroundWorkScheduler
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Clock
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +28,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal enum class BackupOperation {
     IDLE,
@@ -50,12 +52,13 @@ internal data class BackupUiState(
 
 @HiltViewModel
 internal class BackupViewModel @Inject constructor(
-    private val exporter: BackupExporter,
+    private val clock: Clock,
     private val dataStore: BackupDataStore,
     private val fileGateway: BackupFileGateway,
     private val preferencesRepository: ReleaseNotificationPreferencesRepository,
     private val scheduler: BackgroundWorkScheduler,
-    private val dateSource: CalendarDateSource
+    private val dateSource: CalendarDateSource,
+    @param:DefaultDispatcher private val validationDispatcher: CoroutineDispatcher
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(BackupUiState(today = dateSource.currentDate()))
     val uiState: StateFlow<BackupUiState> = mutableUiState.asStateFlow()
@@ -75,8 +78,7 @@ internal class BackupViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 mutableUiState.update { it.copy(operation = BackupOperation.SAVING, failure = null) }
-                val backup = exporter.export()
-                val failure = fileGateway.write(uri, backup.bytes)
+                val failure = fileGateway.write(uri, dataStore.createPortableBackup(clock.instant()))
                 mutableUiState.update {
                     it.copy(
                         operation = if (failure == null) BackupOperation.SUCCESS else BackupOperation.FAILURE,
@@ -100,8 +102,7 @@ internal class BackupViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 mutableUiState.update { it.copy(operation = BackupOperation.SHARING, failure = null) }
-                val backup = exporter.export()
-                val failure = fileGateway.share(backup.bytes)
+                val failure = fileGateway.share(dataStore.createPortableBackup(clock.instant()))
                 mutableUiState.update {
                     it.copy(
                         operation = if (failure == null) BackupOperation.SUCCESS else BackupOperation.FAILURE,
@@ -133,7 +134,9 @@ internal class BackupViewModel @Inject constructor(
                 }
                 mutableUiState.update { it.copy(operation = BackupOperation.VALIDATING) }
                 val document = (parsed as BackupParseResult.Success).document
-                val validation = BackupValidator.validate(document, dateSource.currentDate())
+                val today = dateSource.currentDate()
+                // Validation walks and indexes every record of a file up to 50 MiB: keep it off the main thread.
+                val validation = withContext(validationDispatcher) { BackupValidator.validate(document, today) }
                 if (validation is BackupValidationResult.Failure) {
                     fail(validation.failure.kind)
                     return@launch

@@ -14,14 +14,15 @@ import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.MediaDetails
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.Season
 import com.cydoniancitizen.bingee.core.model.SeasonProgress
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.calendar.rotateSeasonBatch
 import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
+import com.cydoniancitizen.bingee.domain.repository.BackgroundRefreshPlanner
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.SeriesRepository
@@ -51,6 +52,65 @@ import org.junit.Test
 class DefaultCalendarRefreshCoordinatorTest {
     private val now = Instant.parse("2026-08-03T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
+
+    @Test
+    fun backgroundRefreshBoundsTitlesAndSeasonsButManualRefreshRemainsComplete() = runTest {
+        val entries = (1..25).map { entry(it.toString(), MediaType.SERIES) }
+        val series = FakeSeriesRepository(
+            entries.associate { entry ->
+                entry.mediaRef to (0..99).map { season(entry.mediaRef, it, null, episodesCached = false) }
+            }
+        )
+        val details = FakeDetailsRepository()
+        val coordinator = coordinator(entries, details, series, FakeCalendarRepository())
+
+        val result = coordinator.refresh(entries.map { BackgroundRefreshTarget(it.mediaRef, it.mediaType) })
+
+        assertEquals(20, result.titlesConsidered)
+        assertEquals(20, details.calls.size)
+        assertEquals(40, series.calls.size)
+        assertEquals(60, result.operationsSucceeded)
+        details.calls.clear()
+        series.calls.clear()
+
+        coordinator.refresh()
+
+        assertEquals(25, details.calls.size)
+        assertEquals(2500, series.calls.size)
+    }
+
+    @Test
+    fun failedSeasonBatchesRotateIncludingSpecialsAndWrap() = runTest {
+        val reference = ref("1")
+        val series = FakeSeriesRepository(
+            seasons = mapOf(reference to (0..4).map { season(reference, it, null, episodesCached = false) }),
+            results = (0..4).associateWith { AppResult.Failure(AppError.NetworkUnavailable) }
+        )
+        val coordinator = coordinator(emptyList(), FakeDetailsRepository(), series, FakeCalendarRepository())
+        val targets = listOf(BackgroundRefreshTarget(reference, MediaType.SERIES))
+
+        repeat(5) { coordinator.refresh(targets) }
+
+        assertEquals(listOf(4, 0, 4, 1, 4, 2, 4, 3, 4, 0), series.calls)
+    }
+
+    @Test
+    fun currentReleasesTakePriorityOverMissingSeasonsWhileHistoryStillRotates() = runTest {
+        val reference = ref("1")
+        val series = FakeSeriesRepository(
+            mapOf(
+                reference to listOf(
+                    season(reference, 0, null, true, freshness = CacheFreshness.STALE),
+                    season(reference, 1, null, true, freshness = CacheFreshness.STALE),
+                    season(reference, 2, LocalDate.of(2026, 8, 10), true),
+                    season(reference, 3, null, false)
+                )
+            )
+        )
+        val coordinator = coordinator(emptyList(), FakeDetailsRepository(), series, FakeCalendarRepository())
+        repeat(3) { coordinator.refresh(listOf(BackgroundRefreshTarget(reference, MediaType.SERIES))) }
+        assertEquals(listOf(2, 0, 2, 1, 2, 3), series.calls)
+    }
 
     @Test
     fun emptyLibraryAndMissingCredentialDoNoRemoteWorkAndDoNotMarkSuccess() = runTest {
@@ -276,7 +336,20 @@ class DefaultCalendarRefreshCoordinatorTest {
         credentialRepository = FakeCredentialRepository(credential),
         clock = clock,
         dateSource = TestCalendarDateSource(LocalDate.of(2026, 8, 3)),
-        window = ReleaseCalendarWindow()
+
+        backgroundPlanner = object : BackgroundRefreshPlanner {
+            private val cursors = mutableMapOf<ExternalMediaRef, Int>()
+            override suspend fun plan(limit: Int): AppResult<List<BackgroundRefreshTarget>> = error("Not used")
+            override suspend fun claimSeasons(
+                mediaRef: ExternalMediaRef,
+                seasonNumbers: List<Int>,
+                prioritySeasonNumber: Int?
+            ): AppResult<List<Int>> {
+                val batch = rotateSeasonBatch(seasonNumbers, cursors[mediaRef], prioritySeasonNumber)
+                batch.lastOrNull()?.let { cursors[mediaRef] = it }
+                return AppResult.Success(batch)
+            }
+        }
     )
 
     private fun entry(id: String, type: MediaType) = LibraryEntry(

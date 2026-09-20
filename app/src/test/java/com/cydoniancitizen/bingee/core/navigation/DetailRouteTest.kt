@@ -30,6 +30,13 @@ class DetailRouteTest {
         assertNull(DetailRoute.parse("MOVIE", " "))
         assertNull(DetailRoute.parse("MOVIE", "bad"))
         assertNull(DetailRoute.parse("MOVIE", "0"))
+        assertNull(DetailRoute.parse("MOVIE", "-1"))
+        assertNull(DetailRoute.parse("MOVIE", "9223372036854775808"))
+        assertNull(DetailRoute.parse(null, "1"))
+        assertNull(DetailRoute.parse("MOVIE", null))
+        listOf(0L, -1L).forEach { id ->
+            assertThrows(IllegalArgumentException::class.java) { DetailRouteArgs(MediaType.MOVIE, id) }
+        }
         assertThrows(IllegalArgumentException::class.java) {
             DetailRoute.create(MediaType.MOVIE, 0)
         }

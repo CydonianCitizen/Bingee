@@ -44,6 +44,8 @@ For release-hardening or persistence changes, also run the connected suite when 
 ./gradlew connectedDebugAndroidTest
 ```
 
+CI runs the Room migration, transaction, and backup/restore suites (the `data.library`, `data.importexport`, `data.calendar`, `data.imports`, `data.rating`, and `data.settings` packages) on an API 33 emulator; the rest of the connected suite still runs locally. The connected task uninstalls the tested app when it finishes, so do not point it at a device whose installed Bingee data you want to keep.
+
 Report the device/API level, density, font scale, network mode, notification permission state, and any manual accessibility or Storage Access Framework flows. Do not report a device configuration that was not actually used.
 
 ## Issues and bug reports

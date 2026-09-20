@@ -2,7 +2,6 @@ package com.cydoniancitizen.bingee.core.model
 
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 data class WatchedEpisodeActivity(val watchedAt: Instant, val runtimeMinutes: Int?) {
     init {
@@ -74,7 +73,4 @@ data class PersonalViewingEntry(
 
     val navigableDetailsRef: ExternalMediaRef?
         get() = mediaRef.toNavigableDetailsRef()
-
-    fun displayWatchedDate(zoneId: ZoneId): LocalDate? =
-        watchedDate ?: completionTimestamp?.atZone(zoneId)?.toLocalDate()
 }

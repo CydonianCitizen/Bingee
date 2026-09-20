@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.data.progress
 
-import android.database.sqlite.SQLiteException
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
@@ -9,6 +8,7 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
+import com.cydoniancitizen.bingee.data.toPersistenceError
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.WatchProgressRepository
 import java.time.Clock
@@ -55,6 +55,15 @@ internal class DefaultWatchProgressRepository @Inject constructor(
 
     override suspend fun markEpisodeUnwatched(episodeRef: ExternalMediaRef): AppResult<Unit> =
         episodeRef.write { dao.markEpisodeUnwatched(it.source, it.externalId) }
+
+    override suspend fun markPreviousEpisodesWatched(episodeRef: ExternalMediaRef): AppResult<Unit> = episodeRef.write {
+        dao.markPreviousEpisodesWatched(
+            source = it.source,
+            externalId = it.externalId,
+            today = dateSource.currentDate(),
+            watchedAt = clock.instant()
+        )
+    }
 
     override suspend fun markSeasonWatched(seasonRef: ExternalMediaRef): AppResult<Unit> = seasonRef.write {
         dao.markSeasonWatched(
@@ -117,10 +126,3 @@ private fun ExternalMediaRef.normalizedRefOrNull(): ExternalMediaRef? {
 
 private fun ExternalMediaRef.invalidReferenceError(): AppError =
     if (source == MediaSource.TMDB) AppError.InvalidInput else AppError.UnsupportedData
-
-private fun Throwable.toPersistenceError(): AppError = when (this) {
-    is IllegalArgumentException,
-    is IllegalStateException -> AppError.CorruptedData
-    is SQLiteException -> AppError.LocalStorageFailure
-    else -> AppError.Unknown
-}

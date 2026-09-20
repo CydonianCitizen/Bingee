@@ -20,42 +20,45 @@ internal data class DetailsCacheWrite(
     val genres: List<MediaGenreEntity>
 )
 
-internal fun MediaDetails.toCacheWrite(fetchedAt: Instant): DetailsCacheWrite = DetailsCacheWrite(
-    media = MediaEntity(
-        mediaType = mediaType,
-        title = title.trim(),
-        originalTitle = originalTitle.normalizedOptional(),
-        overview = overview.normalizedOptional(),
-        posterUrl = posterUrl.normalizedOptional(),
-        releaseDate = releaseDate,
-        createdAt = fetchedAt,
-        metadataUpdatedAt = fetchedAt
-    ),
-    details = MediaDetailsEntity(
-        localMediaId = 0,
-        backdropUrl = backdropUrl.normalizedOptional(),
-        productionStatus = productionStatus.name,
-        originalLanguage = originalLanguage.normalizedOptional(),
-        runtimeMinutes = runtime.minutesOrNull(),
-        episodeRuntimeMinutes = episodeRuntime.minutesOrNull(),
-        numberOfSeasons = numberOfSeasons,
-        numberOfEpisodes = numberOfEpisodes,
-        detailsFetchedAt = fetchedAt
-    ),
-    genres = genres.mapIndexed { index, genre ->
-        MediaGenreEntity(
+internal fun MediaDetails.toCacheWrite(fetchedAt: Instant, language: String? = null): DetailsCacheWrite =
+    DetailsCacheWrite(
+        media = MediaEntity(
+            mediaType = mediaType,
+            title = title.trim(),
+            originalTitle = originalTitle.normalizedOptional(),
+            overview = overview.normalizedOptional(),
+            posterUrl = posterUrl.normalizedOptional(),
+            releaseDate = releaseDate,
+            createdAt = fetchedAt,
+            metadataUpdatedAt = fetchedAt
+        ),
+        details = MediaDetailsEntity(
             localMediaId = 0,
-            genreOrder = index,
-            name = genre.name.trim(),
-            source = genre.source,
-            genreId = genre.genreId
-        )
-    }
-)
+            backdropUrl = backdropUrl.normalizedOptional(),
+            productionStatus = productionStatus.name,
+            originalLanguage = originalLanguage.normalizedOptional(),
+            runtimeMinutes = runtime.minutesOrNull(),
+            episodeRuntimeMinutes = episodeRuntime.minutesOrNull(),
+            numberOfSeasons = numberOfSeasons,
+            numberOfEpisodes = numberOfEpisodes,
+            detailsFetchedAt = fetchedAt,
+            language = language
+        ),
+        genres = genres.mapIndexed { index, genre ->
+            MediaGenreEntity(
+                localMediaId = 0,
+                genreOrder = index,
+                name = genre.name.trim(),
+                source = genre.source,
+                genreId = genre.genreId
+            )
+        }
+    )
 
 internal fun CachedDetailsRelation.toDomain(
     reference: ExternalMediaRef,
-    freshnessPolicy: CacheFreshnessPolicy
+    freshnessPolicy: CacheFreshnessPolicy,
+    requestedLanguage: String
 ): CachedMediaDetails? {
     val cached = details ?: return null
     require(externalRefs.any { it.source == reference.source && it.externalId == reference.externalId }) {
@@ -83,7 +86,7 @@ internal fun CachedDetailsRelation.toDomain(
     return CachedMediaDetails(
         details = domain,
         fetchedAt = cached.detailsFetchedAt,
-        freshness = freshnessPolicy.classify(cached.detailsFetchedAt)
+        freshness = freshnessPolicy.classify(cached.detailsFetchedAt, cached.language, requestedLanguage)
     )
 }
 

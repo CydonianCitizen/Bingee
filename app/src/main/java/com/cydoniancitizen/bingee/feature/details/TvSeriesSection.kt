@@ -32,9 +32,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -55,6 +58,7 @@ import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.SeasonProgress
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.core.ui.formatLocalized
 import com.cydoniancitizen.bingee.core.ui.toUiError
 
 /**
@@ -249,6 +253,7 @@ private fun SeasonCard(
                                 key(episodeRef.source.name, episodeRef.externalId) {
                                     EpisodeRow(
                                         episode = episode,
+                                        hideSpoilers = state.hideSpoilers,
                                         pending = episodeRef in state.pendingEpisodes,
                                         onToggle = { onToggleEpisode(episode) }
                                     )
@@ -378,10 +383,12 @@ private fun SeasonWatchedCheckbox(progress: SeasonProgress, enabled: Boolean, on
 }
 
 @Composable
-private fun EpisodeRow(episode: TrackedEpisode, pending: Boolean, onToggle: () -> Unit) {
+private fun EpisodeRow(episode: TrackedEpisode, hideSpoilers: Boolean, pending: Boolean, onToggle: () -> Unit) {
     val metadata = episode.episode
     val watched = episode.watchState is EpisodeWatchState.Watched
+    val spoilerHidden = hideSpoilers && !watched
     val unavailable = episode.watchState == EpisodeWatchState.Unavailable
+    val locale = LocalConfiguration.current.locales[0]
     val watchStateDescription = when {
         pending -> stringResource(R.string.detail_progress_updating)
         unavailable -> stringResource(R.string.detail_episode_future)
@@ -403,10 +410,12 @@ private fun EpisodeRow(episode: TrackedEpisode, pending: Boolean, onToggle: () -
         horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val shape = MaterialTheme.shapes.small
         val imageModifier = Modifier
             .width(120.dp)
             .aspectRatio(16f / 9f)
-            .clip(MaterialTheme.shapes.small)
+            .clip(shape)
+            .then(if (spoilerHidden) Modifier.blur(SpoilerBlur, BlurredEdgeTreatment(shape)) else Modifier)
         val placeholder = painterResource(R.drawable.poster_placeholder)
         if (metadata.stillUrl == null) {
             Image(
@@ -429,7 +438,11 @@ private fun EpisodeRow(episode: TrackedEpisode, pending: Boolean, onToggle: () -
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                stringResource(R.string.detail_episode_title, metadata.episodeNumber, metadata.title),
+                if (spoilerHidden) {
+                    stringResource(R.string.detail_episode_title_hidden, metadata.episodeNumber)
+                } else {
+                    stringResource(R.string.detail_episode_title, metadata.episodeNumber, metadata.title)
+                },
                 style = MaterialTheme.typography.titleSmall
             )
             // Air date and runtime are secondary to the title, which the default body style left
@@ -438,7 +451,7 @@ private fun EpisodeRow(episode: TrackedEpisode, pending: Boolean, onToggle: () -
             val metaColor = MaterialTheme.colorScheme.onSurfaceVariant
             metadata.airDate?.let {
                 Text(
-                    stringResource(R.string.detail_episode_air_date, it.toString()),
+                    stringResource(R.string.detail_episode_air_date, it.formatLocalized(locale)),
                     style = metaStyle,
                     color = metaColor
                 )
@@ -464,3 +477,6 @@ private fun EpisodeRow(episode: TrackedEpisode, pending: Boolean, onToggle: () -
         )
     }
 }
+
+/** Strong enough on a 120dp still to leave colour but no readable faces or text. */
+private val SpoilerBlur = 12.dp

@@ -182,12 +182,12 @@ class WatchedStatisticsTest {
     }
 
     @Test
-    fun explicitWatchedDateControlsDisplayWhileCompletionTimestampStaysPrecise() {
+    fun completionTimestampStaysPreciseAlongsideExplicitWatchedDate() {
         val completion = instant("2026-08-01T23:30:00Z")
         val explicit = LocalDate.of(2020, 2, 3)
         val entry = movie("movie", watchedAt = completion, watchedDate = explicit)
 
-        assertEquals(explicit, entry.displayWatchedDate(zone))
+        assertEquals(explicit, entry.watchedDate)
         assertEquals(completion, entry.completionTimestamp)
     }
 
@@ -197,7 +197,6 @@ class WatchedStatisticsTest {
 
         val stats = calculateWatchedStatistics(listOf(entry), zone)
 
-        assertEquals(LocalDate.of(2026, 8, 2), entry.displayWatchedDate(zone))
         assertFalse(stats.isEmpty)
     }
 
@@ -429,6 +428,88 @@ class WatchedStatisticsTest {
             listOf(0f, 0f),
             relativeViewingNormalization(listOf(MonthlyViewingData(2026, 1), MonthlyViewingData(2026, 2)))
         )
+    }
+
+    @Test
+    fun movieAndSeriesSharingTmdbIdBothCountInEitherInputOrder() {
+        val movie = movie(
+            "1399",
+            watchedAt = instant("2026-03-01T10:00:00Z"),
+            rating = 7,
+            runtimeMinutes = 120,
+            genres = listOf(Genre("Drama", MediaSource.TMDB, 18))
+        )
+        val series = series(
+            "1399",
+            watchedEpisodes = 10,
+            completedAt = instant("2026-04-01T10:00:00Z"),
+            rating = 9,
+            watchedRuntimeMinutes = 450,
+            seriesIsCurrentlyComplete = true,
+            genres = listOf(Genre("Comedy", MediaSource.TMDB, 35))
+        )
+
+        val results = listOf(listOf(movie, series), listOf(series, movie)).map { entries ->
+            calculateWatchedStatistics(entries, zone, LocalDate.of(2026, 8, 17), 2026)
+        }
+
+        results.forEach { stats ->
+            assertEquals(1, stats.moviesWatchedCount)
+            assertEquals(1, stats.tvSeriesCompletedCount)
+            assertEquals(10, stats.episodesWatchedCount)
+            assertEquals(120L, stats.movieWatchTimeMinutes)
+            assertEquals(450L, stats.seriesWatchTimeMinutes)
+            assertEquals(2, stats.personalRatingStatistics.ratedTitleCount)
+            assertEquals(8.0, stats.personalRatingStatistics.averageRating!!, 0.001)
+            assertEquals(listOf(18L), stats.movieGenres.map { it.genreId })
+            assertEquals(listOf(35L), stats.seriesGenres.map { it.genreId })
+        }
+        assertEquals(
+            results[0].personalRatingStatistics.ratedTitles.map { it.mediaType },
+            results[1].personalRatingStatistics.ratedTitles.map { it.mediaType }
+        )
+    }
+
+    @Test
+    fun tasteScopesKeepMovieAndSeriesSharingTmdbId() {
+        val movie = movie(
+            "1399",
+            watchedAt = Instant.EPOCH,
+            genres = listOf(Genre("Drama", MediaSource.TMDB, 18))
+        )
+        val series = series(
+            "1399",
+            watchedEpisodes = 1,
+            genres = listOf(Genre("Comedy", MediaSource.TMDB, 35))
+        )
+
+        listOf(listOf(movie, series), listOf(series, movie)).forEach { entries ->
+            assertEquals(
+                setOf(18L, 35L),
+                calculateTasteStatistics(entries, StatisticsMediaScope.ALL).rankedGenres.map { it.genreId }.toSet()
+            )
+            assertEquals(
+                listOf(18L),
+                calculateTasteStatistics(entries, StatisticsMediaScope.MOVIES).rankedGenres.map { it.genreId }
+            )
+            assertEquals(
+                listOf(35L),
+                calculateTasteStatistics(entries, StatisticsMediaScope.SERIES).rankedGenres.map { it.genreId }
+            )
+        }
+    }
+
+    @Test
+    fun duplicateRowsOfSameTitleAndTypeAreStillCountedOnce() {
+        val genres = listOf(Genre("Drama", MediaSource.TMDB, 18))
+        val duplicate = movie("1399", watchedAt = Instant.EPOCH, rating = 8, runtimeMinutes = 100, genres = genres)
+
+        val stats = calculateWatchedStatistics(listOf(duplicate, duplicate), zone)
+
+        assertEquals(1, stats.moviesWatchedCount)
+        assertEquals(100L, stats.movieWatchTimeMinutes)
+        assertEquals(1, stats.personalRatingStatistics.ratedTitleCount)
+        assertEquals(1, calculateTasteStatistics(listOf(duplicate, duplicate)).rankedGenres.single().titleCount)
     }
 
     private fun movie(

@@ -4,7 +4,7 @@
     android:height="144dp"
     android:viewportWidth="96"
     android:viewportHeight="144"
-    android:tint="?attr/colorOnSurfaceVariant">
+    android:tint="@color/poster_placeholder_tint">
     <path
         android:fillColor="@android:color/white"
         android:pathData="M20,20h56v104h-56zM28,32v60l14,-18 10,12 8,-10 8,12v-56zM32,108h32v8h-32z" />

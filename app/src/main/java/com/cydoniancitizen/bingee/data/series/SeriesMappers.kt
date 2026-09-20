@@ -45,7 +45,8 @@ internal fun Episode.toEntity(updatedAt: Instant): EpisodeEntity = EpisodeEntity
 internal fun SeasonWithEpisodesRelation.toDomain(
     seriesRef: ExternalMediaRef,
     today: LocalDate,
-    freshnessPolicy: CacheFreshnessPolicy
+    freshnessPolicy: CacheFreshnessPolicy,
+    requestedLanguage: String
 ): CachedSeason {
     require(season.source == seriesRef.source) { "Cached season provider differs from series provider" }
     val seasonRef = ExternalMediaRef(season.source, season.externalId)
@@ -84,9 +85,12 @@ internal fun SeasonWithEpisodesRelation.toDomain(
         season = domainSeason,
         metadataUpdatedAt = season.metadataUpdatedAt,
         episodesFetchedAt = season.episodesFetchedAt,
+        isKnownEmpty = season.isKnownEmpty,
         episodes = trackedEpisodes,
         progress = deriveSeasonProgress(trackedEpisodes),
-        episodeCacheFreshness = season.episodesFetchedAt?.let(freshnessPolicy::classify)
+        episodeCacheFreshness = season.episodesFetchedAt?.let {
+            freshnessPolicy.classify(it, season.episodesLanguage, requestedLanguage)
+        }
     )
 }
 

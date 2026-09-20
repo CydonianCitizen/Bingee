@@ -28,5 +28,7 @@ data class CachedSeason(
     val episodesFetchedAt: Instant?,
     val episodes: List<TrackedEpisode>,
     val progress: SeasonProgress,
-    val episodeCacheFreshness: CacheFreshness?
+    val episodeCacheFreshness: CacheFreshness?,
+    /** A season response confirmed zero episodes; portable evidence, independent of cache freshness. */
+    val isKnownEmpty: Boolean = false
 )

@@ -198,7 +198,7 @@ internal fun NotificationSettingsContent(
 }
 
 @Composable
-private fun SettingSwitchRow(label: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
+internal fun SettingSwitchRow(label: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

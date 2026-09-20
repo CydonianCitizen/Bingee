@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
 import com.cydoniancitizen.bingee.core.model.CachedSeason
+import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
@@ -15,10 +16,12 @@ import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.model.deriveSeriesProgress
+import com.cydoniancitizen.bingee.core.model.hasSufficientEpisodeCoverage
 import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.data.settings.SpoilerPreferences
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
@@ -93,8 +96,29 @@ internal data class SeriesDetailUiState(
     val expandedSeasons: Set<ExternalMediaRef> = emptySet(),
     val seasonLoads: Map<ExternalMediaRef, SeasonLoadState> = emptyMap(),
     val pendingEpisodes: Set<ExternalMediaRef> = emptySet(),
-    val pendingSeasons: Set<ExternalMediaRef> = emptySet()
+    val pendingSeasons: Set<ExternalMediaRef> = emptySet(),
+    /** The episode just marked watched while earlier ones may still be unwatched; drives the catch-up prompt. */
+    val previousEpisodesPrompt: Episode? = null,
+    /** Unwatched episodes blur their still and drop their title. */
+    val hideSpoilers: Boolean = false
 )
+
+/**
+ * Whether marking [target] may leave earlier regular episodes unwatched: an aired one still unticked,
+ * or an earlier season whose episodes are not all stored and so cannot be checked yet.
+ */
+internal fun List<CachedSeason>.hasUnwatchedBefore(target: Episode): Boolean = target.seasonNumber > 0 &&
+    any { season ->
+        val number = season.season.seasonNumber
+        when {
+            number <= 0 || number > target.seasonNumber -> false
+            !season.hasSufficientEpisodeCoverage() && number < target.seasonNumber -> season.season.episodeCount > 0
+            else -> season.episodes.any {
+                it.watchState == EpisodeWatchState.Unwatched &&
+                    (number < target.seasonNumber || it.episode.episodeNumber < target.episodeNumber)
+            }
+        }
+    }
 
 internal data class MediaDetailsUiState(
     val today: LocalDate,
@@ -122,7 +146,8 @@ internal class MediaDetailsViewModel @Inject constructor(
     private val seriesRepository: SeriesRepository,
     private val progressRepository: WatchProgressRepository,
     private val ratingRepository: RatingRepository,
-    private val dateSource: CalendarDateSource
+    private val dateSource: CalendarDateSource,
+    private val spoilerPreferences: SpoilerPreferences
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(MediaDetailsUiState(today = dateSource.currentDate()))
     val uiState: StateFlow<MediaDetailsUiState> = mutableUiState.asStateFlow()
@@ -160,6 +185,11 @@ internal class MediaDetailsViewModel @Inject constructor(
                         it.copy(series = it.series.copy(content = SeriesContentState.Loading))
                     }
                     observeSeries(args.tmdbId)
+                    viewModelScope.launch {
+                        spoilerPreferences.observeHideSpoilers().collect { hide ->
+                            mutableUiState.update { it.copy(series = it.series.copy(hideSpoilers = hide)) }
+                        }
+                    }
                 }
             }
         }
@@ -255,18 +285,65 @@ internal class MediaDetailsViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            val result = if (episode.watchState is EpisodeWatchState.Watched) {
-                progressRepository.markEpisodeUnwatched(ref)
-            } else {
+            val markingWatched = episode.watchState !is EpisodeWatchState.Watched
+            val result = if (markingWatched) {
                 progressRepository.markEpisodeWatched(ref)
+            } else {
+                progressRepository.markEpisodeUnwatched(ref)
             }
             mutableUiState.update {
+                val seasons = (it.series.content as? SeriesContentState.Ready)?.seasons.orEmpty()
+                val prompt = episode.episode.takeIf {
+                    markingWatched && result is AppResult.Success && seasons.hasUnwatchedBefore(episode.episode)
+                }
                 it.copy(
-                    series = it.series.copy(pendingEpisodes = it.series.pendingEpisodes - ref),
+                    series = it.series.copy(
+                        pendingEpisodes = it.series.pendingEpisodes - ref,
+                        previousEpisodesPrompt = prompt ?: it.series.previousEpisodesPrompt
+                    ),
                     progressError = (result as? AppResult.Failure)?.error
                 )
             }
         }
+    }
+
+    fun markPreviousEpisodesWatched() {
+        val args = routeArgs ?: return
+        val series = mutableUiState.value.series
+        val target = series.previousEpisodesPrompt ?: return
+        val seasons = (series.content as? SeriesContentState.Ready)?.seasons ?: return
+        val ref = target.externalRef
+        mutableUiState.update {
+            it.copy(
+                series = it.series.copy(
+                    previousEpisodesPrompt = null,
+                    pendingEpisodes = it.series.pendingEpisodes + ref
+                ),
+                progressError = null
+            )
+        }
+        viewModelScope.launch {
+            // Earlier seasons without all their episode rows cannot be caught up, as the write only
+            // reaches stored rows. Load them first, and write nothing if one fails, so the catch-up is
+            // never partial. Restored seasons already hold their rows and need no network.
+            val loadFailure = seasons
+                .filter { it.season.seasonNumber in 1 until target.seasonNumber && !it.hasSufficientEpisodeCoverage() }
+                .firstNotNullOfOrNull {
+                    (seriesRepository.refreshSeason(args.tmdbId, it.season.seasonNumber) as? AppResult.Failure)?.error
+                }
+            val error = loadFailure
+                ?: (progressRepository.markPreviousEpisodesWatched(ref) as? AppResult.Failure)?.error
+            mutableUiState.update {
+                it.copy(
+                    series = it.series.copy(pendingEpisodes = it.series.pendingEpisodes - ref),
+                    progressError = error
+                )
+            }
+        }
+    }
+
+    fun dismissPreviousEpisodesPrompt() {
+        mutableUiState.update { it.copy(series = it.series.copy(previousEpisodesPrompt = null)) }
     }
 
     fun toggleSeasonWatched(season: CachedSeason) {

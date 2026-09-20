@@ -12,6 +12,38 @@ import org.junit.Test
 
 class TvTimeSourceValidationTest {
     @Test
+    fun discardedListFieldsStillRequireValidValues() = runTest {
+        val invalidLists = listOf(
+            LIST.replace("\"id\":\"list\"", "\"id\":null"),
+            LIST.replace("\"name\":\"List\"", "\"name\":false"),
+            LIST.replace("\"description\":\"\"", "\"description\":0"),
+            LIST.replace("\"is_public\":false", "\"is_public\":\"false\""),
+            LIST.replace("2024-01-01T00:00:00Z", "not-a-timestamp"),
+            LIST.replace("\"custom_order\":0", "\"custom_order\":0.5"),
+            LIST.replace("\"name\":\"Movie\"", "\"name\":null")
+        )
+        invalidLists.forEach { list ->
+            assertFailure(archive(list, MOVIE, SERIES), TvTimeParseFailureKind.INVALID_STRUCTURE)
+        }
+    }
+
+    @Test
+    fun firstAndLaterMovieRecordsKeepTheSameCountsAndInvalidRecordHandling() = runTest {
+        val valid = MOVIE.removeSurrounding("[", "]")
+        val invalid = valid.replace("\"year\":2020", "\"year\":999")
+        listOf("[$invalid,$valid]", "[$valid,$invalid]").forEachIndexed { index, movies ->
+            val document = success(archive(LIST, movies, SERIES))
+            assertEquals(1, document.summary.movieRecordCount)
+            assertEquals(1, document.summary.watchedMovieCount)
+            assertEquals(1, document.summary.invalidRecordCount)
+            assertEquals(2, document.summary.unsupported.favoriteRecords)
+            assertEquals(2, document.summary.unsupported.rewatchRecords)
+            assertEquals("movie:${1 - index}", document.movies.single().recordId)
+            assertTrue(document.warnings.any { it.code == ImportWarningCode.INVALID_RECORD })
+        }
+    }
+
+    @Test
     fun requiresExactlyOneOfEveryJsonRole() = runTest {
         assertFailure(archive(LIST, MOVIE), TvTimeParseFailureKind.MISSING_ROLE)
         assertFailure(archive(LIST, MOVIE, MOVIE, SERIES), TvTimeParseFailureKind.DUPLICATE_ROLE)
@@ -105,7 +137,6 @@ class TvTimeSourceValidationTest {
         assertTrue(document.warnings.any { it.code == ImportWarningCode.HIGH_SEASON_NUMBER })
         assertEquals(1, document.summary.unsupported.sourceStatusRecords)
         assertEquals(1, document.summary.unsupported.technicalFlagRecords)
-        assertEquals(0, document.summary.ratingsImported)
         assertFalse(document.series.single().normalizedTitle.isBlank())
     }
 

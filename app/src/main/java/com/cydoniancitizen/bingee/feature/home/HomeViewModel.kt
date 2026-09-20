@@ -8,9 +8,9 @@ import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.ReleaseCalendarWindow
 import com.cydoniancitizen.bingee.core.model.ReleaseDateGroup
 import com.cydoniancitizen.bingee.core.model.groupReleaseEvents
+import com.cydoniancitizen.bingee.core.model.releaseCalendarStartDate
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
@@ -80,7 +80,6 @@ internal class HomeViewModel @Inject constructor(
     private val calendarRepository: ReleaseCalendarRepository,
     private val refreshCoordinator: CalendarRefreshCoordinator,
     private val dateSource: CalendarDateSource,
-    private val window: ReleaseCalendarWindow,
     private val featuredRepository: com.cydoniancitizen.bingee.domain.repository.FeaturedReleasesRepository,
     private val libraryRepository: com.cydoniancitizen.bingee.domain.repository.LibraryRepository,
     private val watchProgressRepository: WatchProgressRepository
@@ -211,7 +210,7 @@ internal class HomeViewModel @Inject constructor(
     private fun observeLocalCalendar() {
         val datedEvents = combine(dateSource.observeDate(), localRetry) { today, _ -> today }
             .flatMapLatest { today ->
-                calendarRepository.observeEvents(window.startDate(today))
+                calendarRepository.observeEvents(releaseCalendarStartDate(today))
                     .combine(calendarRepository.observeLastSuccessfulRefresh()) { events, last ->
                         Triple(today, events, last)
                     }

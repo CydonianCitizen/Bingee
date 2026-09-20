@@ -9,7 +9,7 @@ class ReleaseCalendarTest {
 
     @Test
     fun windowStartsSevenCalendarDaysAgoAndHasNoFutureCutoff() {
-        assertEquals(LocalDate.of(2026, 7, 27), ReleaseCalendarWindow().startDate(today))
+        assertEquals(LocalDate.of(2026, 7, 27), releaseCalendarStartDate(today))
     }
 
     @Test

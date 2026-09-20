@@ -4,11 +4,9 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 enum class ProfileCollection { WATCHED, WATCH_LATER, FAVORITES }
@@ -49,14 +47,7 @@ internal class DataStoreProfileDisplayModePreferences @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : ProfileDisplayModePreferences {
 
-    override fun observeDisplayModes(): Flow<ProfileDisplayModes> = context.bingeePreferences.data
-        .catch { failure ->
-            if (failure is IOException) {
-                emit(androidx.datastore.preferences.core.emptyPreferences())
-            } else {
-                throw failure
-            }
-        }
+    override fun observeDisplayModes(): Flow<ProfileDisplayModes> = context.bingeePreferenceData
         .map { prefs ->
             ProfileDisplayModes(
                 watchedMovies = parseViewMode(prefs[KEY_WATCHED_MOVIES]),

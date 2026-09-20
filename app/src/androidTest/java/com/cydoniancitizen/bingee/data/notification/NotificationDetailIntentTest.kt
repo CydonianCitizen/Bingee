@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -17,7 +18,7 @@ class NotificationDetailIntentTest {
     @Test
     fun movieAndTvTargetsRoundTripWithoutEventPayload() {
         listOf(MediaType.MOVIE, MediaType.SERIES).forEach { mediaType ->
-            val target = NotificationNavigationTarget(mediaType, 42)
+            val target = DetailRouteArgs(mediaType, 42)
             val intent = NotificationDetailIntent.intent(context, target)
             assertEquals(target, NotificationDetailIntent.parse(intent))
             assertEquals(2, intent.extras?.size())
@@ -28,14 +29,14 @@ class NotificationDetailIntentTest {
     @Test
     fun malformedIntentIsIgnoredAndPendingIntentIsImmutable() {
         assertNull(NotificationDetailIntent.parse(android.content.Intent()))
-        val target = NotificationNavigationTarget(MediaType.MOVIE, 42)
+        val target = DetailRouteArgs(MediaType.MOVIE, 42)
         assertTrue(NotificationDetailIntent.pendingIntent(context, target, 7).isImmutable)
     }
 
     @Test
     fun legacyTmdbTargetNormalizesToCurrentTarget() {
         assertEquals(
-            NotificationNavigationTarget(MediaType.SERIES, 1399),
+            DetailRouteArgs(MediaType.SERIES, 1399),
             NotificationDetailIntent.parse(rawIntent("TMDB", "SERIES", "1399"))
         )
     }

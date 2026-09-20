@@ -2,11 +2,8 @@ package com.cydoniancitizen.bingee.data.update
 
 data class SemanticVersion(val major: Int, val minor: Int, val patch: Int) : Comparable<SemanticVersion> {
 
-    override fun compareTo(other: SemanticVersion): Int {
-        if (major != other.major) return major.compareTo(other.major)
-        if (minor != other.minor) return minor.compareTo(other.minor)
-        return patch.compareTo(other.patch)
-    }
+    override fun compareTo(other: SemanticVersion): Int =
+        compareValuesBy(this, other, { it.major }, { it.minor }, { it.patch })
 
     override fun toString(): String = "$major.$minor.$patch"
 

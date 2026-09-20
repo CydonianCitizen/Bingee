@@ -25,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -69,6 +71,7 @@ import com.cydoniancitizen.bingee.core.model.WatchedDateValidationResult
 import com.cydoniancitizen.bingee.core.model.isValid
 import com.cydoniancitizen.bingee.core.model.validateWatchedDate
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.core.ui.formatLocalized
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import java.time.LocalDate
 
@@ -96,6 +99,8 @@ internal fun MediaDetailsScreen(
         onToggleSeasonExpanded = viewModel::toggleSeasonExpanded,
         onRetrySeason = viewModel::retrySeason,
         onToggleEpisode = viewModel::toggleEpisode,
+        onMarkPreviousEpisodes = viewModel::markPreviousEpisodesWatched,
+        onDismissPreviousEpisodes = viewModel::dismissPreviousEpisodesPrompt,
         onToggleSeasonWatched = viewModel::toggleSeasonWatched,
         onSelectRating = viewModel::selectRating,
         onSaveRating = viewModel::setRating,
@@ -125,6 +130,8 @@ internal fun MediaDetailsContent(
     onToggleSeasonExpanded: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
     onRetrySeason: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
     onToggleEpisode: (com.cydoniancitizen.bingee.core.model.TrackedEpisode) -> Unit = {},
+    onMarkPreviousEpisodes: () -> Unit = {},
+    onDismissPreviousEpisodes: () -> Unit = {},
     onToggleSeasonWatched: (com.cydoniancitizen.bingee.core.model.CachedSeason) -> Unit = {},
     onSelectRating: (Int) -> Unit = {},
     onSaveRating: () -> Unit = {},
@@ -161,6 +168,9 @@ internal fun MediaDetailsContent(
             snackbarHostState.showSnackbar(progressErrorText)
             onDismissProgressError()
         }
+    }
+    if (state.series.previousEpisodesPrompt != null) {
+        PreviousEpisodesDialog(onConfirm = onMarkPreviousEpisodes, onDismiss = onDismissPreviousEpisodes)
     }
 
     Scaffold(
@@ -266,8 +276,9 @@ private fun DetailTopBar(
             }
         },
         actions = {
-            IconButton(
-                onClick = onToggleFavorite,
+            IconToggleButton(
+                checked = state.isFavorite,
+                onCheckedChange = { onToggleFavorite() },
                 enabled = !state.favoriteUpdating && state.isInLibrary != null
             ) {
                 Icon(
@@ -529,6 +540,7 @@ private fun WatchedDateSection(
     modifier: Modifier = Modifier
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    val locale = LocalConfiguration.current.locales[0]
     val labelRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
     val editRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_edit else R.string.completion_date_edit
 
@@ -542,7 +554,7 @@ private fun WatchedDateSection(
             style = MaterialTheme.typography.titleLarge
         )
         if (watchedDate != null) {
-            Text(watchedDate.toString())
+            Text(watchedDate.formatLocalized(locale))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
             Button(
@@ -556,7 +568,7 @@ private fun WatchedDateSection(
                     onClick = { onSetWatchedDate(null) },
                     enabled = !isUpdating
                 ) {
-                    Text(stringResource(R.string.action_dismiss))
+                    Text(stringResource(R.string.watched_date_clear))
                 }
             }
         }
@@ -590,6 +602,7 @@ internal fun WatchedDateDialog(
     var customDate by remember { mutableStateOf(currentDate ?: today) }
     var showCustomDatePicker by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<String?>(null) }
+    val locale = LocalConfiguration.current.locales[0]
 
     val resolvedDate = when (selectedChoice) {
         WatchedDateChoice.TODAY -> today
@@ -598,9 +611,9 @@ internal fun WatchedDateDialog(
     }
 
     val titleRes = if (mediaType == MediaType.MOVIE) R.string.watched_date_label else R.string.completion_date_label
-    val futureDateError = stringResource(R.string.watched_date_future_error, today)
+    val futureDateError = stringResource(R.string.watched_date_future_error, today.formatLocalized(locale))
     val beforeReleaseDateError = releaseDate?.let {
-        stringResource(R.string.watched_date_before_release_error, it)
+        stringResource(R.string.watched_date_before_release_error, it.formatLocalized(locale))
     }
 
     AlertDialog(
@@ -631,10 +644,16 @@ internal fun WatchedDateDialog(
                         Text(
                             text = when (choice) {
                                 WatchedDateChoice.TODAY -> stringResource(R.string.watched_date_today)
-                                WatchedDateChoice.RELEASE_DATE -> stringResource(R.string.watched_date_release_date) +
-                                    ": $releaseDate"
-                                WatchedDateChoice.CUSTOM_DATE -> stringResource(R.string.watched_date_custom) +
-                                    ": $customDate"
+                                WatchedDateChoice.RELEASE_DATE -> stringResource(
+                                    R.string.label_value,
+                                    stringResource(R.string.watched_date_release_date),
+                                    requireNotNull(releaseDate).formatLocalized(locale)
+                                )
+                                WatchedDateChoice.CUSTOM_DATE -> stringResource(
+                                    R.string.label_value,
+                                    stringResource(R.string.watched_date_custom),
+                                    customDate.formatLocalized(locale)
+                                )
                             },
                             modifier = Modifier.padding(start = 8.dp)
                         )
@@ -642,7 +661,13 @@ internal fun WatchedDateDialog(
                 }
                 if (selectedChoice == WatchedDateChoice.CUSTOM_DATE) {
                     TextButton(onClick = { showCustomDatePicker = true }) {
-                        Text(stringResource(R.string.watched_date_custom) + " ($customDate)")
+                        Text(
+                            stringResource(
+                                R.string.label_value,
+                                stringResource(R.string.watched_date_custom),
+                                customDate.formatLocalized(locale)
+                            )
+                        )
                     }
                 }
                 validationError?.let {
@@ -703,4 +728,24 @@ internal fun WatchedDateDialog(
             androidx.compose.material3.DatePicker(state = datePickerState)
         }
     }
+}
+
+/** Offered after an episode is marked watched while earlier ones may still be unwatched. */
+@Composable
+private fun PreviousEpisodesDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.detail_mark_previous_title)) },
+        text = { Text(stringResource(R.string.detail_mark_previous_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.detail_mark_previous_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.detail_mark_previous_dismiss))
+            }
+        }
+    )
 }

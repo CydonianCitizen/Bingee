@@ -149,6 +149,12 @@ class CalendarRefreshWorkerExecutorTest {
         BackgroundRefreshPlanner {
         var requestedLimit: Int? = null
 
+        override suspend fun claimSeasons(
+            mediaRef: com.cydoniancitizen.bingee.core.model.ExternalMediaRef,
+            seasonNumbers: List<Int>,
+            prioritySeasonNumber: Int?
+        ): AppResult<List<Int>> = error("Not used by executor")
+
         override suspend fun plan(limit: Int): AppResult<List<BackgroundRefreshTarget>> {
             requestedLimit = limit
             return result

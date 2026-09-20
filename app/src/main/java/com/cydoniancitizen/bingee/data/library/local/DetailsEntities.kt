@@ -28,7 +28,9 @@ internal data class MediaDetailsEntity(
     @ColumnInfo(name = "episode_runtime_minutes") val episodeRuntimeMinutes: Int?,
     @ColumnInfo(name = "number_of_seasons") val numberOfSeasons: Int?,
     @ColumnInfo(name = "number_of_episodes") val numberOfEpisodes: Int?,
-    @ColumnInfo(name = "details_fetched_at") val detailsFetchedAt: Instant
+    @ColumnInfo(name = "details_fetched_at") val detailsFetchedAt: Instant,
+    /** TMDB language tag of the cached text; null when unknown, as for rows cached before Room v6. */
+    @ColumnInfo(name = "language") val language: String? = null
 )
 
 @Entity(

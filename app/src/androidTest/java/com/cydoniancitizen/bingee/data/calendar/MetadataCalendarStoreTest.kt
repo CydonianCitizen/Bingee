@@ -53,9 +53,9 @@ class MetadataCalendarStoreTest {
 
     @Test
     fun metadataWritesProjectMovieSeasonAndEpisodeEvents() = runBlocking {
-        store.storeDetails(movieRef, movie("Film", LocalDate.of(2026, 8, 4)), emptyList(), now)
+        store.storeDetails(movieRef, movie("Film", LocalDate.of(2026, 8, 4)), emptyList(), now, "en-US")
         val season = season(LocalDate.of(2026, 8, 5))
-        store.storeDetails(seriesRef, series("Show"), listOf(season), now)
+        store.storeDetails(seriesRef, series("Show"), listOf(season), now, "en-US")
         store.storeSeason(
             seriesRef,
             TmdbSeasonPayload(
@@ -69,15 +69,34 @@ class MetadataCalendarStoreTest {
     }
 
     @Test
+    fun cachedTextRecordsTheLanguageItWasRequestedIn() = runBlocking {
+        val season = season(LocalDate.of(2026, 8, 5))
+        store.storeDetails(seriesRef, series("Serie"), listOf(season), now, "it-IT")
+        store.storeSeason(
+            seriesRef,
+            TmdbSeasonPayload(season, listOf(episode(LocalDate.of(2026, 8, 6))), language = "it-IT"),
+            now
+        )
+        assertEquals("it-IT", text("SELECT language FROM media_details LIMIT 1"))
+        assertEquals("it-IT", text("SELECT episodes_language FROM seasons LIMIT 1"))
+
+        // A later summary refresh records its own language but leaves the cached episodes' language alone.
+        store.storeDetails(seriesRef, series("Series"), listOf(season), now.plusSeconds(1), "en-US")
+        assertEquals("en-US", text("SELECT language FROM media_details LIMIT 1"))
+        assertEquals("it-IT", text("SELECT episodes_language FROM seasons LIMIT 1"))
+    }
+
+    @Test
     fun failedEventProjectionRollsBackRelatedMetadataWriteAndPreservesOldEvent() = runBlocking {
-        store.storeDetails(movieRef, movie("Old", LocalDate.of(2026, 8, 4)), emptyList(), now)
+        store.storeDetails(movieRef, movie("Old", LocalDate.of(2026, 8, 4)), emptyList(), now, "en-US")
 
         runCatching {
             store.storeDetails(
                 movieRef,
                 movie("New", LocalDate.of(2026, 8, 8), externalRef = ref("different")),
                 emptyList(),
-                now.plusSeconds(1)
+                now.plusSeconds(1),
+                "en-US"
             )
         }
 
@@ -89,7 +108,7 @@ class MetadataCalendarStoreTest {
     @Test
     fun episodeDateRefreshPreservesRatingProgressAndMembership() = runBlocking {
         val season = season(LocalDate.of(2026, 8, 5))
-        store.storeDetails(seriesRef, series("Show"), listOf(season), now)
+        store.storeDetails(seriesRef, series("Show"), listOf(season), now, "en-US")
         store.storeSeason(
             seriesRef,
             TmdbSeasonPayload(season, listOf(episode(LocalDate.of(2026, 8, 6)))),
@@ -108,7 +127,7 @@ class MetadataCalendarStoreTest {
         )
         sql("UPDATE media_entries SET is_favorite = 1 WHERE local_media_id = $mediaId")
 
-        store.storeDetails(seriesRef, series("Refreshed"), listOf(season), now.plusSeconds(1))
+        store.storeDetails(seriesRef, series("Refreshed"), listOf(season), now.plusSeconds(1), "en-US")
 
         store.storeSeason(
             seriesRef,
@@ -126,7 +145,7 @@ class MetadataCalendarStoreTest {
 
     @Test
     fun localRepositoryMapsActiveRowsAndPersistsSuccessfulRefreshState() = runBlocking {
-        store.storeDetails(movieRef, movie("Film", LocalDate.of(2026, 8, 4)), emptyList(), now)
+        store.storeDetails(movieRef, movie("Film", LocalDate.of(2026, 8, 4)), emptyList(), now, "en-US")
         val mediaId = long("SELECT local_media_id FROM media_entries LIMIT 1")
         sql("INSERT INTO library_entries(local_media_id, added_at) VALUES($mediaId, '2026-08-03T12:00:00Z')")
         val repository = DefaultReleaseCalendarRepository(

@@ -235,8 +235,96 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationFiveToSixAddsRefreshAttemptsAndLeavesCachedLanguageUnknown() {
+        val name = "bingee-v5-to-v6"
+        val legacy = helper.createDatabase(name, 5)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, created_at, metadata_updated_at, is_favorite) " +
+                "VALUES (1, 'SERIES', 'Series', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 0)"
+        )
+        legacy.execSQL(
+            "INSERT INTO media_details (local_media_id, production_status, details_fetched_at) " +
+                "VALUES (1, 'CURRENT', '2026-08-01T00:00:00Z')"
+        )
+        legacy.execSQL(
+            "INSERT INTO seasons (local_season_id, local_media_id, source, external_id, season_number, " +
+                "episode_count, metadata_updated_at, episodes_fetched_at) " +
+                "VALUES (1, 1, 'TMDB', '8001', 1, 2, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')"
+        )
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 6, true, *ALL_MIGRATIONS)
+        // Existing caches keep their timestamps; their language was never recorded, so it stays unknown.
+        migrated.query("SELECT details_fetched_at, language FROM media_details").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("2026-08-01T00:00:00Z", cursor.getString(0))
+            assertEquals(true, cursor.isNull(1))
+        }
+        migrated.query("SELECT episodes_fetched_at, episodes_language FROM seasons").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("2026-08-01T00:00:00Z", cursor.getString(0))
+            assertEquals(true, cursor.isNull(1))
+        }
+        // No title has been attempted yet, and the attempt row follows its media row.
+        migrated.query("SELECT COUNT(*) FROM background_refresh_attempts").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(0, cursor.getInt(0))
+        }
+        migrated.execSQL("PRAGMA foreign_keys = ON")
+        migrated.execSQL(
+            "INSERT INTO background_refresh_attempts (local_media_id, attempted_at) VALUES (1, '2026-08-02T00:00:00Z')"
+        )
+        migrated.execSQL("DELETE FROM media_entries WHERE local_media_id = 1")
+        migrated.query("SELECT COUNT(*) FROM background_refresh_attempts").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(0, cursor.getInt(0))
+        }
+        migrated.close()
+    }
+
+    @Test
+    fun migrationSixToSevenPreservesOnlyProvenEmptySeasons() {
+        val name = "bingee-v6-to-v7"
+        val legacy = helper.createDatabase(name, 6)
+        legacy.execSQL(
+            "INSERT INTO media_entries " +
+                "(local_media_id, media_type, title, created_at, metadata_updated_at, is_favorite) " +
+                "VALUES (1, 'SERIES', 'Series', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', 0)"
+        )
+        legacy.execSQL(
+            "INSERT INTO seasons (local_season_id, local_media_id, source, external_id, season_number, " +
+                "episode_count, metadata_updated_at, episodes_fetched_at) VALUES " +
+                "(1, 1, 'TMDB', '8001', 1, 0, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'), " +
+                "(2, 1, 'TMDB', '8002', 2, 0, '2026-08-01T00:00:00Z', NULL), " +
+                "(3, 1, 'TMDB', '8003', 3, 1, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'), " +
+                "(4, 1, 'TMDB', '8004', 4, 0, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')"
+        )
+        legacy.execSQL(
+            "INSERT INTO episodes (local_episode_id, local_season_id, source, external_id, episode_number, " +
+                "title, metadata_updated_at) VALUES " +
+                "(1, 4, 'TMDB', '7001', 1, 'Retained episode', '2026-08-01T00:00:00Z')"
+        )
+        legacy.close()
+        val migrated = helper.runMigrationsAndValidate(name, 7, true, *ALL_MIGRATIONS)
+        migrated.query("SELECT is_known_empty, episodes_fetched_at FROM seasons ORDER BY local_season_id")
+            .use { cursor ->
+                listOf(1, 0, 0, 0).forEachIndexed { index, expected ->
+                    assertEquals(true, cursor.moveToNext())
+                    assertEquals(expected, cursor.getInt(0))
+                    assertEquals(index == 1, cursor.isNull(1))
+                }
+            }
+        migrated.query("SELECT title FROM episodes").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("Retained episode", cursor.getString(0))
+        }
+        migrated.close()
+    }
+
+    @Test
     fun fullMigrationChainPreservesCanonicalPersonalDataThroughEveryVersion() {
-        val name = "bingee-v1-to-v4"
+        val name = "bingee-v1-to-latest"
         val legacy = helper.createDatabase(name, 1)
         legacy.execSQL(
             "INSERT INTO media_entries " +
@@ -295,9 +383,9 @@ class BingeeDatabaseMigrationTest {
         )
         legacy.close()
 
-        // Room validates the migrated database against canonical v4 -- columns, indices and foreign
-        // keys -- and fails the call if the chain diverges from the exported schema.
-        val migrated = helper.runMigrationsAndValidate(name, 4, true, *ALL_MIGRATIONS)
+        // Room validates the migrated database against the latest exported schema -- columns, indices and
+        // foreign keys -- and fails the call if the chain diverges from it.
+        val migrated = helper.runMigrationsAndValidate(name, 7, true, *ALL_MIGRATIONS)
 
         migrated.query(
             "SELECT media_type, title, original_title, overview, poster_url, release_date, created_at, " +

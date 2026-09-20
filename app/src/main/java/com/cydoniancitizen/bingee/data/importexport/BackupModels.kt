@@ -53,7 +53,9 @@ internal data class BackupSeason(
     val overview: String?,
     val posterUrl: String?,
     val airDate: LocalDate?,
-    val episodeCount: Int
+    val episodeCount: Int,
+    /** Missing in older backups: zero alone does not prove that the season is empty. */
+    val isKnownEmpty: Boolean = false
 )
 
 internal data class BackupEpisode(
@@ -127,7 +129,6 @@ internal enum class BackupFailureKind {
     INVALID_UTF8,
     MALFORMED_JSON,
     WRONG_FORMAT,
-    MISSING_VERSION,
     UNSUPPORTED_VERSION,
     INVALID_STRUCTURE,
     VALIDATION,

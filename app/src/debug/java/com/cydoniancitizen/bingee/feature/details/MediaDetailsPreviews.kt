@@ -132,6 +132,21 @@ private fun TvLongSeasonPreview() = PreviewState(longSeasonState())
 @Composable
 private fun TvLongSeasonLargeFontPreview() = PreviewState(longSeasonState())
 
+@Preview(name = "TV catch-up prompt", showBackground = true)
+@Preview(name = "TV catch-up prompt large font", showBackground = true, fontScale = 1.5f)
+@Composable
+private fun TvCatchUpPromptPreview() = PreviewState(
+    longSeasonState().let {
+        it.copy(series = it.series.copy(previousEpisodesPrompt = FakeMediaData.longSeason.episodes.last().episode))
+    }
+)
+
+@Preview(name = "TV spoilers hidden", showBackground = true, heightDp = 2200)
+@Composable
+private fun TvSpoilersHiddenPreview() = PreviewState(
+    longSeasonState().let { it.copy(series = it.series.copy(hideSpoilers = true)) }
+)
+
 private fun longSeasonState() = MediaDetailsUiState(
     today = LocalDate.of(2026, 8, 18),
     content = DetailContentState.Content(FakeMediaData.staleSeriesDetails),

@@ -482,7 +482,7 @@ private fun FeaturedReleaseCard(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
-                        .size(32.dp)
+                        .size(48.dp)
                 ) {
                     if (inWatchlist) {
                         Icon(
