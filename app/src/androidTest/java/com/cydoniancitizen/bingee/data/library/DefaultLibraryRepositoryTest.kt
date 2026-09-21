@@ -225,7 +225,16 @@ class DefaultLibraryRepositoryTest {
         )
         database.watchProgressDao().markMovieWatched(MediaSource.TMDB, "42", now)
 
-        val updated = (repository.observeEntries().first() as AppResult.Success).value
+        val updated = (
+            withTimeout(2_000) {
+                repository.observeEntries().first { result ->
+                    result is AppResult.Success && result.value.any { entry ->
+                        entry.mediaRef == movie.externalRef &&
+                            (entry.progress as? LibraryProgress.Movie)?.state == MovieWatchState.Watched(now)
+                    }
+                }
+            } as AppResult.Success
+            ).value
         assertEquals(
             LibraryProgress.Movie(MovieWatchState.Watched(now)),
             updated.first { it.mediaRef == movie.externalRef }.progress
@@ -634,7 +643,13 @@ class DefaultLibraryRepositoryTest {
 
         storeSeries("100", 3, runtimes = listOf(42, 48, 51))
 
-        history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
+        history = (
+            withTimeout(2_000) {
+                repository.observePersonalViewing().first { result ->
+                    result is AppResult.Success && result.value.singleOrNull()?.isCompletedTitle == false
+                }
+            } as AppResult.Success
+            ).value.single()
         assertFalse(history.isCompletedTitle)
         assertEquals(2, history.watchedRegularEpisodes)
     }
