@@ -4,8 +4,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import com.cydoniancitizen.bingee.MainActivity
+import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 
 internal object NotificationDetailIntent {
@@ -40,9 +42,8 @@ internal object NotificationDetailIntent {
                 val source = intent.getStringExtra(EXTRA_LEGACY_SOURCE)
                     ?.let { value -> MediaSource.entries.firstOrNull { it.name == value } }
                 if (source != MediaSource.TMDB) return null
-                intent.getStringExtra(EXTRA_LEGACY_EXTERNAL_ID)
-                    ?.takeIf { it.all(Char::isDigit) }
-                    ?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+                val externalId = intent.getStringExtra(EXTRA_LEGACY_EXTERNAL_ID) ?: return null
+                ExternalMediaRef(source, externalId).tmdbIdOrNull() ?: return null
             }
             return DetailRouteArgs(mediaType, tmdbId)
         } catch (_: RuntimeException) {

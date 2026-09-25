@@ -6,9 +6,9 @@ import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedSeason
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.releaseCalendarStartDate
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.BackgroundRefreshPlanner
@@ -84,8 +84,7 @@ internal class DefaultCalendarRefreshCoordinator @Inject constructor(
         tmdbAvailable: Boolean,
         background: Boolean
     ): RefreshCounts {
-        val tmdbId = entry.mediaRef.takeIf { it.source == MediaSource.TMDB }
-            ?.externalId?.toLongOrNull()?.takeIf { it > 0 } ?: return RefreshCounts(skipped = 1)
+        val tmdbId = entry.mediaRef.tmdbIdOrNull() ?: return RefreshCounts(skipped = 1)
         if (!tmdbAvailable) return RefreshCounts(skipped = 1, error = AppError.Unauthorized)
         if (entry.mediaType == MediaType.MOVIE) {
             return detailsRepository.refreshDetails(tmdbId, MediaType.MOVIE, force = true).toCounts()

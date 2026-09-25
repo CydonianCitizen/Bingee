@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -15,16 +16,15 @@ import androidx.compose.ui.semantics.stateDescription
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.ui.formatLocalized
 import com.cydoniancitizen.bingee.core.ui.toUiError
-import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.util.Locale
 
 @Composable
 internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     if (state == MovieProgressState.NotApplicable) return
+    val locale = LocalConfiguration.current.locales[0]
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
@@ -44,7 +44,7 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
             is MovieProgressState.Ready -> {
                 val watched = state.state as? MovieWatchState.Watched
                 val watchedLabel = watched?.let {
-                    stringResource(R.string.detail_movie_watched_at, it.localizedWatchedDate())
+                    stringResource(R.string.detail_movie_watched_at, it.localizedWatchedDate(locale))
                 }
                 val watchStateDescription = when {
                     state.updating -> stringResource(R.string.detail_progress_updating)
@@ -80,11 +80,7 @@ internal fun MovieProgressSection(state: MovieProgressState, onToggle: () -> Uni
  * The canonical viewing date, formatted for the reader. The stored instant is only a fallback for
  * rows written before the local-date column existed; either way the user never sees a raw timestamp.
  */
-private fun MovieWatchState.Watched.localizedWatchedDate(): String {
+private fun MovieWatchState.Watched.localizedWatchedDate(locale: Locale): String {
     val zone = ZoneId.systemDefault()
-    return (watchedDate ?: watchedAt.atZone(zone).toLocalDate()).localizedMedium()
+    return (watchedDate ?: watchedAt.atZone(zone).toLocalDate()).formatLocalized(locale)
 }
-
-/** Shared by every date the detail screen shows, so none of them reaches the user as raw ISO. */
-internal fun LocalDate.localizedMedium(): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault()).format(this)

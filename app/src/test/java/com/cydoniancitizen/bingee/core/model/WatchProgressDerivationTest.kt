@@ -58,6 +58,14 @@ class WatchProgressDerivationTest {
     }
 
     @Test
+    fun canonicalSeriesCompletionRequiresPositiveEqualCountsAndCoverage() {
+        assertFalse(isSeriesComplete(watchedEpisodes = 0, trackableEpisodes = 0, hasSufficientCoverage = true))
+        assertFalse(isSeriesComplete(watchedEpisodes = 1, trackableEpisodes = 2, hasSufficientCoverage = true))
+        assertFalse(isSeriesComplete(watchedEpisodes = 2, trackableEpisodes = 2, hasSufficientCoverage = false))
+        assertTrue(isSeriesComplete(watchedEpisodes = 2, trackableEpisodes = 2, hasSufficientCoverage = true))
+    }
+
+    @Test
     fun restoredSeasonsProveCoverageThroughStoredRowsWithoutAFetchTimestamp() {
         val restored = cachedSeason(1, SeasonProgress(2, 2, true), fetchedAt = null)
         val restoredEmpty = cachedSeason(2, SeasonProgress.EMPTY, fetchedAt = null)

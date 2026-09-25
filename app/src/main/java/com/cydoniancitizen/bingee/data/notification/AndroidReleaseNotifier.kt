@@ -7,8 +7,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.cydoniancitizen.bingee.R
-import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
@@ -36,8 +36,7 @@ internal class AndroidReleaseNotifier @Inject constructor(
                 context = context,
                 target = DetailRouteArgs(
                     mediaType = event.mediaType,
-                    tmdbId = event.mediaRef.takeIf { it.source == MediaSource.TMDB }
-                        ?.externalId?.toLongOrNull()?.takeIf { it > 0 }
+                    tmdbId = event.mediaRef.tmdbIdOrNull()
                         ?: return AppResult.Failure(AppError.InvalidInput)
                 ),
                 requestCode = notificationId

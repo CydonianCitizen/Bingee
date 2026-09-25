@@ -21,6 +21,7 @@ import com.cydoniancitizen.bingee.data.importexport.BackupRef
 import com.cydoniancitizen.bingee.data.importexport.RestoreStage
 import com.cydoniancitizen.bingee.data.importexport.ValidatedBackupPlan
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.data.settings.PortableUserPreferencesStore
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -323,6 +324,67 @@ class BingeeDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationSevenToEightPreservesNotificationChoicesAndAddsPortableDefaults() {
+        val name = "bingee-v7-to-v8"
+        val legacy = helper.createDatabase(name, 7)
+        legacy.execSQL(
+            "INSERT INTO portable_preferences " +
+                "(singleton_key, notification_lead_days, notify_movie_releases, notify_season_premieres, " +
+                "notify_episode_airings, legacy_bridge_completed) VALUES (1, 7, 0, 1, 0, 1)"
+        )
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 8, true, *ALL_MIGRATIONS)
+        migrated.query(
+            "SELECT notification_lead_days, notify_movie_releases, notify_season_premieres, " +
+                "notify_episode_airings, legacy_bridge_completed, theme, language, hide_episode_spoilers, " +
+                "watched_movies_display_mode, watched_tv_series_display_mode, " +
+                "watch_later_movies_display_mode, watch_later_tv_series_display_mode, " +
+                "favorites_movies_display_mode, favorites_tv_series_display_mode, " +
+                "legacy_settings_bridge_completed FROM portable_preferences WHERE singleton_key = 1"
+        ).use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(7, cursor.getInt(0))
+            assertEquals(0, cursor.getInt(1))
+            assertEquals(1, cursor.getInt(2))
+            assertEquals(0, cursor.getInt(3))
+            assertEquals(1, cursor.getInt(4))
+            assertEquals("SYSTEM_DEFAULT", cursor.getString(5))
+            assertEquals("ENGLISH", cursor.getString(6))
+            assertEquals(0, cursor.getInt(7))
+            repeat(6) { index -> assertEquals("LIST", cursor.getString(8 + index)) }
+            assertEquals(0, cursor.getInt(14))
+        }
+        migrated.close()
+    }
+
+    @Test
+    fun migrationEightToNinePreservesDeliveredRows() {
+        val name = "bingee-v8-to-v9"
+        val legacy = helper.createDatabase(name, 8)
+        legacy.execSQL(
+            "INSERT INTO notification_deliveries " +
+                "(source, subject_type, subject_external_id, event_type, event_date, lead_days, " +
+                "notification_id, delivered_at) VALUES " +
+                "('TMDB', 'MEDIA', '42', 'MOVIE_RELEASE', '2026-08-07', 1, 123, '2026-08-06T10:00:00Z')"
+        )
+        legacy.close()
+
+        val migrated = helper.runMigrationsAndValidate(name, 9, true, *ALL_MIGRATIONS)
+        migrated.query(
+            "SELECT notification_id, delivered_at, claim_token, claim_expires_at_ms " +
+                "FROM notification_deliveries WHERE subject_external_id = '42'"
+        ).use { cursor ->
+            assertEquals(true, cursor.moveToFirst())
+            assertEquals(123, cursor.getInt(0))
+            assertEquals("2026-08-06T10:00:00Z", cursor.getString(1))
+            assertEquals(true, cursor.isNull(2))
+            assertEquals(true, cursor.isNull(3))
+        }
+        migrated.close()
+    }
+
+    @Test
     fun fullMigrationChainPreservesCanonicalPersonalDataThroughEveryVersion() {
         val name = "bingee-v1-to-latest"
         val legacy = helper.createDatabase(name, 1)
@@ -385,7 +447,7 @@ class BingeeDatabaseMigrationTest {
 
         // Room validates the migrated database against the latest exported schema -- columns, indices and
         // foreign keys -- and fails the call if the chain diverges from it.
-        val migrated = helper.runMigrationsAndValidate(name, 7, true, *ALL_MIGRATIONS)
+        val migrated = helper.runMigrationsAndValidate(name, 9, true, *ALL_MIGRATIONS)
 
         migrated.query(
             "SELECT media_type, title, original_title, overview, poster_url, release_date, created_at, " +
@@ -656,7 +718,12 @@ class BingeeDatabaseMigrationTest {
             database = database,
             snapshotDao = database.portableSnapshotDao(),
             releaseEventDao = database.releaseEventDao(),
-            notificationPreferences = notificationPrefs
+            notificationPreferences = notificationPrefs,
+            portableUserPreferences = PortableUserPreferencesStore(
+                ApplicationProvider.getApplicationContext(),
+                database,
+                database.portableSnapshotDao()
+            )
         )
     }
 

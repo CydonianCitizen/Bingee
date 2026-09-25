@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cydoniancitizen.bingee.data.importexport.BackupDataStore
+import com.cydoniancitizen.bingee.data.importexport.BackupExportFailure
 import com.cydoniancitizen.bingee.data.importexport.BackupFailureKind
 import com.cydoniancitizen.bingee.data.importexport.BackupFileGateway
 import com.cydoniancitizen.bingee.data.importexport.BackupParseResult
@@ -85,6 +86,8 @@ internal class BackupViewModel @Inject constructor(
                         failure = failure
                     )
                 }
+            } catch (failure: BackupExportFailure) {
+                fail(failure.kind)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
@@ -109,6 +112,8 @@ internal class BackupViewModel @Inject constructor(
                         failure = failure
                     )
                 }
+            } catch (failure: BackupExportFailure) {
+                fail(failure.kind)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {

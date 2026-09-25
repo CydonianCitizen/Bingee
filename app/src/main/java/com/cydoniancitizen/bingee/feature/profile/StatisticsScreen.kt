@@ -70,7 +70,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -208,17 +208,24 @@ internal fun StatisticsContent(
     modifier: Modifier = Modifier
 ) {
     val radarGenres = tasteStatistics.radarGenres
-    val normalizedValues = relativeGenreNormalization(radarGenres.map(GenreStatistic::titleCount))
+    val normalizedValues = remember(radarGenres) {
+        relativeGenreNormalization(radarGenres.map(GenreStatistic::titleCount))
+    }
     var selectedRating by remember { mutableStateOf<Int?>(null) }
     val ratingStatistics = statistics.personalRatingStatistics
-    val effectiveSelectedRating = selectedRating?.takeIf { rating ->
-        ratingStatistics.histogram.any { it.rating == rating && it.titleCount > 0 }
+    // Remembered: selecting a rating or scrolling must not re-run normalization and filtering.
+    val effectiveSelectedRating = remember(selectedRating, ratingStatistics) {
+        selectedRating?.takeIf { rating ->
+            ratingStatistics.histogram.any { it.rating == rating && it.titleCount > 0 }
+        }
     }
-    val selectedTitles = effectiveSelectedRating?.let { rating ->
-        ratingStatistics.ratedTitles.filter { it.personalRating?.value == rating }
-    }.orEmpty()
-    val selectedMovies = selectedTitles.filter { it.mediaType == MediaType.MOVIE }
-    val selectedSeries = selectedTitles.filter { it.mediaType == MediaType.SERIES }
+    val selectedTitles = remember(effectiveSelectedRating, ratingStatistics) {
+        effectiveSelectedRating?.let { rating ->
+            ratingStatistics.ratedTitles.filter { it.personalRating?.value == rating }
+        }.orEmpty()
+    }
+    val selectedMovies = remember(selectedTitles) { selectedTitles.filter { it.mediaType == MediaType.MOVIE } }
+    val selectedSeries = remember(selectedTitles) { selectedTitles.filter { it.mediaType == MediaType.SERIES } }
 
     LazyColumn(
         modifier = modifier
@@ -353,7 +360,7 @@ private fun RatingHistogram(
     onRatingSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val normalized = relativeRatingNormalization(histogram)
+    val normalized = remember(histogram) { relativeRatingNormalization(histogram) }
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(CHART_SLOT_SPACING)
@@ -752,7 +759,7 @@ private fun ViewingMonthChart(
 ) {
     val shortMonths = stringArrayResource(R.array.statistics_months_short)
     val fullMonths = stringArrayResource(R.array.statistics_months_full)
-    val normalized = relativeViewingNormalization(months)
+    val normalized = remember(months) { relativeViewingNormalization(months) }
     val seriesColor = viewingSeriesColor()
     val movieColor = viewingMovieColor()
     val chartDescription = stringResource(
@@ -1046,49 +1053,56 @@ private fun TasteRadarChart(
     val chartHeight = (RADAR_BASE_HEIGHT * fontScale).coerceAtMost(
         availableWidth.coerceAtLeast(RADAR_BASE_HEIGHT)
     )
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(chartHeight)
-            .semantics { contentDescription = chartDescription }
-    ) {
-        drawRadar(
-            genres = genres,
-            normalizedValues = normalizedValues,
-            textMeasurer = textMeasurer,
-            labelStyle = labelStyle,
-            gridColor = gridColor,
-            axisColor = axisColor,
-            accentColor = accentColor
-        )
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(chartHeight)) {
+        // A compact screen still owes long genre names a readable gutter, so the fraction has a floor.
+        val labelWidthPx = with(density) {
+            min(
+                RADAR_LABEL_MAX_WIDTH.toPx(),
+                max(maxWidth.toPx() * 0.24f, RADAR_LABEL_MIN_WIDTH.toPx())
+            )
+        }
+        // Paragraph layout is too expensive to run inside the draw phase; measured labels are
+        // remembered across recompositions and redraws.
+        val labels = remember(genres, labelStyle, labelWidthPx, textMeasurer) {
+            genres.map { genre ->
+                textMeasurer.measure(
+                    text = AnnotatedString(genre.name),
+                    style = labelStyle,
+                    constraints = Constraints(maxWidth = labelWidthPx.roundToInt().coerceAtLeast(1)),
+                    maxLines = RADAR_LABEL_MAX_LINES,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics { contentDescription = chartDescription }
+        ) {
+            drawRadar(
+                genres = genres,
+                normalizedValues = normalizedValues,
+                labels = labels,
+                labelWidth = labelWidthPx,
+                gridColor = gridColor,
+                axisColor = axisColor,
+                accentColor = accentColor
+            )
+        }
     }
 }
 
 private fun DrawScope.drawRadar(
     genres: List<GenreStatistic>,
     normalizedValues: List<Float>,
-    textMeasurer: androidx.compose.ui.text.TextMeasurer,
-    labelStyle: TextStyle,
+    labels: List<TextLayoutResult>,
+    labelWidth: Float,
     gridColor: Color,
     axisColor: Color,
     accentColor: Color
 ) {
     val axisCount = genres.size
     val labelGap = 8.dp.toPx()
-    // A compact screen still owes long genre names a readable gutter, so the fraction has a floor.
-    val labelWidth = min(
-        RADAR_LABEL_MAX_WIDTH.toPx(),
-        max(size.width * 0.24f, RADAR_LABEL_MIN_WIDTH.toPx())
-    )
-    val labels = genres.map { genre ->
-        textMeasurer.measure(
-            text = AnnotatedString(genre.name),
-            style = labelStyle,
-            constraints = Constraints(maxWidth = labelWidth.roundToInt().coerceAtLeast(1)),
-            maxLines = RADAR_LABEL_MAX_LINES,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
     // Only the widest and tallest axis projections actually need clearance, so the radius is bounded
     // by those instead of by the worst case an axis-aligned layout would imply.
     val maxAbsCos = (0 until axisCount)

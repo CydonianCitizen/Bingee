@@ -29,10 +29,13 @@ internal data class NotificationDeliveryEntity(
     @ColumnInfo(name = "event_date") val eventDate: LocalDate,
     @ColumnInfo(name = "lead_days") val leadDays: Int,
     @ColumnInfo(name = "notification_id") val notificationId: Int,
-    @ColumnInfo(name = "delivered_at") val deliveredAt: Instant
+    @ColumnInfo(name = "delivered_at") val deliveredAt: Instant,
+    @ColumnInfo(name = "claim_token") val claimToken: String? = null,
+    @ColumnInfo(name = "claim_expires_at_ms") val claimExpiresAtMs: Long? = null
 ) {
     init {
         require(subjectExternalId.isNotBlank())
         require(leadDays in setOf(0, 1, 3, 7))
+        require((claimToken == null) == (claimExpiresAtMs == null))
     }
 }

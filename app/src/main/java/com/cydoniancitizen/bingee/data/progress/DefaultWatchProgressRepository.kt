@@ -4,6 +4,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
@@ -119,10 +120,12 @@ private fun ProgressWriteOutcome.toResult(): AppResult<Unit> = when (this) {
 }
 
 private fun ExternalMediaRef.normalizedRefOrNull(): ExternalMediaRef? {
-    if (source != MediaSource.TMDB) return null
-    val id = externalId.trim().takeIf { it.toLongOrNull()?.let { value -> value > 0 } == true } ?: return null
-    return ExternalMediaRef(source, id)
+    if (tmdbIdOrNull() == null) return null
+    return ExternalMediaRef(source, externalId.trim())
 }
 
-private fun ExternalMediaRef.invalidReferenceError(): AppError =
-    if (source == MediaSource.TMDB) AppError.InvalidInput else AppError.UnsupportedData
+private fun ExternalMediaRef.invalidReferenceError(): AppError = if (source == MediaSource.TMDB) {
+    AppError.InvalidInput
+} else {
+    AppError.UnsupportedData
+}

@@ -176,6 +176,9 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
                             val result = processMovie(value, entry.index, recordIndex, warnings, identityOwners)
                             result.warning?.let(warnings::add)
                             result.value?.let { movie ->
+                                if (movies.size + series.size >= TvTimeImportLimits.MAX_MEDIA_RECORDS) {
+                                    fail(TvTimeParseFailureKind.TOO_LARGE)
+                                }
                                 movies += movie
                                 if (movie.watch?.watched == true) watchedMovies++
                                 if (movie.warnings.any { it.code == ImportWarningCode.UNSUPPORTED_FIELD }) {
@@ -200,6 +203,9 @@ internal class TvTimeSourceParser @Inject constructor(private val zipGateway: Tv
                                 if (seasonCount + parsed.seasonCount > TvTimeImportLimits.MAX_SEASON_RECORDS ||
                                     episodes.size + parsed.episodes.size > TvTimeImportLimits.MAX_EPISODE_RECORDS
                                 ) {
+                                    fail(TvTimeParseFailureKind.TOO_LARGE)
+                                }
+                                if (movies.size + series.size >= TvTimeImportLimits.MAX_MEDIA_RECORDS) {
                                     fail(TvTimeParseFailureKind.TOO_LARGE)
                                 }
                                 series += parsed.hint

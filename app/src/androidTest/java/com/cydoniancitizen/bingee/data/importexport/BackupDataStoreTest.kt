@@ -1,12 +1,16 @@
 package com.cydoniancitizen.bingee.data.importexport
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.SeriesTrackingState
+import com.cydoniancitizen.bingee.core.model.isSeriesComplete
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.DefaultLibraryRepository
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
@@ -14,7 +18,14 @@ import com.cydoniancitizen.bingee.data.library.local.EpisodeEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.data.settings.PortableUserPreferencesStore
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
+import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.data.settings.bingeePreferenceData
+import com.cydoniancitizen.bingee.data.settings.bingeePreferences
 import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.time.Clock
@@ -51,6 +62,11 @@ class BackupDataStoreTest {
             database.portableSnapshotDao(),
             database.releaseEventDao(),
             DataStoreReleaseNotificationPreferences(
+                ApplicationProvider.getApplicationContext(),
+                database,
+                database.portableSnapshotDao()
+            ),
+            PortableUserPreferencesStore(
                 ApplicationProvider.getApplicationContext(),
                 database,
                 database.portableSnapshotDao()
@@ -130,6 +146,119 @@ class BackupDataStoreTest {
         val second = exportedDocument(secondBytes)
         assertEquals(first.data, second.data)
         assertArrayEquals(BackupJsonCodec.encode(first), secondBytes)
+    }
+
+    @Test
+    fun exportBridgesLegacySettingsBeforeFirstReadAndRestorePreventsLegacyOverwrite() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val themeKey = stringPreferencesKey("app_theme")
+        val languageKey = stringPreferencesKey("app_language")
+        val spoilerKey = booleanPreferencesKey("hide_episode_spoilers")
+        val watchedMoviesKey = stringPreferencesKey("profile_view_watched_movies")
+        val watchedTvKey = stringPreferencesKey("profile_view_watched_tv")
+        val watchLaterMoviesKey = stringPreferencesKey("profile_view_watch_later_movies")
+        val watchLaterTvKey = stringPreferencesKey("profile_view_watch_later_tv")
+        val favoritesMoviesKey = stringPreferencesKey("profile_view_favorites_movies")
+        val favoritesTvKey = stringPreferencesKey("profile_view_favorites_tv")
+        val prior = context.bingeePreferenceData.first()
+        try {
+            context.bingeePreferences.edit { values ->
+                values[themeKey] = AppTheme.DARK.name
+                values[languageKey] = AppLanguage.ITALIAN.name
+                values[spoilerKey] = true
+                values[watchedMoviesKey] = ProfileViewMode.GRID.name
+                values[watchedTvKey] = ProfileViewMode.LIST.name
+                values[watchLaterMoviesKey] = ProfileViewMode.GRID.name
+                values[watchLaterTvKey] = ProfileViewMode.GRID.name
+                values[favoritesMoviesKey] = ProfileViewMode.LIST.name
+                values[favoritesTvKey] = ProfileViewMode.GRID.name
+            }
+
+            val firstExport = exportedDocument(store.createPortableBackup(exportedAt))
+            val migratedPreferences = firstExport.data.preferences
+            assertEquals(AppTheme.DARK, migratedPreferences.theme)
+            assertEquals(AppLanguage.ITALIAN, migratedPreferences.language)
+            assertTrue(migratedPreferences.hideEpisodeSpoilers)
+            assertEquals(ProfileViewMode.GRID, migratedPreferences.profileDisplayModes.watchedMovies)
+            assertEquals(ProfileViewMode.LIST, migratedPreferences.profileDisplayModes.watchedTvSeries)
+            assertEquals(ProfileViewMode.GRID, migratedPreferences.profileDisplayModes.watchLaterMovies)
+            assertEquals(ProfileViewMode.GRID, migratedPreferences.profileDisplayModes.watchLaterTvSeries)
+            assertEquals(ProfileViewMode.LIST, migratedPreferences.profileDisplayModes.favoritesMovies)
+            assertEquals(ProfileViewMode.GRID, migratedPreferences.profileDisplayModes.favoritesTvSeries)
+
+            val restoredPreferences = migratedPreferences.copy(
+                theme = AppTheme.LIGHT,
+                language = AppLanguage.ENGLISH,
+                hideEpisodeSpoilers = false,
+                profileDisplayModes = ProfileDisplayModes()
+            )
+            store.restore(
+                ValidatedBackupPlan(
+                    BackupDocument(
+                        BACKUP_FORMAT_ID,
+                        BACKUP_SCHEMA_VERSION,
+                        exportedAt,
+                        BackupData(
+                            media = emptyList(),
+                            seasons = emptyList(),
+                            episodes = emptyList(),
+                            library = emptyList(),
+                            movieProgress = emptyList(),
+                            episodeProgress = emptyList(),
+                            ratings = emptyList(),
+                            preferences = restoredPreferences
+                        )
+                    )
+                )
+            )
+            val restoredExport = exportedDocument(store.createPortableBackup(exportedAt))
+            assertEquals(restoredPreferences, restoredExport.data.preferences)
+            assertTrue(database.portableSnapshotDao().getPreferences()?.legacySettingsBridgeCompleted == true)
+        } finally {
+            context.bingeePreferences.edit { values ->
+                if (prior[themeKey] == null) values.remove(themeKey) else values[themeKey] = prior[themeKey]!!
+                if (prior[languageKey] ==
+                    null
+                ) {
+                    values.remove(languageKey)
+                } else {
+                    values[languageKey] = prior[languageKey]!!
+                }
+                if (prior[spoilerKey] == null) values.remove(spoilerKey) else values[spoilerKey] = prior[spoilerKey]!!
+                if (prior[watchedMoviesKey] == null) {
+                    values.remove(watchedMoviesKey)
+                } else {
+                    values[watchedMoviesKey] = prior[watchedMoviesKey]!!
+                }
+                if (prior[watchedTvKey] ==
+                    null
+                ) {
+                    values.remove(watchedTvKey)
+                } else {
+                    values[watchedTvKey] = prior[watchedTvKey]!!
+                }
+                if (prior[watchLaterMoviesKey] == null) {
+                    values.remove(watchLaterMoviesKey)
+                } else {
+                    values[watchLaterMoviesKey] = prior[watchLaterMoviesKey]!!
+                }
+                if (prior[watchLaterTvKey] == null) {
+                    values.remove(watchLaterTvKey)
+                } else {
+                    values[watchLaterTvKey] = prior[watchLaterTvKey]!!
+                }
+                if (prior[favoritesMoviesKey] == null) {
+                    values.remove(favoritesMoviesKey)
+                } else {
+                    values[favoritesMoviesKey] = prior[favoritesMoviesKey]!!
+                }
+                if (prior[favoritesTvKey] == null) {
+                    values.remove(favoritesTvKey)
+                } else {
+                    values[favoritesTvKey] = prior[favoritesTvKey]!!
+                }
+            }
+        }
     }
 
     @Test
@@ -344,7 +473,8 @@ class BackupDataStoreTest {
             database.watchProgressDao(),
             database.ratingDao(),
             Clock.fixed(exportedAt, ZoneOffset.UTC),
-            TestCalendarDateSource(validationDate)
+            TestCalendarDateSource(validationDate),
+            kotlinx.coroutines.Dispatchers.Default
         )
         val library = (repository.observeEntries().first() as AppResult.Success).value
             .associate { it.mediaRef.externalId to (it.serialState == SeriesTrackingState.WATCHED) }
@@ -352,10 +482,11 @@ class BackupDataStoreTest {
         assertEquals(library, viewing.associate { it.mediaRef.externalId to it.isCompletedTitle })
         val continueWatching = database.libraryDao().observeContinueWatchingRows(MediaSource.TMDB, validationDate)
             .first().associate {
-                it.externalId to (
-                    it.trackableEpisodes > 0 && it.watchedEpisodes == it.trackableEpisodes &&
-                        it.hasSufficientCoverage
-                    )
+                it.externalId to isSeriesComplete(
+                    it.watchedEpisodes,
+                    it.trackableEpisodes,
+                    it.hasSufficientCoverage
+                )
             }
         assertEquals(library, continueWatching)
         assertEquals(library.count { it.value }, calculateWatchedStatistics(viewing).tvSeriesCompletedCount)

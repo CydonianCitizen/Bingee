@@ -9,10 +9,11 @@ import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,10 +39,10 @@ class NotificationDeliveryDaoTest {
     @Test
     fun compositeIdentityIsIdempotentAndProviderSubjectDateLeadAware() = runBlocking {
         val base = delivery()
-        assertFalse(contains(base))
+        assertTrue(dao.findBetween(base.eventDate, base.eventDate, base.leadDays).isEmpty())
         dao.insert(base)
         dao.insert(base)
-        assertTrue(contains(base))
+        assertEquals(listOf(base), dao.findBetween(base.eventDate, base.eventDate, base.leadDays))
         assertEquals(1, dao.count())
 
         listOf(
@@ -65,14 +66,56 @@ class NotificationDeliveryDaoTest {
         assertEquals(2, dao.count())
     }
 
-    private suspend fun contains(value: NotificationDeliveryEntity) = dao.contains(
-        value.source,
-        value.subjectType,
-        value.subjectExternalId,
-        value.eventType,
-        value.eventDate,
-        value.leadDays
-    )
+    @Test
+    fun twoWorkersCannotTakeTheSameClaimAndExpiredClaimIsRecoverable() = runBlocking {
+        val pending = delivery().copy(
+            deliveredAt = Instant.EPOCH,
+            claimToken = "first",
+            claimExpiresAtMs = 1_000L
+        )
+        assertTrue(dao.insert(pending) >= 0)
+        assertEquals(-1L, dao.insert(pending.copy(claimToken = "second")))
+        assertTrue(dao.findBetween(pending.eventDate, pending.eventDate, pending.leadDays).isEmpty())
+        val contenders = listOf("second", "third").map { token ->
+            async(Dispatchers.IO) {
+                dao.takeExpiredClaim(
+                    pending.source, pending.subjectType, pending.subjectExternalId,
+                    pending.eventType, pending.eventDate, pending.leadDays,
+                    token, 2_000L, 1_000L
+                )
+            }
+        }
+        assertEquals(1, contenders.sumOf { it.await() })
+        val winner = dao.find(
+            pending.source,
+            pending.subjectType,
+            pending.subjectExternalId,
+            pending.eventType,
+            pending.eventDate,
+            pending.leadDays
+        )?.claimToken!!
+        val completedAt = Instant.parse("2026-08-04T10:00:00Z")
+        assertEquals(
+            0,
+            dao.completeClaim(
+                pending.source, pending.subjectType, pending.subjectExternalId,
+                pending.eventType, pending.eventDate, pending.leadDays,
+                "first", pending.notificationId, completedAt
+            )
+        )
+        assertEquals(
+            1,
+            dao.completeClaim(
+                pending.source, pending.subjectType, pending.subjectExternalId,
+                pending.eventType, pending.eventDate, pending.leadDays,
+                winner, pending.notificationId, completedAt
+            )
+        )
+        assertEquals(
+            listOf(pending.copy(deliveredAt = completedAt, claimToken = null, claimExpiresAtMs = null)),
+            dao.findBetween(pending.eventDate, pending.eventDate, pending.leadDays)
+        )
+    }
 
     private fun delivery(eventDate: LocalDate = LocalDate.of(2026, 8, 5), leadDays: Int = 1) =
         NotificationDeliveryEntity(

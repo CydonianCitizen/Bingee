@@ -42,8 +42,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
@@ -74,9 +76,16 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.ui.formatLocalized
 import com.cydoniancitizen.bingee.core.ui.toUiError
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 /** Scroll distance over which the transparent top app bar fades into an opaque one. */
 private val BarCollapseDistance = 160.dp
+
+/**
+ * Steps used to quantize the top-bar collapse fraction for tint interpolation, so icon tint changes
+ * stay visually smooth while recomposing at most this many times during a collapse animation.
+ */
+private const val TINT_QUANTIZATION_STEPS = 16
 
 @Composable
 internal fun MediaDetailsScreen(
@@ -144,7 +153,9 @@ internal fun MediaDetailsContent(
     val content = state.content
     val details = (content as? DetailContentState.Content)?.cached?.details
     val collapseThresholdPx = with(LocalDensity.current) { BarCollapseDistance.toPx() }
-    val collapseFraction by remember(details, collapseThresholdPx) {
+    // Kept as State<Float> and handed down so the top bar can read it in the draw phase and in a
+    // quantized derived state instead of recomposing on every scroll pixel.
+    val collapseFractionState = remember(details, collapseThresholdPx) {
         derivedStateOf {
             when {
                 // Loading and error states have no artwork behind the bar, so it starts opaque.
@@ -182,7 +193,7 @@ internal fun MediaDetailsContent(
         topBar = {
             DetailTopBar(
                 title = details?.title ?: stringResource(R.string.detail_screen_title),
-                collapseFraction = collapseFraction,
+                collapseFraction = collapseFractionState,
                 state = state,
                 onBack = onBack,
                 onRefresh = onRefresh,
@@ -243,26 +254,32 @@ internal fun MediaDetailsContent(
 @Composable
 private fun DetailTopBar(
     title: String,
-    collapseFraction: Float,
+    collapseFraction: State<Float>,
     state: MediaDetailsUiState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    // The fraction moves on every scroll pixel; reading it here would recompose the whole bar each
+    // frame. Icon tints therefore track a quantized fraction, while the bar background reads the
+    // raw fraction inside drawBehind, skipping recomposition entirely.
+    val tintFraction by remember {
+        derivedStateOf { (collapseFraction.value * TINT_QUANTIZATION_STEPS).roundToInt() / TINT_QUANTIZATION_STEPS.toFloat() }
+    }
     // Icons start white over the artwork and land on onSurface once the bar is opaque, so they stay
     // legible against a bright backdrop and against the bar's own surface alike.
-    val iconTint = lerp(Color.White, scheme.onSurface, collapseFraction)
+    val iconTint = lerp(Color.White, scheme.onSurface, tintFraction)
     val favoriteTint = lerp(
         Color.White,
         if (state.isFavorite) scheme.error else scheme.onSurface,
-        collapseFraction
+        tintFraction
     )
     TopAppBar(
         title = {
             // Composed only once the bar is opaque: while the hero title is the one on screen, a
             // second node carrying the same text would make the title assertions ambiguous.
-            if (collapseFraction >= 1f) {
+            if (tintFraction >= 1f) {
                 Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         },
@@ -302,9 +319,12 @@ private fun DetailTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = scheme.surface.copy(alpha = collapseFraction),
+            containerColor = Color.Transparent,
             titleContentColor = scheme.onSurface
         ),
+        modifier = Modifier.drawBehind {
+            drawRect(scheme.surface, alpha = collapseFraction.value)
+        },
         // The app shell already applies the status bar inset to the nav host.
         windowInsets = WindowInsets(0, 0, 0, 0)
     )
@@ -365,6 +385,7 @@ private fun DetailBody(
     onDismissRatingError: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val locale = LocalConfiguration.current.locales[0]
     val sectionModifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = BingeeDimensions.screenPadding)
@@ -496,7 +517,7 @@ private fun DetailBody(
                     )
                 }
                 details.releaseDate?.let {
-                    DetailField(R.string.detail_date, it.localizedMedium())
+                    DetailField(R.string.detail_date, it.formatLocalized(locale))
                 }
                 details.originalLanguage?.let {
                     DetailField(R.string.detail_original_language, it)

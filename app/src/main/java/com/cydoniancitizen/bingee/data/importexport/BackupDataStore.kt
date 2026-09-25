@@ -17,7 +17,12 @@ import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
 import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
 import com.cydoniancitizen.bingee.data.library.local.SeriesStateOverrideEntity
 import com.cydoniancitizen.bingee.data.library.local.SeriesWatchProgressEntity
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.data.settings.PortableUserPreferencesStore
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
+import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,10 +55,12 @@ internal class BackupDataStore @Inject constructor(
     private val database: BingeeDatabase,
     private val snapshotDao: PortableSnapshotDao,
     private val releaseEventDao: ReleaseEventDao,
-    private val notificationPreferences: DataStoreReleaseNotificationPreferences
+    private val notificationPreferences: DataStoreReleaseNotificationPreferences,
+    private val portableUserPreferences: PortableUserPreferencesStore
 ) {
     suspend fun readPortableData(): BackupData {
         notificationPreferences.preferences.first()
+        portableUserPreferences.ensureLegacyBridge()
         return database.withTransaction {
             val rows = snapshotDao.readSnapshot()
             val seasonById = rows.seasons.associateBy { it.localSeasonId }
@@ -153,7 +160,18 @@ internal class BackupDataStore @Inject constructor(
                     it.notificationLeadDays,
                     it.notifyMovieReleases,
                     it.notifySeasonPremieres,
-                    it.notifyEpisodeAirings
+                    it.notifyEpisodeAirings,
+                    theme = parseTheme(it.theme),
+                    language = AppLanguage.fromPreferenceValue(it.language),
+                    hideEpisodeSpoilers = it.hideEpisodeSpoilers,
+                    profileDisplayModes = ProfileDisplayModes(
+                        watchedMovies = parseProfileViewMode(it.watchedMoviesDisplayMode),
+                        watchedTvSeries = parseProfileViewMode(it.watchedTvSeriesDisplayMode),
+                        watchLaterMovies = parseProfileViewMode(it.watchLaterMoviesDisplayMode),
+                        watchLaterTvSeries = parseProfileViewMode(it.watchLaterTvSeriesDisplayMode),
+                        favoritesMovies = parseProfileViewMode(it.favoritesMoviesDisplayMode),
+                        favoritesTvSeries = parseProfileViewMode(it.favoritesTvSeriesDisplayMode)
+                    )
                 )
             } ?: BackupPreferences(1, true, true, true)
             BackupData(
@@ -371,7 +389,17 @@ internal class BackupDataStore @Inject constructor(
                     notifyMovieReleases = data.preferences.notifyMovieReleases,
                     notifySeasonPremieres = data.preferences.notifySeasonPremieres,
                     notifyEpisodeAirings = data.preferences.notifyEpisodeAirings,
-                    legacyBridgeCompleted = true
+                    legacyBridgeCompleted = true,
+                    theme = data.preferences.theme.name,
+                    language = data.preferences.language.name,
+                    hideEpisodeSpoilers = data.preferences.hideEpisodeSpoilers,
+                    watchedMoviesDisplayMode = data.preferences.profileDisplayModes.watchedMovies.name,
+                    watchedTvSeriesDisplayMode = data.preferences.profileDisplayModes.watchedTvSeries.name,
+                    watchLaterMoviesDisplayMode = data.preferences.profileDisplayModes.watchLaterMovies.name,
+                    watchLaterTvSeriesDisplayMode = data.preferences.profileDisplayModes.watchLaterTvSeries.name,
+                    favoritesMoviesDisplayMode = data.preferences.profileDisplayModes.favoritesMovies.name,
+                    favoritesTvSeriesDisplayMode = data.preferences.profileDisplayModes.favoritesTvSeries.name,
+                    legacySettingsBridgeCompleted = true
                 )
             )
             failureInjector.check(RestoreStage.PORTABLE_PREFERENCES)
@@ -394,5 +422,17 @@ internal class BackupDataStore @Inject constructor(
             data = readPortableData()
         )
         BackupJsonCodec.encode(document)
+    }
+
+    private fun parseTheme(value: String): AppTheme = try {
+        AppTheme.valueOf(value)
+    } catch (_: Exception) {
+        AppTheme.SYSTEM_DEFAULT
+    }
+
+    private fun parseProfileViewMode(value: String): ProfileViewMode = try {
+        ProfileViewMode.valueOf(value)
+    } catch (_: Exception) {
+        ProfileViewMode.LIST
     }
 }

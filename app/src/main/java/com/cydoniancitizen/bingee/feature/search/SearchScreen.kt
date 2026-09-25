@@ -312,7 +312,8 @@ private fun SearchResults(
     ) {
         items(
             items = content.items,
-            key = { "${it.externalRef.source}:${it.externalRef.externalId}" }
+            key = { "${it.externalRef.source}:${it.externalRef.externalId}" },
+            contentType = { "searchResult" }
         ) { result ->
             SearchResultItem(
                 result = result,

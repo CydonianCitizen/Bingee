@@ -213,7 +213,11 @@ internal fun HomeContent(
                     )
                 }
                 // One item per date keeps the tighter spacing between a date and its releases.
-                is HomeContentState.Events -> items(content.groups, key = { "date:${it.date}" }) { group ->
+                is HomeContentState.Events -> items(
+                    content.groups,
+                    key = { "date:${it.date}" },
+                    contentType = { "dateGroup" }
+                ) { group ->
                     Column(verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
                         DateHeader(group)
                         group.events.forEach { event ->
@@ -269,7 +273,8 @@ internal fun HomeContent(
                     ) {
                         items(
                             items = state.continueWatching,
-                            key = { "${it.mediaRef.source}:${it.mediaRef.externalId}" }
+                            key = { "${it.mediaRef.source}:${it.mediaRef.externalId}" },
+                            contentType = { "continueWatching" }
                         ) { item ->
                             ContinueWatchingCard(
                                 item = item,
@@ -650,11 +655,35 @@ private fun ReleaseEvent.description(): String = when (subject.eventType) {
     }
 }
 
-private fun java.time.LocalDate.localized(): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(Locale.getDefault()).format(this)
+// Building a localized formatter costs a CLDR pattern lookup, so formatters are cached per locale
+// instead of being rebuilt on every recomposition of a date header or "last updated" row.
+@Volatile
+private var fullDateFormatterCache: Pair<Locale, DateTimeFormatter>? = null
 
-private fun Instant.localized(): String = DateTimeFormatter
-    .ofLocalizedDateTime(FormatStyle.MEDIUM)
-    .withLocale(Locale.getDefault())
-    .withZone(ZoneId.systemDefault())
-    .format(this)
+@Volatile
+private var mediumDateTimeFormatterCache: Pair<Locale, DateTimeFormatter>? = null
+
+private fun fullDateFormatter(): DateTimeFormatter {
+    val locale = Locale.getDefault()
+    fullDateFormatterCache?.let { (cachedLocale, formatter) ->
+        if (cachedLocale == locale) return formatter
+    }
+    return DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
+        .withLocale(locale)
+        .also { fullDateFormatterCache = locale to it }
+}
+
+private fun mediumDateTimeFormatter(): DateTimeFormatter {
+    val locale = Locale.getDefault()
+    mediumDateTimeFormatterCache?.let { (cachedLocale, formatter) ->
+        if (cachedLocale == locale) return formatter
+    }
+    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+        .withLocale(locale)
+        .also { mediumDateTimeFormatterCache = locale to it }
+}
+
+private fun java.time.LocalDate.localized(): String = fullDateFormatter().format(this)
+
+private fun Instant.localized(): String =
+    mediumDateTimeFormatter().withZone(ZoneId.systemDefault()).format(this)

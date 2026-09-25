@@ -11,6 +11,7 @@ import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationCapabil
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationContentMapper
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotifier
 import com.cydoniancitizen.bingee.domain.notification.isNotificationDue
+import com.cydoniancitizen.bingee.domain.repository.NotificationClaim
 import com.cydoniancitizen.bingee.domain.repository.NotificationDeliveryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
@@ -81,7 +82,7 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
                 transientFailure = true
             )
         }
-        val alreadyDelivered = dueEvents.count {
+        var alreadyDelivered = dueEvents.count {
             it.toDeliveryIdentity(preferences.leadTime.days) in deliveredIdentities
         }
         val dispatchCandidates = dueEvents.filter {
@@ -95,6 +96,27 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
             val identity = event.toDeliveryIdentity(preferences.leadTime.days)
 
             val notificationId = deterministicNotificationId(identity)
+            val claim = when (val result = deliveryRepository.claim(identity, notificationId, clock.instant())) {
+                is AppResult.Success -> result.value
+                is AppResult.Failure -> {
+                    failed++
+                    transientFailure = true
+                    continue
+                }
+            }
+            when (claim) {
+                NotificationClaim.AlreadyDelivered -> {
+                    alreadyDelivered++
+                    deliveredIdentities += identity
+                    continue
+                }
+                NotificationClaim.InFlight -> {
+                    // A crashed worker's claim becomes available after its lease expires.
+                    transientFailure = true
+                    continue
+                }
+                is NotificationClaim.Acquired -> Unit
+            }
             val content = contentMapper.map(
                 event,
                 ChronoUnit.DAYS.between(today, event.eventDate).toInt()
@@ -102,13 +124,15 @@ internal class DefaultNotificationDispatchCoordinator @Inject constructor(
             if (notifier.post(event, notificationId, content) is AppResult.Failure) {
                 failed++
                 transientFailure = true
+                deliveryRepository.release(identity, claim.token)
                 continue
             }
             posted++
-            val record = deliveryRepository.record(
-                NotificationDelivery(identity, notificationId, clock.instant())
+            val completion = deliveryRepository.complete(
+                NotificationDelivery(identity, notificationId, clock.instant()),
+                claim.token
             )
-            if (record is AppResult.Failure) {
+            if (completion !is AppResult.Success || !completion.value) {
                 failed++
                 transientFailure = true
             } else {

@@ -25,11 +25,10 @@ keystore.properties
 secrets.properties
 secrets.xml
 
-# Private local evidence and docs
+# Private local evidence and generated reviews
 .local-evidence/
-docs/*
-# Referenced by the in-app Privacy settings page
-!docs/privacy.md
+.audit/
+docs/audits/
 
 # Release artifacts
 app/release/
@@ -37,7 +36,6 @@ app/release/
 *.aab
 
 # Local agent and tooling files
-AGENTS.md
 CLAUDE.md
 .impeccable/
 

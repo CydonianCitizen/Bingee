@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -22,6 +23,19 @@ class DomainModelsTest {
     @Test(expected = IllegalArgumentException::class)
     fun externalReferenceRejectsBlankId() {
         ExternalMediaRef(MediaSource.TMDB, "   ")
+    }
+
+    @Test
+    fun runtimeTmdbIdentityRequiresPositiveLongAndTmdbSource() {
+        assertEquals(42L, ExternalMediaRef(MediaSource.TMDB, "42").tmdbIdOrNull())
+        assertEquals(42L, ExternalMediaRef(MediaSource.TMDB, " 42 ").tmdbIdOrNull())
+        listOf(
+            ExternalMediaRef(MediaSource.TMDB, "0"),
+            ExternalMediaRef(MediaSource.TMDB, "-1"),
+            ExternalMediaRef(MediaSource.TMDB, "not-a-number"),
+            ExternalMediaRef(MediaSource.TMDB, "9223372036854775808"),
+            ExternalMediaRef(MediaSource.IMDB, "42")
+        ).forEach { assertNull(it.tmdbIdOrNull()) }
     }
 
     @Test

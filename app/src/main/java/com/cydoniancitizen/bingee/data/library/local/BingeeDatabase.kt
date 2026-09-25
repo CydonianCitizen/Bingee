@@ -25,7 +25,7 @@ import androidx.room.TypeConverters
         SeriesStateOverrideEntity::class,
         BackgroundRefreshAttemptEntity::class
     ],
-    version = 7,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)

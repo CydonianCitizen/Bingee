@@ -16,8 +16,13 @@ data class ExternalMediaRef(val source: MediaSource, val externalId: String) {
     }
 }
 
-fun ExternalMediaRef.toNavigableDetailsRef(): ExternalMediaRef? =
-    takeIf { source == MediaSource.TMDB && externalId.toLongOrNull()?.let { it > 0 } == true }
+fun ExternalMediaRef.toNavigableDetailsRef(): ExternalMediaRef? = takeIf { tmdbIdOrNull() != null }
+
+fun ExternalMediaRef.tmdbIdOrNull(): Long? = takeIf { source == MediaSource.TMDB }
+    ?.externalId
+    ?.trim()
+    ?.toLongOrNull()
+    ?.takeIf { it > 0 }
 
 fun Iterable<ExternalMediaRef>.resolveTmdbRef(): ExternalMediaRef? = asSequence()
     .filter { it.source == MediaSource.TMDB }

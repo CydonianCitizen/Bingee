@@ -96,6 +96,12 @@ class DefaultWatchProgressRepositoryTest {
             AppResult.Failure(AppError.InvalidInput),
             repository.markMovieWatched(ref("invalid"))
         )
+        listOf("0", "-1", "9223372036854775808").forEach { externalId ->
+            assertEquals(
+                AppResult.Failure(AppError.InvalidInput),
+                repository.markMovieWatched(ref(externalId))
+            )
+        }
         assertEquals(0, dao.writeCount)
     }
 

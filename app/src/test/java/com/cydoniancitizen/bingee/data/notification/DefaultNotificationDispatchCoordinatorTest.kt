@@ -18,6 +18,7 @@ import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationCapabil
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationContent
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationContentMapper
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotifier
+import com.cydoniancitizen.bingee.domain.repository.NotificationClaim
 import com.cydoniancitizen.bingee.domain.repository.NotificationDeliveryRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseNotificationPreferencesRepository
@@ -26,6 +27,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -60,7 +62,7 @@ class DefaultNotificationDispatchCoordinatorTest {
     }
 
     @Test
-    fun dueEventsFilterCategoriesAndPersistOnlyAfterPost() = runTest {
+    fun dueEventsFilterCategoriesAndCompleteAfterPost() = runTest {
         val movie = event("movie", ReleaseEventType.MOVIE_RELEASE, today.plusDays(1))
         val season = event("season", ReleaseEventType.SEASON_PREMIERE, today.plusDays(1))
         val deliveredEpisode = event("episode", ReleaseEventType.EPISODE_AIRING, today)
@@ -166,6 +168,84 @@ class DefaultNotificationDispatchCoordinatorTest {
         assertFalse(delivery.rows.any { it.subjectExternalId == "record-fail" })
         assertTrue(delivery.rows.any { it.subjectExternalId == "ok" })
         assertEquals(listOf("post-fail", "record-fail", "ok"), notifier.postedSubjects)
+
+        // A retry after a successful post must not immediately publish the same event again.
+        coordinator(
+            FakePreferences(
+                ReleaseNotificationPreferences(enabled = true, leadTime = ReleaseNotificationLeadTime.SAME_DAY)
+            ),
+            FakeCapability(NotificationCapabilityStatus.AVAILABLE),
+            FakeCalendar(listOf(failedRecord, successful)),
+            delivery,
+            notifier
+        ).dispatch()
+        assertEquals(1, notifier.postedSubjects.count { it == "record-fail" })
+        assertEquals(1, notifier.postedSubjects.count { it == "ok" })
+    }
+
+    @Test
+    fun expiredClaimCanBeReclaimedAfterProcessRestart() = runTest {
+        val event = event("restart", ReleaseEventType.MOVIE_RELEASE, today)
+        val delivery = FakeDeliveryRepository(failRecordSubjects = setOf("restart"))
+        val notifier = FakeNotifier()
+        val preferences = FakePreferences(
+            ReleaseNotificationPreferences(enabled = true, leadTime = ReleaseNotificationLeadTime.SAME_DAY)
+        )
+        val calendar = FakeCalendar(listOf(event))
+        coordinator(preferences, FakeCapability(NotificationCapabilityStatus.AVAILABLE), calendar, delivery, notifier)
+            .dispatch()
+        coordinator(preferences, FakeCapability(NotificationCapabilityStatus.AVAILABLE), calendar, delivery, notifier)
+            .dispatch()
+        assertEquals(1, notifier.postedSubjects.size)
+
+        val later = Clock.offset(clock, java.time.Duration.ofMinutes(6))
+        coordinator(
+            preferences,
+            FakeCapability(NotificationCapabilityStatus.AVAILABLE),
+            calendar,
+            delivery,
+            notifier,
+            dispatchClock = later
+        ).dispatch()
+        assertEquals(2, notifier.postedSubjects.size)
+    }
+
+    @Test
+    fun anExistingWorkerClaimPreventsAnotherWorkerFromPosting() = runTest {
+        val event = event("parallel", ReleaseEventType.MOVIE_RELEASE, today)
+        val delivery = FakeDeliveryRepository()
+        val identity = event.identity(0)
+        assertTrue(delivery.claim(identity, 7, clock.instant()) is AppResult.Success)
+        val notifier = FakeNotifier()
+        val summary = coordinator(
+            FakePreferences(
+                ReleaseNotificationPreferences(enabled = true, leadTime = ReleaseNotificationLeadTime.SAME_DAY)
+            ),
+            FakeCapability(NotificationCapabilityStatus.AVAILABLE),
+            FakeCalendar(listOf(event)),
+            delivery,
+            notifier
+        ).dispatch()
+        assertTrue(summary.transientFailure)
+        assertTrue(notifier.postedSubjects.isEmpty())
+    }
+
+    @Test
+    fun failedPostReleasesClaimForImmediateRetry() = runTest {
+        val event = event("retry", ReleaseEventType.MOVIE_RELEASE, today)
+        val preferences = FakePreferences(
+            ReleaseNotificationPreferences(enabled = true, leadTime = ReleaseNotificationLeadTime.SAME_DAY)
+        )
+        val capability = FakeCapability(NotificationCapabilityStatus.AVAILABLE)
+        val calendar = FakeCalendar(listOf(event))
+        val delivery = FakeDeliveryRepository()
+        coordinator(preferences, capability, calendar, delivery, FakeNotifier(setOf("retry"))).dispatch()
+
+        val notifier = FakeNotifier()
+        val retry = coordinator(preferences, capability, calendar, delivery, notifier).dispatch()
+        assertEquals(1, retry.posted)
+        assertEquals(listOf("retry"), notifier.postedSubjects)
+        assertTrue(event.identity(0) in delivery.rows)
     }
 
     private fun coordinator(
@@ -174,7 +254,8 @@ class DefaultNotificationDispatchCoordinatorTest {
         calendar: FakeCalendar,
         delivery: FakeDeliveryRepository = FakeDeliveryRepository(),
         notifier: FakeNotifier = FakeNotifier(),
-        contentMapper: ReleaseNotificationContentMapper = FakeContentMapper()
+        contentMapper: ReleaseNotificationContentMapper = FakeContentMapper(),
+        dispatchClock: Clock = clock
     ) = DefaultNotificationDispatchCoordinator(
         preferences,
         capability,
@@ -182,7 +263,7 @@ class DefaultNotificationDispatchCoordinatorTest {
         delivery,
         contentMapper,
         notifier,
-        clock,
+        dispatchClock,
         TestCalendarDateSource(today)
     )
 
@@ -249,6 +330,7 @@ class DefaultNotificationDispatchCoordinatorTest {
     private class FakeDeliveryRepository(private val failRecordSubjects: Set<String> = emptySet()) :
         NotificationDeliveryRepository {
         val rows = linkedSetOf<NotificationDeliveryIdentity>()
+        private val claims = mutableMapOf<NotificationDeliveryIdentity, Pair<String, Instant>>()
         var prunedBefore: LocalDate? = null
         var batchLookupCalls = 0
         override suspend fun findDelivered(
@@ -257,13 +339,34 @@ class DefaultNotificationDispatchCoordinatorTest {
             batchLookupCalls++
             return AppResult.Success(rows.intersect(identities))
         }
-        override suspend fun record(delivery: NotificationDelivery): AppResult<Unit> =
-            if (delivery.identity.subjectExternalId in failRecordSubjects) {
-                AppResult.Failure(AppError.LocalStorageFailure)
-            } else {
-                rows += delivery.identity
-                AppResult.Success(Unit)
+        override suspend fun claim(
+            identity: NotificationDeliveryIdentity,
+            notificationId: Int,
+            now: Instant
+        ): AppResult<NotificationClaim> = synchronized(this) {
+            if (identity in rows) return@synchronized AppResult.Success(NotificationClaim.AlreadyDelivered)
+            val existing = claims[identity]
+            if (existing != null && now.isBefore(existing.second)) {
+                return@synchronized AppResult.Success(NotificationClaim.InFlight)
             }
+            val token = UUID.randomUUID().toString()
+            claims[identity] = token to now.plusSeconds(300)
+            AppResult.Success(NotificationClaim.Acquired(token))
+        }
+
+        override suspend fun complete(delivery: NotificationDelivery, token: String): AppResult<Boolean> {
+            if (delivery.identity.subjectExternalId in failRecordSubjects) {
+                return AppResult.Failure(AppError.LocalStorageFailure)
+            }
+            if (claims[delivery.identity]?.first != token) return AppResult.Success(false)
+            claims.remove(delivery.identity)
+            rows += delivery.identity
+            return AppResult.Success(true)
+        }
+        override suspend fun release(identity: NotificationDeliveryIdentity, token: String): AppResult<Unit> {
+            if (claims[identity]?.first == token) claims.remove(identity)
+            return AppResult.Success(Unit)
+        }
         override suspend fun prune(eventDateBefore: LocalDate): AppResult<Int> {
             prunedBefore = eventDateBefore
             return AppResult.Success(0)

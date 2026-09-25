@@ -356,6 +356,7 @@
     <string name="backup_replace_local_data">Replace local data</string>
     <string name="backup_error_unreadable">Backup file could not be read.</string>
     <string name="backup_error_too_large">Backup file is too large.</string>
+    <string name="backup_error_export_too_large">This backup exceeds the limits supported by restore and cannot be created.</string>
     <string name="backup_error_malformed">Backup JSON is malformed or has invalid data.</string>
     <string name="backup_error_wrong_format">This is not a Bingee backup.</string>
     <string name="backup_error_unsupported_version">This backup uses a newer unsupported version.</string>

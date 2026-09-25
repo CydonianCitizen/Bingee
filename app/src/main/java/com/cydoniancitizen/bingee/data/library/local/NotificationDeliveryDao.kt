@@ -12,30 +12,9 @@ import java.time.LocalDate
 @Dao
 internal interface NotificationDeliveryDao {
     @Query(
-        """
-        SELECT EXISTS(
-            SELECT 1 FROM notification_deliveries
-            WHERE source = :source
-              AND subject_type = :subjectType
-              AND subject_external_id = :subjectExternalId
-              AND event_type = :eventType
-              AND event_date = :eventDate
-              AND lead_days = :leadDays
-        )
-        """
-    )
-    suspend fun contains(
-        source: MediaSource,
-        subjectType: ReleaseSubjectType,
-        subjectExternalId: String,
-        eventType: ReleaseEventType,
-        eventDate: LocalDate,
-        leadDays: Int
-    ): Boolean
-
-    @Query(
         "SELECT * FROM notification_deliveries " +
-            "WHERE event_date BETWEEN :fromDate AND :throughDate AND lead_days = :leadDays"
+            "WHERE event_date BETWEEN :fromDate AND :throughDate AND lead_days = :leadDays " +
+            "AND claim_token IS NULL"
     )
     suspend fun findBetween(
         fromDate: LocalDate,
@@ -45,6 +24,73 @@ internal interface NotificationDeliveryDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(delivery: NotificationDeliveryEntity): Long
+
+    @Query(
+        "SELECT * FROM notification_deliveries WHERE source = :source AND subject_type = :subjectType " +
+            "AND subject_external_id = :subjectExternalId AND event_type = :eventType " +
+            "AND event_date = :eventDate AND lead_days = :leadDays"
+    )
+    suspend fun find(
+        source: MediaSource,
+        subjectType: ReleaseSubjectType,
+        subjectExternalId: String,
+        eventType: ReleaseEventType,
+        eventDate: LocalDate,
+        leadDays: Int
+    ): NotificationDeliveryEntity?
+
+    @Query(
+        "UPDATE notification_deliveries SET claim_token = :token, claim_expires_at_ms = :expiresAtMs " +
+            "WHERE source = :source AND subject_type = :subjectType " +
+            "AND subject_external_id = :subjectExternalId AND event_type = :eventType " +
+            "AND event_date = :eventDate AND lead_days = :leadDays " +
+            "AND claim_token IS NOT NULL AND claim_expires_at_ms <= :nowMs"
+    )
+    suspend fun takeExpiredClaim(
+        source: MediaSource,
+        subjectType: ReleaseSubjectType,
+        subjectExternalId: String,
+        eventType: ReleaseEventType,
+        eventDate: LocalDate,
+        leadDays: Int,
+        token: String,
+        expiresAtMs: Long,
+        nowMs: Long
+    ): Int
+
+    @Query(
+        "UPDATE notification_deliveries SET delivered_at = :deliveredAt, notification_id = :notificationId, " +
+            "claim_token = NULL, claim_expires_at_ms = NULL " +
+            "WHERE source = :source AND subject_type = :subjectType " +
+            "AND subject_external_id = :subjectExternalId AND event_type = :eventType " +
+            "AND event_date = :eventDate AND lead_days = :leadDays AND claim_token = :token"
+    )
+    suspend fun completeClaim(
+        source: MediaSource,
+        subjectType: ReleaseSubjectType,
+        subjectExternalId: String,
+        eventType: ReleaseEventType,
+        eventDate: LocalDate,
+        leadDays: Int,
+        token: String,
+        notificationId: Int,
+        deliveredAt: java.time.Instant
+    ): Int
+
+    @Query(
+        "DELETE FROM notification_deliveries WHERE source = :source AND subject_type = :subjectType " +
+            "AND subject_external_id = :subjectExternalId AND event_type = :eventType " +
+            "AND event_date = :eventDate AND lead_days = :leadDays AND claim_token = :token"
+    )
+    suspend fun releaseClaim(
+        source: MediaSource,
+        subjectType: ReleaseSubjectType,
+        subjectExternalId: String,
+        eventType: ReleaseEventType,
+        eventDate: LocalDate,
+        leadDays: Int,
+        token: String
+    ): Int
 
     @Query("DELETE FROM notification_deliveries WHERE event_date < :eventDateBefore")
     suspend fun prune(eventDateBefore: LocalDate): Int

@@ -38,11 +38,16 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -75,7 +80,8 @@ class DefaultLibraryRepositoryTest {
                 database.watchProgressDao(),
                 database.ratingDao(),
                 Clock.fixed(now, ZoneOffset.UTC),
-                dateSource
+                dateSource,
+                Dispatchers.Default
             )
     }
 
@@ -109,6 +115,42 @@ class DefaultLibraryRepositoryTest {
             AppResult.Success(emptyList<LibraryEntry>()),
             repository.observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.TV_SERIES)).first()
         )
+    }
+
+    @Test
+    fun libraryProjectionUsesProvidedDispatcherWhenCollectedOnMain() = runBlocking {
+        repository.add(mediaResult())
+        val dispatches = AtomicInteger()
+        val dispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) {
+                dispatches.incrementAndGet()
+                Dispatchers.Default.dispatch(context, block)
+            }
+        }
+        val observedRepository = DefaultLibraryRepository(
+            database.libraryDao(), database.watchProgressDao(), database.ratingDao(),
+            Clock.fixed(now, ZoneOffset.UTC), dateSource, dispatcher
+        )
+
+        val result = withContext(Dispatchers.Main) { observedRepository.observeEntries().first() }
+
+        assertEquals(1, (result as AppResult.Success).value.size)
+        assertTrue(dispatches.get() > 0)
+    }
+
+    @Test
+    fun runtimeAddsUseCanonicalTmdbIdentityValidation() = runBlocking {
+        listOf("0", "-1", "not-a-number", "9223372036854775808").forEach { externalId ->
+            assertEquals(
+                AppResult.Failure(AppError.InvalidInput),
+                repository.add(ExternalMediaRef(MediaSource.TMDB, externalId), MediaType.MOVIE)
+            )
+        }
+        assertEquals(
+            AppResult.Failure(AppError.UnsupportedData),
+            repository.add(ExternalMediaRef(MediaSource.IMDB, "tt2543164"), MediaType.MOVIE)
+        )
+        assertEquals(AppResult.Success(emptyList<LibraryEntry>()), repository.observeEntries().first())
     }
 
     @Test

@@ -1,0 +1,9 @@
+{
+  "formatId": "bingee-backup",
+  "schemaVersion": 1,
+  "exportedAt": "2026-08-04T10:00:00Z",
+  "data": {
+    "media": [], "seasons": [], "episodes": [], "library": [], "movieProgress": [], "episodeProgress": [], "ratings": [],
+    "preferences": {"notificationLeadDays": 1, "notifyMovieReleases": true, "notifySeasonPremieres": true, "notifyEpisodeAirings": true}
+  }
+}

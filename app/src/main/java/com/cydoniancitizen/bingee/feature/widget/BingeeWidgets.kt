@@ -59,6 +59,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.navigation.DetailRouteArgs
 import com.cydoniancitizen.bingee.data.notification.NotificationDetailIntent
 import com.cydoniancitizen.bingee.data.settings.AppTheme
@@ -178,7 +179,7 @@ private fun markNextEpisode(ref: ExternalMediaRef): Action = actionRunCallback<M
 
 /** Opens the title through the same intent notifications use, or the app when it has no TMDB identity. */
 private fun openDetails(context: Context, ref: ExternalMediaRef, mediaType: MediaType): Action {
-    val tmdbId = ref.externalId.toLongOrNull()?.takeIf { ref.source == MediaSource.TMDB && it > 0 }
+    val tmdbId = ref.tmdbIdOrNull()
     return if (tmdbId != null) {
         actionStartActivity(NotificationDetailIntent.intent(context, DetailRouteArgs(mediaType, tmdbId)))
     } else {

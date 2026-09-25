@@ -195,13 +195,17 @@ class TvTimeImportStoreTest {
     fun importLeavesPortablePreferencesRefreshStateAndDeliveryLedgerUntouched() = runBlocking {
         val sql = database.openHelper.writableDatabase
         sql.execSQL(
-            "INSERT INTO portable_preferences VALUES(1, 7, 0, 1, 0, 1)"
+            "INSERT INTO portable_preferences " +
+                "(singleton_key, notification_lead_days, notify_movie_releases, notify_season_premieres, " +
+                "notify_episode_airings, legacy_bridge_completed) VALUES(1, 7, 0, 1, 0, 1)"
         )
         sql.execSQL(
             "INSERT INTO calendar_refresh_state VALUES(1, '2024-04-01T00:00:00Z')"
         )
         sql.execSQL(
-            "INSERT INTO notification_deliveries VALUES(" +
+            "INSERT INTO notification_deliveries " +
+                "(source, subject_type, subject_external_id, event_type, event_date, lead_days, " +
+                "notification_id, delivered_at) VALUES(" +
                 "'TMDB','MEDIA','old','MOVIE_RELEASE','2024-05-01',1,42,'2024-04-30T00:00:00Z')"
         )
 

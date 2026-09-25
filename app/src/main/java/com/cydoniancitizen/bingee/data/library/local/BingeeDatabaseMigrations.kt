@@ -117,5 +117,50 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `portable_preferences` ADD COLUMN `theme` TEXT NOT NULL DEFAULT 'SYSTEM_DEFAULT'")
+        db.execSQL("ALTER TABLE `portable_preferences` ADD COLUMN `language` TEXT NOT NULL DEFAULT 'ENGLISH'")
+        db.execSQL("ALTER TABLE `portable_preferences` ADD COLUMN `hide_episode_spoilers` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `watched_movies_display_mode` TEXT NOT NULL DEFAULT 'LIST'"
+        )
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `watched_tv_series_display_mode` TEXT NOT NULL DEFAULT 'LIST'"
+        )
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `watch_later_movies_display_mode` TEXT NOT NULL DEFAULT 'LIST'"
+        )
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `watch_later_tv_series_display_mode` TEXT NOT NULL DEFAULT 'LIST'"
+        )
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `favorites_movies_display_mode` TEXT NOT NULL DEFAULT 'LIST'"
+        )
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `favorites_tv_series_display_mode` TEXT NOT NULL DEFAULT 'LIST'"
+        )
+        db.execSQL(
+            "ALTER TABLE `portable_preferences` ADD COLUMN `legacy_settings_bridge_completed` INTEGER NOT NULL DEFAULT 0"
+        )
+    }
+}
+
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `notification_deliveries` ADD COLUMN `claim_token` TEXT")
+        db.execSQL("ALTER TABLE `notification_deliveries` ADD COLUMN `claim_expires_at_ms` INTEGER")
+    }
+}
+
 val ALL_MIGRATIONS: Array<Migration> =
-    arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    arrayOf(
+        MIGRATION_1_2,
+        MIGRATION_2_3,
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9
+    )

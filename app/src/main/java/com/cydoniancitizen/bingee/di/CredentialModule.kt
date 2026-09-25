@@ -8,11 +8,11 @@ import com.cydoniancitizen.bingee.data.credential.TmdbCredentialCipher
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialFile
 import com.cydoniancitizen.bingee.data.credential.TmdbCredentialStore
 import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
-import com.cydoniancitizen.bingee.data.settings.DataStoreAppearancePreferences
 import com.cydoniancitizen.bingee.data.settings.DataStoreFirstRunPreferences
-import com.cydoniancitizen.bingee.data.settings.DataStoreProfileDisplayModePreferences
-import com.cydoniancitizen.bingee.data.settings.DataStoreSpoilerPreferences
 import com.cydoniancitizen.bingee.data.settings.FirstRunPreferences
+import com.cydoniancitizen.bingee.data.settings.PortableAppearancePreferences
+import com.cydoniancitizen.bingee.data.settings.PortableProfileDisplayModePreferences
+import com.cydoniancitizen.bingee.data.settings.PortableSpoilerPreferences
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.SpoilerPreferences
 import com.cydoniancitizen.bingee.data.tmdb.auth.TmdbCredentialRemoteValidator
@@ -53,12 +53,12 @@ internal abstract class CredentialModule {
 
     @Binds
     abstract fun bindProfileDisplayModePreferences(
-        implementation: DataStoreProfileDisplayModePreferences
+        implementation: PortableProfileDisplayModePreferences
     ): ProfileDisplayModePreferences
 
     @Binds
-    abstract fun bindAppearancePreferences(implementation: DataStoreAppearancePreferences): AppearancePreferences
+    abstract fun bindAppearancePreferences(implementation: PortableAppearancePreferences): AppearancePreferences
 
     @Binds
-    abstract fun bindSpoilerPreferences(implementation: DataStoreSpoilerPreferences): SpoilerPreferences
+    abstract fun bindSpoilerPreferences(implementation: PortableSpoilerPreferences): SpoilerPreferences
 }

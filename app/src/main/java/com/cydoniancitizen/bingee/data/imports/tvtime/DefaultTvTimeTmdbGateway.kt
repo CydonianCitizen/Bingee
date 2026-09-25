@@ -4,6 +4,7 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
 import com.cydoniancitizen.bingee.core.model.MediaSearchQuery
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.tmdb.details.TmdbDetailsRemoteDataSource
 import com.cydoniancitizen.bingee.data.tmdb.search.TmdbSearchClient
@@ -83,7 +84,7 @@ internal class DefaultTvTimeTmdbGateway @Inject constructor(
     override suspend fun loadDetails(
         candidate: TmdbImportCandidate
     ): AppResult<com.cydoniancitizen.bingee.data.tmdb.details.TmdbMediaDetailsPayload> =
-        candidate.externalRef.externalId.toLongOrNull()?.takeIf { it > 0 }
+        candidate.externalRef.tmdbIdOrNull()
             ?.let { detailsSource.load(it, candidate.mediaType) }
             ?: AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.InvalidInput)
 

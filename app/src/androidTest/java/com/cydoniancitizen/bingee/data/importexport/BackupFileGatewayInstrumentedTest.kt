@@ -6,11 +6,13 @@ import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -20,6 +22,7 @@ import org.junit.runner.RunWith
 class BackupFileGatewayInstrumentedTest {
     private lateinit var context: Context
     private lateinit var store: BackupShareFileStore
+    private val testFiles = mutableListOf<File>()
 
     @Before
     fun setUp() {
@@ -29,13 +32,15 @@ class BackupFileGatewayInstrumentedTest {
 
     @After
     fun tearDown() {
-        store.cleanupStale()
+        testFiles.forEach { it.delete() }
     }
+
+    private fun createShareFile(bytes: ByteArray): File = store.create(bytes).also { testFiles.add(it) }
 
     @Test
     fun providerExposesOnlyBackupCachePathAndContentUriReads() {
         val bytes = "synthetic backup".toByteArray()
-        val file = store.create(bytes)
+        val file = createShareFile(bytes)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.backup-files", file)
 
         assertEquals("content", uri.scheme)
@@ -60,7 +65,7 @@ class BackupFileGatewayInstrumentedTest {
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.backup-files",
-            store.create(byteArrayOf(1, 2, 3))
+            createShareFile(byteArrayOf(1, 2, 3))
         )
         val intent = buildBackupShareIntent(uri)
 
@@ -72,19 +77,44 @@ class BackupFileGatewayInstrumentedTest {
     }
 
     @Test
-    fun staleShareFilesAreRemovedBeforeNewShareFile() {
-        val stale = File(context.cacheDir, "backup_exports/old.json").also {
-            it.parentFile?.mkdirs()
+    fun firstShareUriStillReadsOriginalBytesAfterSecondShare() {
+        val firstBytes = "first backup".toByteArray()
+        val firstFile = createShareFile(firstBytes)
+        val firstUri = FileProvider.getUriForFile(context, "${context.packageName}.backup-files", firstFile)
+        val secondBytes = "second backup".toByteArray()
+        val secondFile = createShareFile(secondBytes)
+        val secondUri = FileProvider.getUriForFile(context, "${context.packageName}.backup-files", secondFile)
+
+        assertNotEquals(firstUri, secondUri)
+        val delayedFirstRead = context.contentResolver.openInputStream(firstUri).use { requireNotNull(it).readBytes() }
+        val secondRead = context.contentResolver.openInputStream(secondUri).use { requireNotNull(it).readBytes() }
+        assertArrayEquals(firstBytes, delayedFirstRead)
+        assertArrayEquals(secondBytes, secondRead)
+    }
+
+    @Test
+    fun onlyOldShareFilesAreRemovedBeforeNewShareFile() {
+        val directory = File(context.cacheDir, "backup_exports").apply { mkdirs() }
+        val stale = File.createTempFile("stale-", ".json", directory).also {
+            testFiles.add(it)
             it.writeText("stale")
+            assertTrue(it.setLastModified(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(2)))
         }
-        store.create(byteArrayOf(9))
+        val recent = File.createTempFile("recent-", ".json", directory).also {
+            testFiles.add(it)
+            it.writeText("recent")
+        }
+
+        createShareFile(byteArrayOf(9))
+
         assertFalse(stale.exists())
+        assertTrue(recent.exists())
     }
 
     @Test
     fun gatewayReadsProviderUriAndClosesStream() = runBlocking {
         val bytes = "{\"synthetic\":true}".toByteArray()
-        val file = store.create(bytes)
+        val file = createShareFile(bytes)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.backup-files", file)
         val result = BackupFileGateway(context, store).read(uri)
 

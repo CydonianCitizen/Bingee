@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.data.library
 
-import android.database.sqlite.SQLiteException
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -13,7 +12,9 @@ import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.applyLibraryStateAndSort
 import com.cydoniancitizen.bingee.core.model.distinctByCanonicalIdentity
+import com.cydoniancitizen.bingee.core.model.isSeriesComplete
 import com.cydoniancitizen.bingee.core.model.normalizeLibrarySearch
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
@@ -21,6 +22,8 @@ import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.ProgressWriteOutcome
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
+import com.cydoniancitizen.bingee.data.toPersistenceError
+import com.cydoniancitizen.bingee.di.DefaultDispatcher
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
@@ -30,6 +33,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,6 +44,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.shareIn
@@ -51,7 +56,8 @@ internal class DefaultLibraryRepository @Inject constructor(
     private val watchProgressDao: WatchProgressDao,
     private val ratingDao: RatingDao,
     private val clock: Clock,
-    private val dateSource: CalendarDateSource
+    private val dateSource: CalendarDateSource,
+    @param:DefaultDispatcher private val projectionDispatcher: CoroutineDispatcher
 ) : LibraryRepository {
     private val progressScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -98,7 +104,7 @@ internal class DefaultLibraryRepository @Inject constructor(
             )
         }
         applyLibraryStateAndSort(entries, query)
-    }.asPersistenceResult { it }
+    }.asPersistenceResult { it }.flowOn(projectionDispatcher)
 
     override fun observeEntryCount(): Flow<AppResult<Int>> =
         libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
@@ -153,6 +159,9 @@ internal class DefaultLibraryRepository @Inject constructor(
     override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> {
         val prepared =
             try {
+                if (result.externalRef.tmdbIdOrNull() == null) {
+                    return AppResult.Failure(result.externalRef.invalidRuntimeTmdbError())
+                }
                 val now = clock.instant()
                 PreparedLibraryAdd(
                     ref = result.externalRef.normalized(),
@@ -174,7 +183,7 @@ internal class DefaultLibraryRepository @Inject constructor(
     }
 
     override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> =
-        withNormalizedExternalId(ref) { externalId ->
+        ref.withValidTmdbId { externalId ->
             val now = clock.instant()
             try {
                 val existingItem = libraryDao.addExistingToLibrary(ref.source, mediaType, externalId, now)
@@ -183,14 +192,10 @@ internal class DefaultLibraryRepository @Inject constructor(
                 } else {
                     AppResult.Failure(AppError.MissingData)
                 }
-            } catch (_: IllegalArgumentException) {
-                AppResult.Failure(AppError.CorruptedData)
-            } catch (_: IllegalStateException) {
-                AppResult.Failure(AppError.CorruptedData)
-            } catch (_: SQLiteException) {
-                AppResult.Failure(AppError.LocalStorageFailure)
-            } catch (_: Exception) {
-                AppResult.Failure(AppError.Unknown)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Exception) {
+                AppResult.Failure(throwable.toPersistenceError())
             }
         }
 
@@ -286,7 +291,7 @@ private fun LibraryDao.ContinueWatchingRow.toDomain() = ContinueWatchingItem(
         trackableEpisodes = trackableEpisodes,
         completedSeasons = completedSeasons,
         trackableSeasons = trackableSeasons,
-        isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes && hasSufficientCoverage
+        isComplete = isSeriesComplete(watchedEpisodes, trackableEpisodes, hasSufficientCoverage)
     ),
     nextEpisode = if (nextSeasonNumber != null && nextEpisodeNumber != null) {
         EpisodePosition(nextSeasonNumber, nextEpisodeNumber)
@@ -331,27 +336,26 @@ private fun <T, R> Flow<T>.asPersistenceResult(transform: (T) -> R): Flow<AppRes
     map<T, AppResult<R>> { value -> AppResult.Success(transform(value)) }
         .catch { throwable ->
             if (throwable is CancellationException) throw throwable
-            val error =
-                when (throwable) {
-                    is IllegalArgumentException,
-                    is IllegalStateException -> AppError.CorruptedData
-                    is SQLiteException -> AppError.LocalStorageFailure
-                    else -> AppError.Unknown
-                }
-            emit(AppResult.Failure(error))
+            emit(AppResult.Failure(throwable.toPersistenceError()))
         }
 
 private suspend fun <T> persistenceRead(block: suspend () -> T): AppResult<T> = try {
     AppResult.Success(block())
 } catch (cancelled: CancellationException) {
     throw cancelled
-} catch (_: IllegalArgumentException) {
-    AppResult.Failure(AppError.CorruptedData)
-} catch (_: SQLiteException) {
-    AppResult.Failure(AppError.LocalStorageFailure)
-} catch (_: Exception) {
-    AppResult.Failure(AppError.Unknown)
+} catch (throwable: Exception) {
+    AppResult.Failure(throwable.toPersistenceError())
 }
+
+private suspend fun <T> ExternalMediaRef.withValidTmdbId(block: suspend (String) -> AppResult<T>): AppResult<T> =
+    if (tmdbIdOrNull() == null) {
+        AppResult.Failure(invalidRuntimeTmdbError())
+    } else {
+        block(externalId.trim())
+    }
+
+private fun ExternalMediaRef.invalidRuntimeTmdbError(): AppError =
+    if (source == MediaSource.TMDB) AppError.InvalidInput else AppError.UnsupportedData
 
 private suspend fun <T> withNormalizedExternalId(
     ref: ExternalMediaRef,

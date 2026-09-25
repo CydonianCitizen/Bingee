@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -52,9 +53,8 @@ import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
+import com.cydoniancitizen.bingee.core.ui.formatLocalized
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -320,6 +320,7 @@ private fun NotificationItemCard(
 
 @Composable
 private fun NotificationEventCopy(event: ReleaseEvent, today: LocalDate, modifier: Modifier = Modifier) {
+    val locale = LocalConfiguration.current.locales[0]
     val eventText = when (event.subject.eventType) {
         ReleaseEventType.EPISODE_AIRING -> {
             val epNum = event.episodeNumber ?: 1
@@ -328,7 +329,7 @@ private fun NotificationEventCopy(event: ReleaseEvent, today: LocalDate, modifie
                 event.eventDate > today -> stringResource(
                     R.string.notification_item_episode_starts,
                     epNum,
-                    formatLocalizedDate(event.eventDate)
+                    event.eventDate.formatLocalized(locale)
                 )
                 else -> stringResource(R.string.notification_item_episode_available, epNum)
             }
@@ -341,7 +342,7 @@ private fun NotificationEventCopy(event: ReleaseEvent, today: LocalDate, modifie
                 event.eventDate > today -> stringResource(
                     R.string.notification_item_season_starts,
                     seasonNum,
-                    formatLocalizedDate(event.eventDate)
+                    event.eventDate.formatLocalized(locale)
                 )
                 else -> stringResource(R.string.notification_item_new_season_available)
             }
@@ -377,14 +378,12 @@ private fun buildSeasonEpisodeDetail(event: ReleaseEvent): String {
 }
 
 @Composable
-private fun formatEventDateBadge(eventDate: LocalDate, today: LocalDate): String = when {
-    eventDate == today -> stringResource(R.string.notifications_group_today)
-    eventDate == today.minusDays(1) -> stringResource(R.string.notification_relative_yesterday)
-    eventDate == today.plusDays(1) -> stringResource(R.string.notification_relative_tomorrow)
-    else -> formatLocalizedDate(eventDate)
-}
-
-private fun formatLocalizedDate(date: LocalDate): String {
-    val formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-    return date.format(formatter)
+private fun formatEventDateBadge(eventDate: LocalDate, today: LocalDate): String {
+    val locale = LocalConfiguration.current.locales[0]
+    return when {
+        eventDate == today -> stringResource(R.string.notifications_group_today)
+        eventDate == today.minusDays(1) -> stringResource(R.string.notification_relative_yesterday)
+        eventDate == today.plusDays(1) -> stringResource(R.string.notification_relative_tomorrow)
+        else -> eventDate.formatLocalized(locale)
+    }
 }

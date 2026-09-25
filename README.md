@@ -4,7 +4,7 @@ Bingee is an early-stage, open-source Android app for tracking films and TV seri
 
 ## Project status
 
-The current development release is Bingee `1.2.0`. It contains a local-first Compose app with Home, Search, the Your Bingee personal dashboard, Continue Watching with one-tap episode tracking, two home screen widgets, Notification Center, settings subpages, secure TMDB credential management, Room v7 details and progress, a Room-first release calendar, approximate local notifications, versioned JSON backup/restore (v2 export, v1/v2 import), an additive importer for documented TV Time JSON ZIP profiles, English/Italian localization, and a manual GitHub update checker. TMDB is the only runtime media provider; animated and anime content is handled as ordinary TMDB Movies or TV Series. What changed in each release is in the [GitHub releases](https://github.com/CydonianCitizen/Bingee/releases).
+The current development release is Bingee `1.2.2`. It contains a local-first Compose app with Home, Search, the Your Bingee personal dashboard, Continue Watching with one-tap episode tracking, two home screen widgets, Notification Center, settings subpages, secure TMDB credential management, Room v8 details and progress, a Room-first release calendar, approximate local notifications, versioned JSON backup/restore (v3 export, v1/v2/v3 import), an additive importer for documented TV Time JSON ZIP profiles, English/Italian localization, and a manual GitHub update checker. V3 carries theme, language, spoiler visibility, and six collection display modes; it rejects exports above the 50 MiB restore ceiling and aligns current episode/season limits with TV Time. TMDB is the only runtime media provider; animated and anime content is handled as ordinary TMDB Movies or TV Series. What changed in each release is in the [GitHub releases](https://github.com/CydonianCitizen/Bingee/releases).
 
 
 Remote metadata uses a user-supplied TMDB API Read Access Token. It is optional for opening the local shell. Debug fakes are architectural fixtures and are not wired into production navigation.
@@ -69,7 +69,7 @@ Two home screen widgets read the same Room data and never call TMDB. The 2×2 wi
 
 WorkManager maintains a bounded batch of up to 20 followed titles approximately once per day when network is available, rotating through the least recently attempted titles so that ones TMDB keeps rejecting cannot hold back the rest. A separate network-free worker evaluates cached Room events for optional local notifications. Notifications are disabled by default; Settings requests Android notification permission only after the user enables them and supports same-day, one-day, three-day, or seven-day lead times plus movie, season, and episode categories. Android may delay work because of Doze, battery optimization, constraints, or device policy; Bingee promises no exact notification time.
 
-Your Bingee → Settings → Data & backup emits backup v2, including media history, watch progress, ratings, preferences, and ordered genre metadata. Restore accepts v1/v2 and validates the complete file before one Room transaction.
+Your Bingee → Settings → Data & backup emits backup v3, including media history, watch progress, ratings, portable preferences, and ordered genre metadata. Restore accepts v1/v2/v3 and validates the complete file before one Room transaction. Theme, language, spoiler visibility, and the six collection display modes travel with the backup; Android notification permission and enablement and credentials stay device-specific. Legacy v1/v2 files retain their 500,000-episode reader ceiling; v3 exports and TV Time use the current 100,000-episode ceiling.
 
 Your Bingee → Settings → Data & backup also exposes an experimental `Import TV Time history` action. It supports only the role-based JSON ZIP profile derived from evidence ID `TVTIME-SAMPLE-001`. The archive is inspected locally with bounded ZIP limits, then matched conservatively through the existing TMDB credential. Ambiguous records require review or skip; confirmation applies additive, idempotent changes only. Ratings, favorites, custom lists, rewatch counters/timelines, CSV, other TV Time variants, TV Time authentication, and TV Time network access are unsupported.
 
@@ -104,7 +104,7 @@ Feature UI depends on immutable domain models and repository contracts, never pr
 
 ## Versioning
 
-The project follows Semantic Versioning. The current Android release is `1.2.0` with `versionCode` 4. Historical milestone documents may use older version numbers.
+The project follows Semantic Versioning. The current Android release is `1.2.2` with `versionCode` 6. Historical milestone documents may use older version numbers.
 
 ## Contributing
 

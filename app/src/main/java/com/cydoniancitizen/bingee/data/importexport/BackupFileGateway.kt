@@ -8,6 +8,7 @@ import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -27,20 +28,28 @@ internal class BackupShareFileStore @Inject constructor(@ApplicationContext cont
     private val directory = File(context.cacheDir, SHARE_DIRECTORY)
 
     fun cleanupStale() {
-        directory.listFiles()?.forEach { file -> file.delete() }
+        val cutoff = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1)
+        directory.listFiles()?.forEach { file ->
+            if (file.isFile && file.lastModified() < cutoff) file.delete()
+        }
     }
 
     fun create(bytes: ByteArray): File {
         directory.mkdirs()
         cleanupStale()
-        return File(directory, SHARE_FILENAME).also { file ->
+        val file = File.createTempFile(SHARE_FILENAME_PREFIX, ".json", directory)
+        try {
             file.outputStream().use { output -> output.write(bytes) }
+        } catch (failure: IOException) {
+            file.delete()
+            throw failure
         }
+        return file
     }
 
     private companion object {
         const val SHARE_DIRECTORY = "backup_exports"
-        const val SHARE_FILENAME = "bingee-backup-share.json"
+        const val SHARE_FILENAME_PREFIX = "bingee-backup-share-"
     }
 }
 

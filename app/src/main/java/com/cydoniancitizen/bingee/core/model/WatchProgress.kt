@@ -92,9 +92,16 @@ fun deriveSeriesProgress(seasons: List<CachedSeason>): SeriesProgress {
         trackableEpisodes = total,
         completedSeasons = complete,
         trackableSeasons = trackable.size,
-        isComplete = total > 0 && watched == total && regular.all(CachedSeason::hasSufficientEpisodeCoverage)
+        isComplete = isSeriesComplete(
+            watchedEpisodes = watched,
+            trackableEpisodes = total,
+            hasSufficientCoverage = regular.all(CachedSeason::hasSufficientEpisodeCoverage)
+        )
     )
 }
+
+fun isSeriesComplete(watchedEpisodes: Int, trackableEpisodes: Int, hasSufficientCoverage: Boolean): Boolean =
+    trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes && hasSufficientCoverage
 
 /**
  * Every episode the provider declares for the season is stored. Episode rows come only from provider

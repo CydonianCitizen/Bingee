@@ -38,9 +38,15 @@ internal object BackupValidator {
             BackupFailureKind.UNSUPPORTED_VERSION
         )
         val data = document.data
+        val maxEpisodeRecords = if (document.schemaVersion >= BACKUP_SCHEMA_VERSION) {
+            BackupLimits.MAX_EPISODES
+        } else {
+            BackupLimits.MAX_LEGACY_EPISODES
+        }
         require(data.media.size <= BackupLimits.MAX_MEDIA, BackupFailureKind.TOO_LARGE)
         require(data.seasons.size <= BackupLimits.MAX_SEASONS, BackupFailureKind.TOO_LARGE)
-        require(data.episodes.size <= BackupLimits.MAX_EPISODES, BackupFailureKind.TOO_LARGE)
+        require(data.episodes.size <= maxEpisodeRecords, BackupFailureKind.TOO_LARGE)
+        require(data.episodeProgress.size <= maxEpisodeRecords, BackupFailureKind.TOO_LARGE)
 
         val mediaByRef = linkedMapOf<String, BackupMedia>()
         val mediaPrimaryKeys = hashSetOf<String>()

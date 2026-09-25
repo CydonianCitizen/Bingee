@@ -233,7 +233,8 @@ class SeriesAndProgressDaoTest {
             progressDao,
             database.ratingDao(),
             Clock.fixed(now, ZoneOffset.UTC),
-            dateSource
+            dateSource,
+            kotlinx.coroutines.Dispatchers.Default
         )
 
         // Missing season 2 episodes mean completion cannot be claimed, so the canonical state stays

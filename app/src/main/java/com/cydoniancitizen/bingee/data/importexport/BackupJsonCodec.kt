@@ -2,6 +2,10 @@ package com.cydoniancitizen.bingee.data.importexport
 
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
+import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -10,6 +14,7 @@ import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.StringReader
 import java.math.BigDecimal
@@ -23,13 +28,85 @@ import kotlinx.coroutines.CancellationException
 
 internal object BackupJsonCodec {
     fun encode(document: BackupDocument): ByteArray {
-        val output = ByteArrayOutputStream()
-        JsonWriter(OutputStreamWriter(output, StandardCharsets.UTF_8)).use { writer ->
+        ensureRestorableLimits(document.data)
+        val output = ByteArrayOutputStream(32 * 1024)
+        JsonWriter(OutputStreamWriter(SizeLimitedOutputStream(output), StandardCharsets.UTF_8)).use { writer ->
             writer.setIndent("  ")
             writer.serializeNulls = true
             writeDocument(writer, document)
         }
         return output.toByteArray()
+    }
+
+    private fun ensureRestorableLimits(data: BackupData) {
+        val tooMany = data.media.size > BackupLimits.MAX_MEDIA ||
+            data.seasons.size > BackupLimits.MAX_SEASONS ||
+            data.episodes.size > BackupLimits.MAX_EPISODES ||
+            data.library.size > BackupLimits.MAX_MEDIA ||
+            data.movieProgress.size > BackupLimits.MAX_MEDIA ||
+            data.seriesProgress.size > BackupLimits.MAX_MEDIA ||
+            data.abandonedSeries.size > BackupLimits.MAX_MEDIA ||
+            data.episodeProgress.size > BackupLimits.MAX_EPISODES ||
+            data.ratings.size > BackupLimits.MAX_MEDIA ||
+            data.media.any { media ->
+                media.externalRefs.size > BackupLimits.MAX_MEDIA ||
+                    media.genres.size > BackupLimits.MAX_GENRES_PER_MEDIA
+            }
+        val textTooLarge = data.media.any { media ->
+            !media.primaryRef.isRestorable() || media.externalRefs.any { !it.isRestorable() } ||
+                exceedsStringLimit(media.title) || exceedsStringLimit(media.originalTitle) ||
+                exceedsStringLimit(media.overview) || exceedsUrlLimit(media.posterUrl) ||
+                media.genres.any { exceedsStringLimit(it.name) }
+        } || data.seasons.any { season ->
+            !season.mediaRef.isRestorable() || !season.externalRef.isRestorable() ||
+                exceedsStringLimit(season.name) || exceedsStringLimit(season.overview) ||
+                exceedsUrlLimit(season.posterUrl)
+        } || data.episodes.any { episode ->
+            !episode.seasonRef.isRestorable() || !episode.externalRef.isRestorable() ||
+                exceedsStringLimit(episode.title) || exceedsStringLimit(episode.overview) ||
+                exceedsUrlLimit(episode.stillUrl)
+        } || data.library.any { !it.mediaRef.isRestorable() } ||
+            data.movieProgress.any { !it.mediaRef.isRestorable() } ||
+            data.seriesProgress.any { !it.mediaRef.isRestorable() } ||
+            data.abandonedSeries.any { !it.mediaRef.isRestorable() } ||
+            data.episodeProgress.any { !it.episodeRef.isRestorable() } ||
+            data.ratings.any { !it.mediaRef.isRestorable() }
+        if (tooMany || textTooLarge) throw BackupExportFailure()
+    }
+
+    private fun BackupRef.isRestorable(): Boolean = source == MediaSource.TMDB &&
+        externalId.length in 1..BackupLimits.MAX_STRING &&
+        externalId.all { it in '0'..'9' } &&
+        externalId.toLongOrNull()?.let { it > 0 } == true
+
+    private fun exceedsStringLimit(value: String?): Boolean = value != null && value.length > BackupLimits.MAX_STRING
+
+    private fun exceedsUrlLimit(value: String?): Boolean = value != null && value.length > BackupLimits.MAX_URL
+
+    private class SizeLimitedOutputStream(private val target: OutputStream) : OutputStream() {
+        private var writtenBytes = 0
+
+        override fun write(value: Int) {
+            ensureRoom(1)
+            target.write(value)
+            writtenBytes++
+        }
+
+        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+            ensureRoom(length)
+            target.write(buffer, offset, length)
+            writtenBytes += length
+        }
+
+        override fun flush() = target.flush()
+
+        override fun close() = target.close()
+
+        private fun ensureRoom(additionalBytes: Int) {
+            if (additionalBytes < 0 || writtenBytes.toLong() + additionalBytes > MAX_BACKUP_BYTES) {
+                throw BackupExportFailure()
+            }
+        }
     }
 
     fun parse(input: InputStream, maxBytes: Int = MAX_BACKUP_BYTES): BackupParseResult = try {
@@ -88,11 +165,11 @@ internal object BackupJsonCodec {
         writer.name("schemaVersion").value(document.schemaVersion)
         writer.name("exportedAt").value(document.exportedAt.toString())
         writer.name("data")
-        writeData(writer, document.data)
+        writeData(writer, document.data, document.schemaVersion)
         writer.endObject()
     }
 
-    private fun writeData(writer: JsonWriter, data: BackupData) {
+    private fun writeData(writer: JsonWriter, data: BackupData, schemaVersion: Int) {
         writer.beginObject()
         writer.name("media").beginArray()
         data.media.forEach { writeMedia(writer, it) }
@@ -123,7 +200,7 @@ internal object BackupJsonCodec {
         writer.endArray()
 
         writer.name("preferences")
-        writePreferences(writer, data.preferences)
+        writePreferences(writer, data.preferences, schemaVersion)
         writer.endObject()
     }
 
@@ -246,12 +323,25 @@ internal object BackupJsonCodec {
         writer.name("updatedAt").value(rating.updatedAt.toString()).endObject()
     }
 
-    private fun writePreferences(writer: JsonWriter, preferences: BackupPreferences) {
+    private fun writePreferences(writer: JsonWriter, preferences: BackupPreferences, schemaVersion: Int) {
         writer.beginObject()
         writer.name("notificationLeadDays").value(preferences.notificationLeadDays)
         writer.name("notifyMovieReleases").value(preferences.notifyMovieReleases)
         writer.name("notifySeasonPremieres").value(preferences.notifySeasonPremieres)
         writer.name("notifyEpisodeAirings").value(preferences.notifyEpisodeAirings)
+        if (schemaVersion >= 3) {
+            writer.name("theme").value(preferences.theme.name)
+            writer.name("language").value(preferences.language.name)
+            writer.name("hideEpisodeSpoilers").value(preferences.hideEpisodeSpoilers)
+            writer.name("profileDisplayModes").beginObject()
+            writer.name("watchedMovies").value(preferences.profileDisplayModes.watchedMovies.name)
+            writer.name("watchedTvSeries").value(preferences.profileDisplayModes.watchedTvSeries.name)
+            writer.name("watchLaterMovies").value(preferences.profileDisplayModes.watchLaterMovies.name)
+            writer.name("watchLaterTvSeries").value(preferences.profileDisplayModes.watchLaterTvSeries.name)
+            writer.name("favoritesMovies").value(preferences.profileDisplayModes.favoritesMovies.name)
+            writer.name("favoritesTvSeries").value(preferences.profileDisplayModes.favoritesTvSeries.name)
+            writer.endObject()
+        }
         writer.endObject()
     }
 
@@ -273,14 +363,19 @@ internal object BackupJsonCodec {
     }
 
     private fun readData(dataObj: JsonObject, schemaVersion: Int): BackupData {
+        val maxEpisodeRecords = if (schemaVersion >= 3) {
+            BackupLimits.MAX_EPISODES
+        } else {
+            BackupLimits.MAX_LEGACY_EPISODES
+        }
         val media = readArray(dataObj, "media", BackupLimits.MAX_MEDIA) { readMedia(it, schemaVersion) }
         val seasons = readArray(dataObj, "seasons", BackupLimits.MAX_SEASONS, ::readSeason)
-        val episodes = readArray(dataObj, "episodes", BackupLimits.MAX_EPISODES, ::readEpisode)
+        val episodes = readArray(dataObj, "episodes", maxEpisodeRecords, ::readEpisode)
         val library = readArray(dataObj, "library", BackupLimits.MAX_MEDIA, ::readLibrary)
         val movieProgress = readArray(dataObj, "movieProgress", BackupLimits.MAX_MEDIA, ::readMovieProgress)
-        val episodeProgress = readArray(dataObj, "episodeProgress", BackupLimits.MAX_EPISODES, ::readEpisodeProgress)
+        val episodeProgress = readArray(dataObj, "episodeProgress", maxEpisodeRecords, ::readEpisodeProgress)
         val ratings = readArray(dataObj, "ratings", BackupLimits.MAX_MEDIA, ::readRating)
-        val preferences = readPreferences(required(dataObj, "preferences").asObjectOrProblem())
+        val preferences = readPreferences(required(dataObj, "preferences").asObjectOrProblem(), schemaVersion)
 
         val seriesProgress = readOptionalArray(dataObj, "seriesProgress", BackupLimits.MAX_MEDIA, ::readSeriesProgress)
         val abandonedSeries = readOptionalArray(
@@ -429,12 +524,50 @@ internal object BackupJsonCodec {
         )
     }
 
-    private fun readPreferences(value: JsonObject) = BackupPreferences(
-        requiredInt(value, "notificationLeadDays"),
-        requiredBoolean(value, "notifyMovieReleases"),
-        requiredBoolean(value, "notifySeasonPremieres"),
-        requiredBoolean(value, "notifyEpisodeAirings")
+    private fun readPreferences(value: JsonObject, schemaVersion: Int): BackupPreferences {
+        val base = BackupPreferences(
+            notificationLeadDays = requiredInt(value, "notificationLeadDays"),
+            notifyMovieReleases = requiredBoolean(value, "notifyMovieReleases"),
+            notifySeasonPremieres = requiredBoolean(value, "notifySeasonPremieres"),
+            notifyEpisodeAirings = requiredBoolean(value, "notifyEpisodeAirings")
+        )
+        if (schemaVersion < 3) return base
+        return base.copy(
+            theme = readAppTheme(requiredString(value, "theme")),
+            language = readAppLanguage(requiredString(value, "language")),
+            hideEpisodeSpoilers = requiredBoolean(value, "hideEpisodeSpoilers"),
+            profileDisplayModes = readProfileDisplayModes(
+                required(value, "profileDisplayModes").asObjectOrProblem()
+            )
+        )
+    }
+
+    private fun readProfileDisplayModes(value: JsonObject) = ProfileDisplayModes(
+        watchedMovies = readProfileViewMode(requiredString(value, "watchedMovies")),
+        watchedTvSeries = readProfileViewMode(requiredString(value, "watchedTvSeries")),
+        watchLaterMovies = readProfileViewMode(requiredString(value, "watchLaterMovies")),
+        watchLaterTvSeries = readProfileViewMode(requiredString(value, "watchLaterTvSeries")),
+        favoritesMovies = readProfileViewMode(requiredString(value, "favoritesMovies")),
+        favoritesTvSeries = readProfileViewMode(requiredString(value, "favoritesTvSeries"))
     )
+
+    private fun readAppTheme(value: String): AppTheme = try {
+        AppTheme.valueOf(value)
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
+    private fun readAppLanguage(value: String): AppLanguage = try {
+        AppLanguage.valueOf(value)
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
+
+    private fun readProfileViewMode(value: String): ProfileViewMode = try {
+        ProfileViewMode.valueOf(value)
+    } catch (_: Exception) {
+        problem(BackupFailureKind.INVALID_STRUCTURE)
+    }
 
     private fun readMediaType(value: String): MediaType = try {
         MediaType.valueOf(value)

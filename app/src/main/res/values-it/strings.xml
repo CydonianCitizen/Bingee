@@ -480,6 +480,7 @@
     <string name="backup_replace_local_data">Sostituisci dati locali</string>
     <string name="backup_error_unreadable">Impossibile leggere il file di backup.</string>
     <string name="backup_error_too_large">Il file di backup è troppo grande.</string>
+    <string name="backup_error_export_too_large">Il backup supera i limiti supportati dal ripristino e non può essere creato.</string>
     <string name="backup_error_malformed">Il JSON del backup è malformato o contiene dati non validi.</string>
     <string name="backup_error_wrong_format">Questo non è un backup Bingee.</string>
     <string name="backup_error_unsupported_version">Questo backup usa una versione più recente non supportata.</string>

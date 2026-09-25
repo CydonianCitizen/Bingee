@@ -11,6 +11,7 @@ import com.cydoniancitizen.bingee.core.model.PersonalRating
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.model.WatchedEpisodeActivity
+import com.cydoniancitizen.bingee.core.model.isSeriesComplete
 import com.cydoniancitizen.bingee.core.model.resolveTmdbRef
 import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.LibraryDao
@@ -44,10 +45,7 @@ internal fun LibraryItemWithRefs.toDomain(
     val domainWatchedDate = progressRow?.let {
         if (media.mediaType == MediaType.MOVIE) {
             it.movieWatchedDate
-        } else if (it.trackableEpisodes > 0 &&
-            it.watchedEpisodes == it.trackableEpisodes &&
-            it.hasSufficientCoverage
-        ) {
+        } else if (isSeriesComplete(it.watchedEpisodes, it.trackableEpisodes, it.hasSufficientCoverage)) {
             it.seriesWatchedDate
         } else {
             null
@@ -84,7 +82,7 @@ internal fun LibraryDao.LibraryProgressRow?.toDomainProgress(mediaType: MediaTyp
             trackableEpisodes = trackableEpisodes,
             completedSeasons = completedSeasons,
             trackableSeasons = trackableSeasons,
-            isComplete = trackableEpisodes > 0 && watchedEpisodes == trackableEpisodes && hasSufficientCoverage,
+            isComplete = isSeriesComplete(watchedEpisodes, trackableEpisodes, hasSufficientCoverage),
             watchedDate = seriesWatchedDate,
             lastWatchedAt = lastProgressAt,
             nextEpisode = if (nextSeasonNumber != null && nextEpisodeNumber != null) {

@@ -22,7 +22,7 @@ import com.cydoniancitizen.bingee.core.designsystem.component.ErrorState
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaType
-import com.cydoniancitizen.bingee.core.model.toNavigableDetailsRef
+import com.cydoniancitizen.bingee.core.model.tmdbIdOrNull
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.feature.details.MediaDetailsScreen
 import com.cydoniancitizen.bingee.feature.home.HomeScreen
@@ -200,7 +200,7 @@ fun BingeeNavHost(
 }
 
 private fun NavHostController.openDetails(reference: ExternalMediaRef, mediaType: MediaType) {
-    val tmdbId = reference.toNavigableDetailsRef()?.externalId?.toLongOrNull() ?: return
+    val tmdbId = reference.tmdbIdOrNull() ?: return
     navigate(DetailRoute.create(mediaType, tmdbId))
 }
 

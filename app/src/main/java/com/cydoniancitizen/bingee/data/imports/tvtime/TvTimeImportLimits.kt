@@ -1,5 +1,7 @@
 package com.cydoniancitizen.bingee.data.imports.tvtime
 
+import com.cydoniancitizen.bingee.data.imports.PortableRecordLimits
+
 internal const val TV_TIME_PROFILE_ID = "TVTIME-SAMPLE-001"
 
 internal object TvTimeImportLimits {
@@ -12,8 +14,9 @@ internal object TvTimeImportLimits {
     const val MAX_JSON_RECORD_BYTES = 32L * 1024 * 1024
     const val MAX_MOVIE_RECORDS = 50_000
     const val MAX_SERIES_RECORDS = 50_000
-    const val MAX_SEASON_RECORDS = 200_000
-    const val MAX_EPISODE_RECORDS = 500_000
+    const val MAX_MEDIA_RECORDS = PortableRecordLimits.MAX_MEDIA
+    const val MAX_SEASON_RECORDS = PortableRecordLimits.MAX_SEASONS
+    const val MAX_EPISODE_RECORDS = PortableRecordLimits.MAX_EPISODES
     const val MAX_LIST_ITEMS = 100_000
     const val MAX_STRING_LENGTH = 8_192
     const val MAX_UNKNOWN_FIELD_WARNINGS = 2_000

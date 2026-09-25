@@ -2,6 +2,10 @@ package com.cydoniancitizen.bingee.data.importexport
 
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
+import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -22,7 +26,7 @@ class BackupJsonCodecTest {
         val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
         assertEquals(document, parsed.document)
         assertTrue(validate(parsed.document) is BackupValidationResult.Success)
-        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v3.schema.json").toString(Charsets.UTF_8))
         val payload = JsonParser.parseString(BackupJsonCodec.encode(document).toString(Charsets.UTF_8)).asJsonObject
         assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
         val season = payload.getAsJsonObject("data").getAsJsonArray("seasons")[0].asJsonObject
@@ -88,7 +92,7 @@ class BackupJsonCodecTest {
         val parsed = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
         assertEquals(document, parsed.document)
         assertTrue(validate(parsed.document) is BackupValidationResult.Success)
-        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v3.schema.json").toString(Charsets.UTF_8))
         val payload = JsonParser.parseString(BackupJsonCodec.encode(document).toString(Charsets.UTF_8))
         assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
     }
@@ -117,6 +121,7 @@ class BackupJsonCodecTest {
             .asJsonObject
         val media = payload.getAsJsonObject("data").getAsJsonArray("media")[0].asJsonObject
         media.remove("genres")
+        payload.addProperty("schemaVersion", BACKUP_SCHEMA_VERSION_V2)
         assertTrue(BackupJsonCodec.parse(payload.toString().toByteArray()) is BackupParseResult.Failure)
         payload.addProperty("schemaVersion", 1)
         val legacy = BackupJsonCodec.parse(payload.toString().toByteArray()) as BackupParseResult.Success
@@ -142,7 +147,7 @@ class BackupJsonCodecTest {
         val json = BackupJsonCodec.encode(fullDocument()).toString(Charsets.UTF_8)
 
         assertTrue(json.contains("\"formatId\": \"bingee-backup\""))
-        assertTrue(json.contains("\"schemaVersion\": 2"))
+        assertTrue(json.contains("\"schemaVersion\": 3"))
         assertTrue(json.contains("\"exportedAt\": \"2026-08-04T10:00:00Z\""))
         assertTrue(json.contains("\"mediaType\": \"MOVIE\""))
         assertTrue(json.contains("\"releaseDate\": \"2026-01-02\""))
@@ -160,10 +165,10 @@ class BackupJsonCodecTest {
     }
 
     @Test
-    fun productionPayloadMatchesCanonicalV2SchemaAndParser() {
+    fun productionPayloadMatchesCanonicalV3SchemaAndParser() {
         val encoded = BackupJsonCodec.encode(fullDocument())
         val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
-        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v3.schema.json").toString(Charsets.UTF_8))
         val errors = validateSchema(schema, payload, schema.asJsonObject, "$")
 
         assertTrue(errors.joinToString("\n"), errors.isEmpty())
@@ -186,6 +191,253 @@ class BackupJsonCodecTest {
 
         assertTrue(result is BackupParseResult.Success)
         assertEquals(original, (result as BackupParseResult.Success).document)
+    }
+
+    @Test
+    fun v3RoundTripsPortablePreferencesWhileV1AndV2UseTheirDefaults() {
+        val preferences = BackupPreferences(
+            notificationLeadDays = 7,
+            notifyMovieReleases = false,
+            notifySeasonPremieres = true,
+            notifyEpisodeAirings = false,
+            theme = AppTheme.DARK,
+            language = AppLanguage.ITALIAN,
+            hideEpisodeSpoilers = true,
+            profileDisplayModes = ProfileDisplayModes(
+                watchedMovies = ProfileViewMode.GRID,
+                watchedTvSeries = ProfileViewMode.LIST,
+                watchLaterMovies = ProfileViewMode.GRID,
+                watchLaterTvSeries = ProfileViewMode.GRID,
+                favoritesMovies = ProfileViewMode.LIST,
+                favoritesTvSeries = ProfileViewMode.GRID
+            )
+        )
+        val document = fullDocument().copy(data = fullDocument().data.copy(preferences = preferences))
+        val current = BackupJsonCodec.parse(BackupJsonCodec.encode(document)) as BackupParseResult.Success
+        assertEquals(preferences, current.document.data.preferences)
+        assertTrue(validate(current.document) is BackupValidationResult.Success)
+
+        listOf(BACKUP_SCHEMA_VERSION_V1, BACKUP_SCHEMA_VERSION_V2).forEach { version ->
+            val legacy = document.copy(schemaVersion = version)
+            val bytes = BackupJsonCodec.encode(legacy)
+            val parsed = BackupJsonCodec.parse(bytes) as BackupParseResult.Success
+            assertEquals(version, parsed.document.schemaVersion)
+            assertEquals(
+                BackupPreferences(7, false, true, false),
+                parsed.document.data.preferences
+            )
+            assertTrue(validate(parsed.document) is BackupValidationResult.Success)
+        }
+
+        val missingV3Field = JsonParser.parseString(BackupJsonCodec.encode(document).toString(Charsets.UTF_8))
+            .asJsonObject
+        missingV3Field.getAsJsonObject("data").getAsJsonObject("preferences").remove("theme")
+        assertTrue(BackupJsonCodec.parse(missingV3Field.toString().toByteArray()) is BackupParseResult.Failure)
+    }
+
+    @Test
+    fun roundTripsAtSeasonAndEpisodeCountLimits() {
+        val base = fullDocument()
+        val seriesRef = BackupRef(MediaSource.TMDB, "11")
+        val series = BackupMedia(
+            seriesRef,
+            listOf(seriesRef),
+            MediaType.SERIES,
+            "Series",
+            null,
+            null,
+            null,
+            null
+        )
+        val seasons = List(BackupLimits.MAX_SEASONS) { index ->
+            BackupSeason(
+                seriesRef,
+                BackupRef(MediaSource.TMDB, (index + 100).toString()),
+                index,
+                null,
+                null,
+                null,
+                null,
+                0
+            )
+        }
+        val seasonDocument = base.copy(
+            data = base.data.copy(
+                media = listOf(series),
+                seasons = seasons,
+                episodes = emptyList(),
+                library = listOf(BackupLibraryEntry(seriesRef, Instant.EPOCH, MediaType.SERIES)),
+                movieProgress = emptyList(),
+                seriesProgress = emptyList(),
+                episodeProgress = emptyList(),
+                ratings = emptyList()
+            )
+        )
+        val seasonsResult = BackupJsonCodec.parse(BackupJsonCodec.encode(seasonDocument))
+        assertTrue(seasonsResult is BackupParseResult.Success)
+        assertEquals(seasonDocument, (seasonsResult as BackupParseResult.Success).document)
+
+        val seasonRef = BackupRef(MediaSource.TMDB, "20")
+        val episodes = List(BackupLimits.MAX_EPISODES) { index ->
+            BackupEpisode(
+                seasonRef,
+                BackupRef(MediaSource.TMDB, (index + 1_000).toString()),
+                index + 1,
+                "Episode",
+                null,
+                null,
+                null,
+                null
+            )
+        }
+        val episodeDocument = seasonDocument.copy(
+            data = seasonDocument.data.copy(
+                seasons = listOf(
+                    BackupSeason(seriesRef, seasonRef, 1, null, null, null, null, episodes.size)
+                ),
+                episodes = episodes
+            )
+        )
+        val episodesResult = BackupJsonCodec.parse(BackupJsonCodec.encode(episodeDocument))
+        assertTrue(episodesResult is BackupParseResult.Success)
+        assertEquals(episodeDocument, (episodesResult as BackupParseResult.Success).document)
+
+        val overLimit = episodeDocument.copy(
+            data = episodeDocument.data.copy(episodes = List(BackupLimits.MAX_EPISODES + 1) { episodes.first() })
+        )
+        try {
+            BackupJsonCodec.encode(overLimit)
+            throw AssertionError("Expected episode-count export rejection")
+        } catch (failure: BackupExportFailure) {
+            assertEquals(BackupFailureKind.EXPORT_TOO_LARGE, failure.kind)
+        }
+    }
+
+    @Test
+    fun legacyV1AndV2StillAcceptEpisodeCountsAboveTheV3Ceiling() {
+        val count = BackupLimits.MAX_EPISODES + 1
+        for (version in BACKUP_SCHEMA_VERSION_V1..BACKUP_SCHEMA_VERSION_V2) {
+            val legacyBytes = buildString(count * 160 + 1_024) {
+                append("{\"formatId\":\"$BACKUP_FORMAT_ID\",\"schemaVersion\":$version,")
+                append("\"exportedAt\":\"2020-01-01T00:00:00Z\",\"data\":{\"media\":[")
+                append("{\"primaryRef\":{\"source\":\"TMDB\",\"externalId\":\"10\"},")
+                append("\"externalRefs\":[{\"source\":\"TMDB\",\"externalId\":\"10\"}],")
+                append("\"mediaType\":\"SERIES\",\"title\":\"Series\",\"genres\":[]}],")
+                append("\"seasons\":[{\"mediaRef\":{\"source\":\"TMDB\",\"externalId\":\"10\"},")
+                append("\"externalRef\":{\"source\":\"TMDB\",\"externalId\":\"20\"},")
+                append("\"seasonNumber\":1,\"episodeCount\":$count}],\"episodes\":[")
+                repeat(count) { index ->
+                    if (index > 0) append(',')
+                    append("{\"seasonRef\":{\"source\":\"TMDB\",\"externalId\":\"20\"},")
+                    append("\"externalRef\":{\"source\":\"TMDB\",\"externalId\":\"${index + 1_000}\"},")
+                    append("\"episodeNumber\":${index + 1},\"title\":\"Episode\"}")
+                }
+                append("],\"library\":[],\"movieProgress\":[],")
+                append("\"episodeProgress\":[],\"ratings\":[],\"preferences\":{")
+                append("\"notificationLeadDays\":1,\"notifyMovieReleases\":true,")
+                append("\"notifySeasonPremieres\":true,\"notifyEpisodeAirings\":true}}}")
+            }.toByteArray()
+
+            val result = BackupJsonCodec.parse(legacyBytes)
+            assertTrue("Backup v$version should retain its legacy episode cap", result is BackupParseResult.Success)
+            val document = (result as BackupParseResult.Success).document
+            assertEquals(count, document.data.episodes.size)
+            assertTrue(
+                "Backup v$version must remain restorable above the v3 count ceiling",
+                BackupValidator.validate(document, validationDate) is BackupValidationResult.Success
+            )
+        }
+    }
+
+    @Test
+    fun v3ParserRejectsEpisodeCountsAboveItsConfiguredCeiling() {
+        val count = BackupLimits.MAX_EPISODES + 1
+        val bytes = buildString(count * 5 + 256) {
+            append("{\"formatId\":\"$BACKUP_FORMAT_ID\",\"schemaVersion\":$BACKUP_SCHEMA_VERSION,")
+            append("\"exportedAt\":\"2020-01-01T00:00:00Z\",\"data\":{\"media\":[],")
+            append("\"seasons\":[],\"episodes\":[")
+            repeat(count) { index ->
+                if (index > 0) append(',')
+                append("null")
+            }
+            append("""]}}""")
+        }.toByteArray()
+
+        val result = BackupJsonCodec.parse(bytes)
+        assertTrue(result is BackupParseResult.Failure)
+        assertEquals(BackupFailureKind.TOO_LARGE, (result as BackupParseResult.Failure).failure.kind)
+    }
+
+    @Test
+    fun exportRejectsMetadataOutsideRestoreStringLimits() {
+        val document = fullDocument()
+        val tooLongTitle = document.copy(
+            data = document.data.copy(
+                media = document.data.media.map { it.copy(title = "x".repeat(BackupLimits.MAX_STRING + 1)) }
+            )
+        )
+        val tooLongUrl = document.copy(
+            data = document.data.copy(
+                media = document.data.media.map { media ->
+                    media.copy(posterUrl = "https://example.com/" + "x".repeat(BackupLimits.MAX_URL))
+                }
+            )
+        )
+
+        listOf(tooLongTitle, tooLongUrl).forEach { invalid ->
+            try {
+                BackupJsonCodec.encode(invalid)
+                throw AssertionError("Expected export rejection for metadata outside restore limits")
+            } catch (failure: BackupExportFailure) {
+                assertEquals(BackupFailureKind.EXPORT_TOO_LARGE, failure.kind)
+            }
+        }
+    }
+
+    @Test
+    fun byteLimitRoundTripsNearTheCapAndRejectsOversizedExports() {
+        val base = fullDocument()
+        val seriesRef = BackupRef(MediaSource.TMDB, "11")
+        val seasonRef = BackupRef(MediaSource.TMDB, "20")
+        val series = BackupMedia(seriesRef, listOf(seriesRef), MediaType.SERIES, "Series", null, null, null, null)
+        val longOverview = "x".repeat(BackupLimits.MAX_STRING)
+        fun documentWithEpisodeCount(count: Int) = base.copy(
+            data = base.data.copy(
+                media = listOf(series),
+                seasons = listOf(BackupSeason(seriesRef, seasonRef, 1, null, null, null, null, count)),
+                episodes = List(count) { index ->
+                    BackupEpisode(
+                        seasonRef,
+                        BackupRef(MediaSource.TMDB, (index + 1_000).toString()),
+                        index + 1,
+                        "Episode",
+                        longOverview,
+                        null,
+                        null,
+                        null
+                    )
+                },
+                library = listOf(BackupLibraryEntry(seriesRef, Instant.EPOCH, MediaType.SERIES)),
+                movieProgress = emptyList(),
+                seriesProgress = emptyList(),
+                episodeProgress = emptyList(),
+                ratings = emptyList()
+            )
+        )
+
+        val nearLimit = BackupJsonCodec.encode(documentWithEpisodeCount(6_000))
+        assertTrue(nearLimit.size > MAX_BACKUP_BYTES - 3 * 1024 * 1024)
+        assertTrue(nearLimit.size <= MAX_BACKUP_BYTES)
+        val parsed = BackupJsonCodec.parse(nearLimit)
+        assertTrue(parsed is BackupParseResult.Success)
+        assertEquals(6_000, (parsed as BackupParseResult.Success).document.data.episodes.size)
+
+        try {
+            BackupJsonCodec.encode(documentWithEpisodeCount(6_400))
+            throw AssertionError("Expected oversized export rejection")
+        } catch (failure: BackupExportFailure) {
+            assertEquals(BackupFailureKind.EXPORT_TOO_LARGE, failure.kind)
+        }
     }
 
     @Test
@@ -271,7 +523,7 @@ class BackupJsonCodecTest {
         val encoded = BackupJsonCodec.encode(document)
         val parsed = BackupJsonCodec.parse(encoded) as BackupParseResult.Success
         assertEquals(document, parsed.document)
-        val schema = JsonParser.parseString(resource("backup/bingee-backup-v2.schema.json").toString(Charsets.UTF_8))
+        val schema = JsonParser.parseString(resource("backup/bingee-backup-v3.schema.json").toString(Charsets.UTF_8))
         val payload = JsonParser.parseString(encoded.toString(Charsets.UTF_8))
         assertTrue(validateSchema(schema, payload, schema.asJsonObject, "$").isEmpty())
     }
@@ -318,14 +570,14 @@ class BackupJsonCodecTest {
                 ) as BackupParseResult.Failure
                 ).failure.kind
         )
-        val missingVersionResult = BackupJsonCodec.parse(valid.replace("\"schemaVersion\": 2,\n", "").toByteArray())
+        val missingVersionResult = BackupJsonCodec.parse(valid.replace("\"schemaVersion\": 3,\n", "").toByteArray())
         assertTrue(missingVersionResult is BackupParseResult.Failure)
 
         assertEquals(
             BackupFailureKind.UNSUPPORTED_VERSION,
             (
                 BackupJsonCodec.parse(
-                    valid.replace("\"schemaVersion\": 2", "\"schemaVersion\": 5").toByteArray()
+                    valid.replace("\"schemaVersion\": 3", "\"schemaVersion\": 5").toByteArray()
                 ) as BackupParseResult.Failure
                 ).failure.kind
         )

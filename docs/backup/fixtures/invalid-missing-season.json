@@ -1,0 +1,12 @@
+{
+  "formatId": "bingee-backup",
+  "schemaVersion": 1,
+  "exportedAt": "2026-08-04T10:00:00Z",
+  "data": {
+    "media": [{ "primaryRef": { "source": "TMDB", "externalId": "series-1" }, "externalRefs": [{ "source": "TMDB", "externalId": "series-1" }], "mediaType": "SERIES", "title": "Series" }],
+    "seasons": [],
+    "episodes": [{ "seasonRef": { "source": "TMDB", "externalId": "missing-season" }, "externalRef": { "source": "TMDB", "externalId": "episode-1" }, "episodeNumber": 1, "title": "Episode" }],
+    "library": [], "movieProgress": [], "episodeProgress": [], "ratings": [],
+    "preferences": { "notificationLeadDays": 1, "notifyMovieReleases": true, "notifySeasonPremieres": true, "notifyEpisodeAirings": true }
+  }
+}

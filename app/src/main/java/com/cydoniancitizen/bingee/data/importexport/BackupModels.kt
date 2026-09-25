@@ -2,19 +2,26 @@ package com.cydoniancitizen.bingee.data.importexport
 
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
+import com.cydoniancitizen.bingee.data.imports.PortableRecordLimits
+import com.cydoniancitizen.bingee.data.settings.AppLanguage
+import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 
 internal const val BACKUP_FORMAT_ID = "bingee-backup"
 internal const val BACKUP_SCHEMA_VERSION_V1 = 1
-internal const val BACKUP_SCHEMA_VERSION = 2
+internal const val BACKUP_SCHEMA_VERSION_V2 = 2
+internal const val BACKUP_SCHEMA_VERSION = 3
 internal const val BACKUP_MIME_TYPE = "application/json"
 internal const val MAX_BACKUP_BYTES = 50 * 1024 * 1024
 
 internal object BackupLimits {
-    const val MAX_MEDIA = 50_000
-    const val MAX_SEASONS = 100_000
-    const val MAX_EPISODES = 500_000
+    const val MAX_MEDIA = PortableRecordLimits.MAX_MEDIA
+    const val MAX_SEASONS = PortableRecordLimits.MAX_SEASONS
+    const val MAX_EPISODES = PortableRecordLimits.MAX_EPISODES
+    const val MAX_LEGACY_EPISODES = 500_000
     const val MAX_STRING = 8_192
     const val MAX_URL = 2_048
     const val MAX_GENRES_PER_MEDIA = 100
@@ -100,7 +107,11 @@ internal data class BackupPreferences(
     val notificationLeadDays: Int,
     val notifyMovieReleases: Boolean,
     val notifySeasonPremieres: Boolean,
-    val notifyEpisodeAirings: Boolean
+    val notifyEpisodeAirings: Boolean,
+    val theme: AppTheme = AppTheme.SYSTEM_DEFAULT,
+    val language: AppLanguage = AppLanguage.ENGLISH,
+    val hideEpisodeSpoilers: Boolean = false,
+    val profileDisplayModes: ProfileDisplayModes = ProfileDisplayModes()
 )
 
 internal data class BackupData(
@@ -136,9 +147,12 @@ internal enum class BackupFailureKind {
     MISSING_REFERENCE,
     CONFLICTING_REFERENCE,
     WRITE_FAILED,
+    EXPORT_TOO_LARGE,
     TRANSACTION_FAILED,
     SCHEDULING_WARNING
 }
+
+internal class BackupExportFailure(val kind: BackupFailureKind = BackupFailureKind.EXPORT_TOO_LARGE) : IOException()
 
 internal data class BackupParseFailure(val kind: BackupFailureKind) : Exception()
 

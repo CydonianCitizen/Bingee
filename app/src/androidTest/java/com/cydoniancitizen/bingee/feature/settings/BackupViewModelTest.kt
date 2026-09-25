@@ -25,6 +25,7 @@ import com.cydoniancitizen.bingee.data.importexport.BackupValidationResult
 import com.cydoniancitizen.bingee.data.importexport.BackupValidator
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.data.settings.PortableUserPreferencesStore
 import com.cydoniancitizen.bingee.domain.background.BackgroundWorkScheduler
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
 import java.io.File
@@ -65,7 +66,8 @@ class BackupViewModelTest {
             database,
             database.portableSnapshotDao(),
             database.releaseEventDao(),
-            preferences()
+            preferences(),
+            PortableUserPreferencesStore(context, database, database.portableSnapshotDao())
         )
         validation = HeldDispatcher()
         val existing = BackupValidator.validate(document("1"), today) as BackupValidationResult.Success

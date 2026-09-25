@@ -1,0 +1,10 @@
+{
+  "formatId": "bingee-backup",
+  "schemaVersion": 1,
+  "exportedAt": "2026-08-04T10:00:00Z",
+  "data": {
+    "media": [{ "primaryRef": { "source": "TMDB", "externalId": "1" }, "externalRefs": [{ "source": "TMDB", "externalId": "1" }], "mediaType": "MOVIE", "title": "A" }],
+    "seasons": [], "episodes": [], "library": [{ "mediaRef": { "source": "TMDB", "externalId": "1" }, "addedAt": "not-a-timestamp" }], "movieProgress": [], "episodeProgress": [], "ratings": [],
+    "preferences": { "notificationLeadDays": 1, "notifyMovieReleases": true, "notifySeasonPremieres": true, "notifyEpisodeAirings": true }
+  }
+}

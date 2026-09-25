@@ -1,9 +1,5 @@
 package com.cydoniancitizen.bingee.data.settings
 
-import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -43,19 +39,19 @@ interface ProfileDisplayModePreferences {
 }
 
 @Singleton
-internal class DataStoreProfileDisplayModePreferences @Inject constructor(
-    @param:ApplicationContext private val context: Context
+internal class PortableProfileDisplayModePreferences @Inject constructor(
+    private val preferences: PortableUserPreferencesStore
 ) : ProfileDisplayModePreferences {
 
-    override fun observeDisplayModes(): Flow<ProfileDisplayModes> = context.bingeePreferenceData
-        .map { prefs ->
+    override fun observeDisplayModes(): Flow<ProfileDisplayModes> = preferences.observe()
+        .map { stored ->
             ProfileDisplayModes(
-                watchedMovies = parseViewMode(prefs[KEY_WATCHED_MOVIES]),
-                watchedTvSeries = parseViewMode(prefs[KEY_WATCHED_TV]),
-                watchLaterMovies = parseViewMode(prefs[KEY_WATCH_LATER_MOVIES]),
-                watchLaterTvSeries = parseViewMode(prefs[KEY_WATCH_LATER_TV]),
-                favoritesMovies = parseViewMode(prefs[KEY_FAVORITES_MOVIES]),
-                favoritesTvSeries = parseViewMode(prefs[KEY_FAVORITES_TV])
+                watchedMovies = parseViewMode(stored.watchedMoviesDisplayMode),
+                watchedTvSeries = parseViewMode(stored.watchedTvSeriesDisplayMode),
+                watchLaterMovies = parseViewMode(stored.watchLaterMoviesDisplayMode),
+                watchLaterTvSeries = parseViewMode(stored.watchLaterTvSeriesDisplayMode),
+                favoritesMovies = parseViewMode(stored.favoritesMoviesDisplayMode),
+                favoritesTvSeries = parseViewMode(stored.favoritesTvSeriesDisplayMode)
             )
         }
 
@@ -64,37 +60,28 @@ internal class DataStoreProfileDisplayModePreferences @Inject constructor(
         category: ProfileCategory,
         mode: ProfileViewMode
     ) {
-        val key = when (collection) {
-            ProfileCollection.WATCHED -> when (category) {
-                ProfileCategory.MOVIES -> KEY_WATCHED_MOVIES
-                ProfileCategory.TV_SERIES -> KEY_WATCHED_TV
+        preferences.update { stored ->
+            val field = when (collection) {
+                ProfileCollection.WATCHED -> when (category) {
+                    ProfileCategory.MOVIES -> stored.copy(watchedMoviesDisplayMode = mode.name)
+                    ProfileCategory.TV_SERIES -> stored.copy(watchedTvSeriesDisplayMode = mode.name)
+                }
+                ProfileCollection.WATCH_LATER -> when (category) {
+                    ProfileCategory.MOVIES -> stored.copy(watchLaterMoviesDisplayMode = mode.name)
+                    ProfileCategory.TV_SERIES -> stored.copy(watchLaterTvSeriesDisplayMode = mode.name)
+                }
+                ProfileCollection.FAVORITES -> when (category) {
+                    ProfileCategory.MOVIES -> stored.copy(favoritesMoviesDisplayMode = mode.name)
+                    ProfileCategory.TV_SERIES -> stored.copy(favoritesTvSeriesDisplayMode = mode.name)
+                }
             }
-            ProfileCollection.WATCH_LATER -> when (category) {
-                ProfileCategory.MOVIES -> KEY_WATCH_LATER_MOVIES
-                ProfileCategory.TV_SERIES -> KEY_WATCH_LATER_TV
-            }
-            ProfileCollection.FAVORITES -> when (category) {
-                ProfileCategory.MOVIES -> KEY_FAVORITES_MOVIES
-                ProfileCategory.TV_SERIES -> KEY_FAVORITES_TV
-            }
-        }
-        context.bingeePreferences.edit { prefs ->
-            prefs[key] = mode.name
+            field
         }
     }
 
-    private fun parseViewMode(value: String?): ProfileViewMode = try {
-        value?.let { ProfileViewMode.valueOf(it) } ?: ProfileViewMode.LIST
+    private fun parseViewMode(value: String): ProfileViewMode = try {
+        ProfileViewMode.valueOf(value)
     } catch (_: Exception) {
         ProfileViewMode.LIST
-    }
-
-    private companion object {
-        val KEY_WATCHED_MOVIES = stringPreferencesKey("profile_view_watched_movies")
-        val KEY_WATCHED_TV = stringPreferencesKey("profile_view_watched_tv")
-        val KEY_WATCH_LATER_MOVIES = stringPreferencesKey("profile_view_watch_later_movies")
-        val KEY_WATCH_LATER_TV = stringPreferencesKey("profile_view_watch_later_tv")
-        val KEY_FAVORITES_MOVIES = stringPreferencesKey("profile_view_favorites_movies")
-        val KEY_FAVORITES_TV = stringPreferencesKey("profile_view_favorites_tv")
     }
 }

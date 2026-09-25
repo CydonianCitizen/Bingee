@@ -2,13 +2,11 @@ package com.cydoniancitizen.bingee.feature.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -60,7 +59,7 @@ import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.designsystem.component.MediaPoster
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeDimensions
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeePodiumColors
-import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeStatusColors
+import com.cydoniancitizen.bingee.core.designsystem.theme.progressingColor
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
@@ -407,15 +406,16 @@ private fun WatchingSection(
             onAction = onNavigateToSearch
         )
     } else {
-        PosterRow {
-            items.forEach { item ->
-                WatchingPosterItem(
-                    item = item,
-                    onClick = item.mediaRef.toNavigableDetailsRef()?.let { reference ->
-                        { onOpenDetails(reference, item.mediaType) }
-                    }
-                )
-            }
+        PosterRow(
+            items = items,
+            key = { it.mediaRef }
+        ) { item ->
+            WatchingPosterItem(
+                item = item,
+                onClick = item.mediaRef.toNavigableDetailsRef()?.let { reference ->
+                    { onOpenDetails(reference, item.mediaType) }
+                }
+            )
         }
     }
 }
@@ -483,15 +483,16 @@ private fun FavoritesSection(
             onAction = onNavigateToSearch
         )
     } else {
-        PosterRow {
-            items.forEach { entry ->
-                FavoritePosterItem(
-                    entry = entry,
-                    onClick = entry.navigableDetailsRef?.let { reference ->
-                        { onOpenDetails(reference, entry.mediaType) }
-                    }
-                )
-            }
+        PosterRow(
+            items = items,
+            key = { it.mediaRef }
+        ) { entry ->
+            FavoritePosterItem(
+                entry = entry,
+                onClick = entry.navigableDetailsRef?.let { reference ->
+                    { onOpenDetails(reference, entry.mediaType) }
+                }
+            )
         }
     }
 }
@@ -516,14 +517,25 @@ private fun SectionHeader(title: String, actionLabel: String? = null, onAction: 
 }
 
 @Composable
-private fun PosterRow(content: @Composable RowScope.() -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        content = content
-    )
+private fun <T> PosterRow(
+    items: List<T>,
+    key: (T) -> ExternalMediaRef,
+    itemContent: @Composable (T) -> Unit
+) {
+    // LazyRow so only the visible posters compose; a plain scrolling Row would compose and measure
+    // every item up front, which stalls the screen for large watching/favorites lists.
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(
+            items = items,
+            key = key,
+            contentType = { "poster" }
+        ) { item ->
+            itemContent(item)
+        }
+    }
 }
 
 @Composable
@@ -568,7 +580,7 @@ private fun WatchingPosterItem(item: ContinueWatchingItem, onClick: (() -> Unit)
                 .fillMaxWidth()
                 .height(4.dp)
                 .clip(RoundedCornerShape(2.dp)),
-            color = BingeeStatusColors.progressing,
+            color = progressingColor(),
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
         Spacer(Modifier.height(8.dp))

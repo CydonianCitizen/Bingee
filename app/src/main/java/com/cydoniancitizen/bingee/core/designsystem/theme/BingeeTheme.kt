@@ -154,8 +154,16 @@ object BingeeDimensions {
 }
 
 object BingeeStatusColors {
-    val progressing = Color(0xFFD69E00)
+    // The progress bar must read on its surfaceVariant track (WCAG 3:1 for non-text components):
+    // the mid amber used before sat around 2.2:1 on light tracks and near-invisible on dark ones,
+    // so each theme gets its own value.
+    val progressingLight = Color(0xFF8A6500)
+    val progressingDark = Color(0xFFFFCC33)
 }
+
+@Composable
+fun progressingColor(): Color =
+    if (isSystemInDarkTheme()) BingeeStatusColors.progressingDark else BingeeStatusColors.progressingLight
 
 object BingeeChartColors {
     val taste = Color(0xFFFFCC33)

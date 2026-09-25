@@ -14,6 +14,23 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
+private const val HAS_SUFFICIENT_REGULAR_SEASON_COVERAGE_SQL = """
+CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM seasons
+    WHERE seasons.local_media_id = media_entries.local_media_id
+      AND seasons.season_number > 0
+      AND (
+          seasons.episode_count != (
+              SELECT COUNT(*)
+              FROM episodes
+              WHERE episodes.local_season_id = seasons.local_season_id
+          )
+          OR (seasons.episode_count = 0 AND seasons.is_known_empty = 0)
+      )
+) THEN 1 ELSE 0 END
+"""
+
 @Dao
 internal abstract class LibraryDao {
     internal data class PersonalViewingRow(
@@ -329,20 +346,7 @@ internal abstract class LibraryDao {
                            AND (episodes.air_date IS NULL OR episodes.air_date <= :today)
                      )
                ) AS trackable_seasons,
-               CASE WHEN NOT EXISTS (
-                   SELECT 1
-                   FROM seasons
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND (
-                         seasons.episode_count != (
-                             SELECT COUNT(*)
-                             FROM episodes
-                             WHERE episodes.local_season_id = seasons.local_season_id
-                         )
-                         OR (seasons.episode_count = 0 AND seasons.is_known_empty = 0)
-                     )
-                   ) THEN 1 ELSE 0 END AS has_sufficient_coverage,
+               $HAS_SUFFICIENT_REGULAR_SEASON_COVERAGE_SQL AS has_sufficient_coverage,
                CASE WHEN EXISTS (
                    SELECT 1 FROM series_state_overrides
                    WHERE series_state_overrides.local_media_id = media_entries.local_media_id
@@ -542,20 +546,7 @@ internal abstract class LibraryDao {
                COALESCE(series_progress.trackable_episodes, 0) AS trackable_episodes,
                COALESCE(series_progress.completed_seasons, 0) AS completed_seasons,
                COALESCE(series_progress.trackable_seasons, 0) AS trackable_seasons,
-               CASE WHEN NOT EXISTS (
-                   SELECT 1
-                   FROM seasons
-                   WHERE seasons.local_media_id = media_entries.local_media_id
-                     AND seasons.season_number > 0
-                     AND (
-                         seasons.episode_count != (
-                             SELECT COUNT(*)
-                             FROM episodes
-                             WHERE episodes.local_season_id = seasons.local_season_id
-                         )
-                         OR (seasons.episode_count = 0 AND seasons.is_known_empty = 0)
-                     )
-               ) THEN 1 ELSE 0 END AS has_sufficient_coverage,
+               $HAS_SUFFICIENT_REGULAR_SEASON_COVERAGE_SQL AS has_sufficient_coverage,
                CASE WHEN series_state_overrides.is_abandoned = 1 THEN 1 ELSE 0 END AS is_abandoned,
                (
                    SELECT MAX(episode_watch_progress.watched_at)

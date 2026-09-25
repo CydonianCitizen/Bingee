@@ -227,6 +227,7 @@ private fun BackupFailureKind.toStringRes(): Int = when (this) {
     BackupFailureKind.MISSING_REFERENCE -> R.string.backup_error_missing_reference
     BackupFailureKind.CONFLICTING_REFERENCE -> R.string.backup_error_conflicting_reference
     BackupFailureKind.WRITE_FAILED -> R.string.backup_error_write
+    BackupFailureKind.EXPORT_TOO_LARGE -> R.string.backup_error_export_too_large
     BackupFailureKind.TRANSACTION_FAILED -> R.string.backup_error_transaction
     BackupFailureKind.SCHEDULING_WARNING -> R.string.backup_warning_schedule
 }

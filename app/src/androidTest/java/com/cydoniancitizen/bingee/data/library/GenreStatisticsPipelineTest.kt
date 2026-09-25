@@ -19,6 +19,7 @@ import com.cydoniancitizen.bingee.data.importexport.RestoreFailureInjector
 import com.cydoniancitizen.bingee.data.importexport.RestoreStage
 import com.cydoniancitizen.bingee.data.library.local.BingeeDatabase
 import com.cydoniancitizen.bingee.data.settings.DataStoreReleaseNotificationPreferences
+import com.cydoniancitizen.bingee.data.settings.PortableUserPreferencesStore
 import com.cydoniancitizen.bingee.domain.model.GenreStatistic
 import com.cydoniancitizen.bingee.domain.model.calculateTasteStatistics
 import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
@@ -57,13 +58,19 @@ class GenreStatisticsPipelineTest {
             database.watchProgressDao(),
             database.ratingDao(),
             Clock.fixed(now, ZoneOffset.UTC),
-            TestCalendarDateSource(today)
+            TestCalendarDateSource(today),
+            kotlinx.coroutines.Dispatchers.Default
         )
         store = BackupDataStore(
             database,
             database.portableSnapshotDao(),
             database.releaseEventDao(),
             DataStoreReleaseNotificationPreferences(
+                ApplicationProvider.getApplicationContext(),
+                database,
+                database.portableSnapshotDao()
+            ),
+            PortableUserPreferencesStore(
                 ApplicationProvider.getApplicationContext(),
                 database,
                 database.portableSnapshotDao()
