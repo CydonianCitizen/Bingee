@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
@@ -25,6 +26,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
@@ -51,7 +54,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -114,19 +116,57 @@ class MediaDetailsScreenTest {
 
     @Test
     fun clearDateActionCommunicatesRemovalAndPassesNull() {
-        val clearedDate = AtomicReference<LocalDate?>(LocalDate.of(2026, 8, 17))
-        setDetails(
+        assertDateActions(
             content(movie()).copy(
                 isInLibrary = true,
-                watchedDate = clearedDate.get(),
+                watchedDate = LocalDate.of(2026, 8, 17),
                 movieProgress = MovieProgressState.Ready(MovieWatchState.Watched(Instant.EPOCH))
             ),
-            onSetWatchedDate = { clearedDate.set(it) }
+            R.string.watched_date_edit
         )
+    }
 
-        scrollTo(hasText("Clear date"))
-        composeRule.onNodeWithText("Clear date").performClick()
-        assertEquals(null, clearedDate.get())
+    @Test
+    fun completedSeriesDateActionsPreserveEditCancelSaveAndClear() {
+        val completed = seriesState(listOf(fetchedSeason(1, "Season 1", watched = 2, trackable = 2)))
+            .copy(isInLibrary = true, watchedDate = LocalDate.of(2026, 8, 17))
+        assertTrue((completed.series.content as SeriesContentState.Ready).progress.isComplete)
+        assertDateActions(completed, R.string.completion_date_edit)
+    }
+
+    private fun assertDateActions(initialState: MediaDetailsUiState, editLabelRes: Int) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val clearLabel = context.getString(R.string.watched_date_clear)
+        val editLabel = context.getString(editLabelRes)
+        val cancelLabel = context.getString(R.string.action_cancel)
+        val saveLabel = context.getString(R.string.action_save)
+        val writes = mutableListOf<LocalDate?>()
+        var state by mutableStateOf(initialState)
+        setDetailsState({ state }, onSetWatchedDate = { writes.add(it) })
+
+        scrollTo(hasText(editLabel))
+        listOf(editLabel, clearLabel).forEach { label ->
+            val action = composeRule.onNodeWithText(label)
+            action.performScrollTo().assertIsDisplayed()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            composeRule.onAllNodesWithText(label).assertCountEquals(1)
+            val target = action.fetchSemanticsNode().touchBoundsInRoot
+            with(composeRule.density) {
+                assertTrue(target.width.toDp() >= 48.dp && target.height.toDp() >= 48.dp)
+            }
+        }
+        composeRule.onNodeWithText(editLabel).performScrollTo().performClick()
+        composeRule.onNodeWithText(cancelLabel).performClick()
+        assertTrue(writes.isEmpty())
+        composeRule.onNodeWithText(editLabel).performClick()
+        composeRule.onNodeWithText(saveLabel).performClick()
+        assertEquals(listOf(initialState.today), writes)
+        composeRule.onNodeWithText(clearLabel).performScrollTo().performClick()
+        assertEquals(listOf(initialState.today, null), writes)
+
+        composeRule.runOnIdle { state = state.copy(watchedDateUpdating = true) }
+        composeRule.onNodeWithText(clearLabel).assertIsNotEnabled()
+        composeRule.onNodeWithText(editLabel).performScrollTo().assertIsNotEnabled()
     }
 
     @Test

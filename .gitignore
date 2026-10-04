@@ -38,7 +38,6 @@ app/release/
 # Local agent and tooling files
 CLAUDE.md
 .impeccable/
-BINGEE_DEVELOPMENT_ROADMAP_AND_CHECKLIST.md
 
 # Operating-system files
 .DS_Store

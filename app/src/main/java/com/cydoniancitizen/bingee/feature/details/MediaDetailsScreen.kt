@@ -3,6 +3,7 @@ package com.cydoniancitizen.bingee.feature.details
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -37,12 +38,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -265,7 +266,10 @@ private fun DetailTopBar(
     // frame. Icon tints therefore track a quantized fraction, while the bar background reads the
     // raw fraction inside drawBehind, skipping recomposition entirely.
     val tintFraction by remember {
-        derivedStateOf { (collapseFraction.value * TINT_QUANTIZATION_STEPS).roundToInt() / TINT_QUANTIZATION_STEPS.toFloat() }
+        derivedStateOf {
+            (collapseFraction.value * TINT_QUANTIZATION_STEPS).roundToInt() /
+                TINT_QUANTIZATION_STEPS.toFloat()
+        }
     }
     // Icons start white over the artwork and land on onSurface once the bar is opaque, so they stay
     // legible against a bright backdrop and against the bar's own surface alike.
@@ -577,7 +581,10 @@ private fun WatchedDateSection(
         if (watchedDate != null) {
             Text(watchedDate.formatLocalized(locale))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing),
+            verticalArrangement = Arrangement.spacedBy(BingeeDimensions.elementSpacing)
+        ) {
             Button(
                 onClick = { showDialog = true },
                 enabled = !isUpdating
