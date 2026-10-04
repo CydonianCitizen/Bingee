@@ -3,16 +3,21 @@ package com.cydoniancitizen.bingee.feature.search
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.MediaSearchCategory
@@ -173,17 +178,30 @@ class SearchScreenTest {
     fun libraryActionReflectsObservedMembershipAndUsesExplicitCallback() {
         val toggled = AtomicReference<MediaSearchResult?>(null)
         var state by mutableStateOf(resultsState(NextPageState.End))
-        val item = (state.content as SearchContentState.Results).items.single()
+        val results = state.content as SearchContentState.Results
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val addLabel = context.getString(R.string.collection_action_add)
+        val removeLabel = context.getString(R.string.collection_action_remove)
         setSearchState(state = { state }, onToggleLibrary = toggled::set)
 
-        composeRule.onNodeWithText("Add to Watch Later").performClick()
-
-        assertEquals(item, toggled.get())
-
-        composeRule.runOnIdle {
-            state = state.copy(libraryMembership = setOf(item.externalRef to item.mediaType))
+        for (type in listOf(MediaType.MOVIE, MediaType.SERIES)) {
+            val item = results.items.single().copy(mediaType = type)
+            composeRule.runOnIdle {
+                state = state.copy(content = results.copy(items = listOf(item)), libraryMembership = emptySet())
+            }
+            composeRule.onNodeWithText(addLabel).assertIsEnabled().performClick()
+            assertEquals(item, toggled.get())
+            composeRule.runOnIdle {
+                state = state.copy(libraryMembership = setOf(item.externalRef to item.mediaType))
+                toggled.set(null)
+            }
+            composeRule.onNodeWithText(removeLabel)
+                .assertIsDisplayed()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                .performClick()
+            assertEquals(item, toggled.get())
+            composeRule.onNodeWithText(addLabel).assertDoesNotExist()
         }
-        composeRule.onNodeWithText("In Watch Later").assertIsDisplayed()
     }
 
     @Test
@@ -199,7 +217,9 @@ class SearchScreenTest {
         composeRule.onNodeWithContentDescription("Open details for Fixed Movie").performClick()
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "1") to MediaType.MOVIE, opened.get())
         opened.set(null)
-        composeRule.onNodeWithText("Add to Watch Later").performClick()
+        composeRule.onNodeWithText(
+            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.collection_action_add)
+        ).performClick()
         assertTrue(toggled.get())
         assertEquals(null, opened.get())
     }

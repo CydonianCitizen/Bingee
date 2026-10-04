@@ -76,8 +76,9 @@
     <string name="library_action_updating">Aggiornamento libreria…</string>
     <string name="series_tracking_abandon">Segna serie come abbandonata</string>
     <string name="series_tracking_restore">Riprendi tracciamento serie</string>
-    <string name="search_action_add_watch_later">Aggiungi a Da vedere</string>
-    <string name="search_action_in_watch_later">In Da vedere</string>
+    <string name="collection_action_add">Aggiungi alla raccolta</string>
+    <string name="collection_action_remove">Rimuovi dalla raccolta</string>
+    <string name="collection_state_in">Nella raccolta</string>
     <string name="profile_title_dashboard">Il tuo Bingee</string>
     <string name="profile_watching_title">In visione</string>
     <string name="profile_view_all">Vedi tutti</string>
@@ -176,8 +177,6 @@
     <string name="widget_event_episode">%1$s · S%2$d E%3$d</string>
     <string name="widget_event_season">%1$s · Stagione %2$d</string>
     <string name="home_open_continue_details">Apri dettagli per %1$s</string>
-    <string name="action_add_to_watchlist">Aggiungi alla lista</string>
-    <string name="action_in_watchlist">Nella lista</string>
     <string name="notifications_title">Notifiche</string>
     <string name="notifications_group_upcoming">In arrivo</string>
     <string name="notifications_group_today">Oggi</string>

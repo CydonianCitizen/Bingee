@@ -429,7 +429,7 @@ private fun CollectionSection(counts: ProfileCollectionCounts, onOpenCollection:
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = rowModifier) {
             CollectionShortcut(
                 modifier = Modifier.weight(1f),
-                // The watchlist is a bookmark everywhere, matching the Home poster control.
+                // The bookmark denotes the genuine Watch Later destination.
                 icon = ImageVector.vectorResource(R.drawable.ic_bookmark),
                 label = stringResource(R.string.profile_collection_watch_later),
                 count = counts.watchLater,

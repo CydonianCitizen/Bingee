@@ -47,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -415,7 +414,7 @@ private fun LazyListScope.featuredRow(
             ) { item ->
                 FeaturedReleaseCard(
                     item = item,
-                    inWatchlist = item.externalRef to item.mediaType in libraryMemberships,
+                    inCollection = item.externalRef to item.mediaType in libraryMemberships,
                     isAdding = item.externalRef to item.mediaType in addingToWatchlist,
                     onAddToWatchlist = { onAddToWatchlist(item) },
                     onClick = { onOpenDetails(item.externalRef, item.mediaType) }
@@ -432,8 +431,8 @@ private val FeaturedCardWidth = 124.dp
 private val PosterAspectRatio = 0.67f
 
 /**
- * Disc behind the poster's watchlist control. Fixed rather than themed because the artwork under it can be
- * any colour; at 60% black even a white poster leaves the white "+" near 5.7:1 and the gold bookmark near 3.9:1.
+ * Disc behind the poster's collection control. Fixed rather than themed because the artwork under it can be
+ * any colour; at 60% black even a white poster leaves the white "+" near 5.7:1 and the gold check near 3.9:1.
  */
 private val PosterControlScrim = Color.Black.copy(alpha = 0.6f)
 private val PosterControlAccent = Color(0xFFFFCC33)
@@ -441,13 +440,13 @@ private val PosterControlAccent = Color(0xFFFFCC33)
 @Composable
 private fun FeaturedReleaseCard(
     item: MediaSearchResult,
-    inWatchlist: Boolean,
+    inCollection: Boolean,
     isAdding: Boolean,
     onAddToWatchlist: () -> Unit,
     onClick: () -> Unit
 ) {
-    val watchlistDescription = stringResource(
-        if (inWatchlist) R.string.action_in_watchlist else R.string.action_add_to_watchlist
+    val membershipDescription = stringResource(
+        if (inCollection) R.string.collection_state_in else R.string.collection_action_add
     )
     Card(
         onClick = onClick,
@@ -470,35 +469,35 @@ private fun FeaturedReleaseCard(
                     // The card owns the combined description of this item.
                     contentDescription = null
                 )
-                // The watchlist action rides on the poster, as the favourite toggle does in the
-                // collection grid. A labelled button cannot hold "Add to Watchlist" at this width.
+                // The collection action rides on the poster, as the favourite toggle does in the
+                // collection grid. A labelled button cannot hold "Add to collection" at this width.
                 // It sits on a fixed dark disc rather than theme colours, so it stays legible on any artwork.
                 IconButton(
                     onClick = onAddToWatchlist,
-                    enabled = !inWatchlist && !isAdding,
+                    enabled = !inCollection && !isAdding,
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = PosterControlScrim,
                         contentColor = Color.White,
                         disabledContainerColor = PosterControlScrim,
-                        // Disabled once in the watchlist, but the bookmark must stay fully legible; only
+                        // Disabled once in the collection, but the check must stay fully legible; only
                         // the in-flight add is dimmed.
-                        disabledContentColor = if (inWatchlist) PosterControlAccent else Color.White.copy(alpha = 0.6f)
+                        disabledContentColor = if (inCollection) PosterControlAccent else Color.White.copy(alpha = 0.6f)
                     ),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
                         .size(48.dp)
                 ) {
-                    if (inWatchlist) {
+                    if (inCollection) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_bookmark),
-                            contentDescription = watchlistDescription,
+                            imageVector = Icons.Default.Check,
+                            contentDescription = membershipDescription,
                             modifier = Modifier.size(18.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = watchlistDescription,
+                            contentDescription = membershipDescription,
                             modifier = Modifier.size(20.dp)
                         )
                     }

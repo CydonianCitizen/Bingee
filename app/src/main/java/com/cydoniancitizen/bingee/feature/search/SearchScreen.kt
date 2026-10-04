@@ -435,13 +435,12 @@ internal fun SearchResultItem(
                 val libraryLabel = stringResource(
                     when {
                         isLibraryActionPending -> R.string.library_action_updating
-                        isInLibrary -> R.string.search_action_in_watch_later
-                        else -> R.string.search_action_add_watch_later
+                        isInLibrary -> R.string.collection_action_remove
+                        else -> R.string.collection_action_add
                     }
                 )
-                // "In Watch Later" reports a state the user already reached; only "Add to Watch
-                // Later" is an action. Rendering both as filled buttons made a saved result and an
-                // unsaved one indistinguishable at a glance.
+                // Membership is independent of viewing progress. Keep removal visually secondary
+                // and name its effect explicitly.
                 if (isInLibrary) {
                     FilledTonalButton(onClick = onToggleLibrary, enabled = !isLibraryActionPending) {
                         Text(libraryLabel)

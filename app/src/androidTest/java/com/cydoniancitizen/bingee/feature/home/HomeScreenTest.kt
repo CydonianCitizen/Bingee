@@ -5,8 +5,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -15,12 +21,15 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
+import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
+import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.ReleaseDateCategory
@@ -44,6 +53,42 @@ import org.junit.Test
 class HomeScreenTest {
     @get:Rule val composeRule = createComposeRule()
     private val today = LocalDate.of(2026, 8, 3)
+
+    @Test
+    fun featuredMembershipActionAndSavedStateDescribeCollectionForMoviesAndSeries() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val addLabel = context.getString(R.string.collection_action_add)
+        val savedLabel = context.getString(R.string.collection_state_in)
+        val added = AtomicReference<MediaSearchResult?>(null)
+        var state by mutableStateOf(HomeUiState(content = HomeContentState.Empty, today = today))
+        setHomeState(
+            state = { state },
+            onAddToWatchlist = { item ->
+                added.set(item)
+                state = state.copy(libraryMemberships = setOf(item.externalRef to item.mediaType))
+            }
+        )
+
+        for (type in listOf(MediaType.MOVIE, MediaType.SERIES)) {
+            val item = MediaSearchResult(ExternalMediaRef(MediaSource.TMDB, "42"), type, "Featured title")
+            composeRule.runOnIdle {
+                state = state.copy(
+                    featuredMovies = listOf(item).filter { type == MediaType.MOVIE },
+                    featuredSeries = listOf(item).filter { type == MediaType.SERIES },
+                    libraryMemberships = emptySet()
+                )
+                added.set(null)
+            }
+            composeRule.onNodeWithContentDescription(addLabel)
+                .assertIsDisplayed().assertIsEnabled()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                .performClick()
+            assertEquals(item, added.get())
+            composeRule.onNodeWithContentDescription(savedLabel)
+                .assertContentDescriptionEquals(savedLabel).assertIsDisplayed().assertIsNotEnabled()
+            composeRule.onNodeWithContentDescription(addLabel).assertDoesNotExist()
+        }
+    }
 
     @Test
     fun emptyLoadingAndLastUpdateStatesAreVisible() {
@@ -321,7 +366,8 @@ class HomeScreenTest {
         onOpenSettings: () -> Unit = {},
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
         onMarkNextEpisode: (ContinueWatchingItem) -> Unit = {},
-        onUndoMarkedEpisode: () -> Unit = {}
+        onUndoMarkedEpisode: () -> Unit = {},
+        onAddToWatchlist: (MediaSearchResult) -> Unit = {}
     ) {
         composeRule.setContent {
             BingeeTheme {
@@ -334,7 +380,8 @@ class HomeScreenTest {
                     onOpenSettings = onOpenSettings,
                     onOpenDetails = onOpenDetails,
                     onMarkNextEpisode = onMarkNextEpisode,
-                    onUndoMarkedEpisode = onUndoMarkedEpisode
+                    onUndoMarkedEpisode = onUndoMarkedEpisode,
+                    onAddToWatchlist = onAddToWatchlist
                 )
             }
         }

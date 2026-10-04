@@ -601,11 +601,9 @@ private fun ProfileGridItem(
                     modifier = Modifier.align(Alignment.TopEnd),
                     colors = IconButtonDefaults.iconToggleButtonColors(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                        contentColor = if (entry.isFavorite) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        checkedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        checkedContentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
                     Icon(

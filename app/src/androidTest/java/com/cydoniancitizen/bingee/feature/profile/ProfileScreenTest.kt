@@ -1,10 +1,16 @@
 package com.cydoniancitizen.bingee.feature.profile
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -13,6 +19,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
@@ -286,8 +294,16 @@ class ProfileScreenTest {
     }
 
     @Test
-    fun gridFavoriteActionExposesItsCurrentToggleState() {
-        val toggled = AtomicBoolean(false)
+    fun gridFavoriteActionExposesItsCurrentToggleState() = assertFavoriteToggle(ProfileViewMode.GRID)
+
+    @Test
+    fun listFavoriteActionExposesItsCurrentToggleState() = assertFavoriteToggle(ProfileViewMode.LIST)
+
+    private fun assertFavoriteToggle(mode: ProfileViewMode) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val add = context.getString(R.string.favorite_add)
+        val remove = context.getString(R.string.favorite_remove)
+        var favorite by mutableStateOf(false)
         val testEntry = LibraryEntry(
             mediaRef = ExternalMediaRef(MediaSource.TMDB, "300"),
             mediaType = MediaType.MOVIE,
@@ -302,8 +318,8 @@ class ProfileScreenTest {
                     state = ProfileUiState(
                         today = LocalDate.of(2026, 8, 18),
                         isLoading = false,
-                        displayModes = ProfileDisplayModes(watchedMovies = ProfileViewMode.GRID),
-                        entries = listOf(testEntry)
+                        displayModes = ProfileDisplayModes(watchedMovies = mode),
+                        entries = listOf(testEntry.copy(isFavorite = favorite))
                     ),
                     onCollectionSelected = {},
                     onCategorySelected = {},
@@ -312,7 +328,7 @@ class ProfileScreenTest {
                     onSearchQueryChanged = {},
                     onClearSearch = {},
                     onRemove = {},
-                    onToggleFavorite = { toggled.set(true) },
+                    onToggleFavorite = { favorite = !it.isFavorite },
                     onOpenSettings = {},
                     onOpenDetails = { _, _ -> },
                     onNavigateToSearch = {},
@@ -321,16 +337,22 @@ class ProfileScreenTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Add to Favorites")
+        composeRule.onNodeWithContentDescription(add)
             .assertIsDisplayed()
             .assert(isToggleable())
-            .assert(
-                SemanticsMatcher.expectValue(
-                    SemanticsProperties.ToggleableState,
-                    ToggleableState.Off
-                )
-            )
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Checkbox))
+            .assertIsOff()
             .performClick()
-        assertTrue(toggled.get())
+        composeRule.onNodeWithContentDescription(remove).assertIsOn()
+        if (mode == ProfileViewMode.GRID) {
+            composeRule.onNodeWithContentDescription(context.getString(R.string.profile_more_actions)).performClick()
+            composeRule.onNodeWithText(remove)
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On))
+                .performClick()
+        } else {
+            composeRule.onNodeWithContentDescription(remove).performClick()
+        }
+        composeRule.onNodeWithContentDescription(add).assertIsOff()
+        assertTrue(!favorite)
     }
 }
