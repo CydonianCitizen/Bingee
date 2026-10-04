@@ -685,5 +685,4 @@ private fun mediumDateTimeFormatter(): DateTimeFormatter {
 
 private fun java.time.LocalDate.localized(): String = fullDateFormatter().format(this)
 
-private fun Instant.localized(): String =
-    mediumDateTimeFormatter().withZone(ZoneId.systemDefault()).format(this)
+private fun Instant.localized(): String = mediumDateTimeFormatter().withZone(ZoneId.systemDefault()).format(this)

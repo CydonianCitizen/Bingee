@@ -128,8 +128,12 @@ class DefaultLibraryRepositoryTest {
             }
         }
         val observedRepository = DefaultLibraryRepository(
-            database.libraryDao(), database.watchProgressDao(), database.ratingDao(),
-            Clock.fixed(now, ZoneOffset.UTC), dateSource, dispatcher
+            database.libraryDao(),
+            database.watchProgressDao(),
+            database.ratingDao(),
+            Clock.fixed(now, ZoneOffset.UTC),
+            dateSource,
+            dispatcher
         )
 
         val result = withContext(Dispatchers.Main) { observedRepository.observeEntries().first() }

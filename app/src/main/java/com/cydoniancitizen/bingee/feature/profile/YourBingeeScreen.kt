@@ -517,11 +517,7 @@ private fun SectionHeader(title: String, actionLabel: String? = null, onAction: 
 }
 
 @Composable
-private fun <T> PosterRow(
-    items: List<T>,
-    key: (T) -> ExternalMediaRef,
-    itemContent: @Composable (T) -> Unit
-) {
+private fun <T> PosterRow(items: List<T>, key: (T) -> ExternalMediaRef, itemContent: @Composable (T) -> Unit) {
     // LazyRow so only the visible posters compose; a plain scrolling Row would compose and measure
     // every item up front, which stalls the screen for large watching/favorites lists.
     LazyRow(
