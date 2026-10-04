@@ -10,11 +10,14 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -423,13 +426,57 @@ class MediaDetailsScreenTest {
     }
 
     @Test
-    fun libraryActionAndMissingImageSemanticsAreAccessible() {
+    fun movieHeroKeepsTitleHeadingAndDecorativeArtwork() {
+        assertHeroSemantics(movie())
+    }
+
+    @Test
+    fun seriesHeroKeepsTitleHeadingAndDecorativeArtwork() {
+        assertHeroSemantics(movie().copy(mediaType = MediaType.SERIES, runtime = null, numberOfSeasons = 3))
+    }
+
+    private fun assertHeroSemantics(media: MediaDetails) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val details = media.copy(
+            title = "A very long localized title that exceeds the hero's two visible lines",
+            originalTitle = "Distinct original title"
+        )
+        var state by mutableStateOf(content(details))
+        setDetailsState({ state })
+
+        // Both the missing-artwork Image and the loaded AsyncImage path keep identity in the Text.
+        listOf(null, "android.resource://${context.packageName}/${R.drawable.poster_placeholder}").forEach { url ->
+            composeRule.runOnIdle { state = content(details.copy(posterUrl = url, backdropUrl = url)) }
+            composeRule.onAllNodes(hasText(details.title) and isHeading()).assertCountEquals(1)
+            composeRule.onNodeWithText(details.title).assertIsDisplayed().assert(isHeading())
+            composeRule.onAllNodes(
+                hasContentDescription(details.title, substring = true),
+                useUnmergedTree = true
+            ).assertCountEquals(0)
+            composeRule.onNodeWithText(context.getString(R.string.detail_original_title, details.originalTitle))
+                .assertIsDisplayed()
+            val typeLabel = context.getString(
+                if (details.mediaType == MediaType.MOVIE) R.string.library_type_movie else R.string.library_type_tv
+            )
+            composeRule.onNode(hasText(typeLabel, substring = true) and hasText("2024", substring = true))
+                .assertIsDisplayed()
+
+            listOf(R.string.detail_back, R.string.detail_refresh).forEach { label ->
+                composeRule.onNodeWithContentDescription(context.getString(label))
+                    .assertIsDisplayed().assertHasClickAction()
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            }
+            composeRule.onNodeWithContentDescription(context.getString(R.string.favorite_add))
+                .assertIsDisplayed().assertHasClickAction().assert(isToggleable())
+        }
+    }
+
+    @Test
+    fun libraryActionRemainsAccessibleWithMissingArtwork() {
         val toggled = AtomicBoolean(false)
         setDetails(content(movie().copy(posterUrl = null, backdropUrl = null)), onToggle = { toggled.set(true) })
 
-        // Asserted before the library click, which can scroll the hero artwork out of view.
-        composeRule.onNodeWithContentDescription("No poster available for Movie title").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("No backdrop available for Movie title").assertIsDisplayed()
+        composeRule.onNodeWithText("Movie title").assertIsDisplayed().assert(isHeading())
         composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Refresh details").assertIsDisplayed()
         scrollTo(hasText("Add to library"))

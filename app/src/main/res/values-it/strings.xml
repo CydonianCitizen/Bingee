@@ -221,8 +221,6 @@
     <string name="detail_error_title">Dettagli non disponibili</string>
     <string name="detail_stale_data">Visualizzazione dettagli salvati durante la verifica aggiornamenti.</string>
     <string name="detail_refresh_failed">I dettagli salvati restano disponibili. Aggiornamento fallito: %1$s</string>
-    <string name="detail_backdrop">Sfondo per %1$s</string>
-    <string name="detail_backdrop_missing">Sfondo non disponibile per %1$s</string>
     <string name="detail_original_title">Titolo originale: %1$s</string>
     <string name="detail_episode_runtime">Durata tipica episodio</string>
     <string name="detail_minutes">%1$d min</string>

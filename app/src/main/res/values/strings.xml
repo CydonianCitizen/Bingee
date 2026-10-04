@@ -211,8 +211,6 @@
     <string name="detail_error_title">Details unavailable</string>
     <string name="detail_stale_data">Showing saved details while checking for updates.</string>
     <string name="detail_refresh_failed">Saved details remain available. Refresh failed: %1$s</string>
-    <string name="detail_backdrop">Backdrop for %1$s</string>
-    <string name="detail_backdrop_missing">No backdrop available for %1$s</string>
     <string name="detail_original_title">Original title: %1$s</string>
     <string name="detail_episode_runtime">Typical episode runtime</string>
     <string name="detail_minutes">%1$d min</string>

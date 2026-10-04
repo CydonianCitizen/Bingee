@@ -121,7 +121,8 @@ internal fun DetailHero(details: MediaDetails, modifier: Modifier = Modifier) {
                 posterUrl = details.posterUrl,
                 modifier = Modifier.shadow(8.dp, MaterialTheme.shapes.medium),
                 width = PosterWidth,
-                height = PosterHeight
+                height = PosterHeight,
+                contentDescription = null
             )
             Column(
                 modifier = Modifier
@@ -222,14 +223,14 @@ private fun Backdrop(details: MediaDetails) {
     if (details.backdropUrl == null) {
         Image(
             painter = placeholder,
-            contentDescription = stringResource(R.string.detail_backdrop_missing, details.title),
+            contentDescription = null,
             modifier = modifier,
             contentScale = ContentScale.Crop
         )
     } else {
         AsyncImage(
             model = details.backdropUrl,
-            contentDescription = stringResource(R.string.detail_backdrop, details.title),
+            contentDescription = null,
             placeholder = placeholder,
             error = placeholder,
             fallback = placeholder,
