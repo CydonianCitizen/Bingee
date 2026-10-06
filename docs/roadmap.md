@@ -1,6 +1,17 @@
 # Bingee Roadmap
 
-This document describes current delivery and explicitly deferred work for Bingee `v1.2.0`.
+This document retains earlier delivery summaries. The [canonical development roadmap and checklist](../BINGEE_DEVELOPMENT_ROADMAP_AND_CHECKLIST.md) defines the active implementation order and release gates.
+
+## Implemented in `v1.2.3`
+
+- Date actions wrap rather than lose the clear-date label at narrow widths and larger fonts.
+- Actual Favorite toggles use a consistent selected state; shortcuts and filters keep their distinct roles.
+- Search and Home describe saved membership as Collection, preserving genuine Watch Later and other tracking states.
+- Details artwork is decorative beside the visible title; notification thumbnails use the shared poster rounding.
+- Statistics opens from both direct Collection launcher shortcuts, with the existing Back/Up path preserved.
+- Populated Your Bingee Watching/Favorites shelves use saveable, typed provider keys, fixing a crash found by the final full Android suite.
+
+See [v1.2.3 release notes](release-notes-1.2.3.md) for the changed behavior. The canonical checklist records verification and release readiness separately.
 
 ## Delivered in `v1.2.0`
 

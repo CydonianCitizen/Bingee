@@ -140,6 +140,16 @@ Local Room data renders independently of the network on every screen. Home is th
 
 Provider IDs use ExternalMediaRef(source, externalId). A raw ID is never a global identity. Room generates a numeric local media ID for foreign keys; it remains private infrastructure and does not replace external identity.
 
+## Collection wording and UI semantics
+
+Your Bingee's Watching and Favorites shelves use lazy lists with Bundle-saveable string keys qualified by provider, media type and external ID, matching Collection's existing identity. This keeps Movie and Series entries distinct even when a provider reuses an ID and permits saved UI state without making domain identity objects Android-specific.
+
+Collection membership remains the existing Library repository/database relationship, independent of Favorite and watch progress. Search labels membership actions Add to collection / Remove from collection; Home Featured uses Add to collection / In collection. Their Italian labels are Aggiungi alla raccolta / Rimuovi dalla raccolta / Nella raccolta. Genuine Watch Later filters, shortcuts and derived tracking states keep their own names; changing membership copy does not change persistence or state derivation.
+
+Actual Favorite toggles use neutral unchecked content and the error/red color family when checked, preserving contrast over Details artwork and native checked semantics. Favorites shortcuts, shelves and filters remain distinct controls. Movie watched-date and Series completion-date actions share the existing wrapping layout; clearing a user-selected date preserves watch progress.
+
+Details poster and backdrop imagery are decorative in loaded, missing and failed states; the visible title heading owns title identification, while Back, Favorite and Refresh remain separate labelled actions. Notification thumbnails retain their compact 48×72dp bounds and delegate rounding to the shared MediaPoster shape instead of adding a second clipping layer.
+
 ## ViewModel and screen state
 
 - Each screen defines an immutable, screen-specific UiState; no universal generic state wrapper is used.
@@ -220,6 +230,8 @@ Debug fakes live in app/src/debug; debug-variant JVM tests in app/src/test reuse
 ## Navigation
 
 TopLevelDestination is the only source of Home, Search, and Your Bingee routes, order, labels, and icons; the personal destination's route stays `profile` so saved navigation state, notification targets, and the `profile/collection/{collection}` subroutes keep resolving. Settings is opened from Your Bingee and pops back through the existing back stack. BingeeNavHost owns the route-to-screen graph; reusable composables never receive a NavController. `DetailRoute` is non-top-level and carries only `MediaSource`, `MediaType`, and external provider ID. Provider/type pairs are validated before navigation; malformed routes render an input error rather than substituting another provider. `MediaType` is required to select an endpoint when a Search result has no local row. No token, local Room ID, query, URL, or metadata payload enters navigation.
+
+Statistics shares the Your Bingee `ProfileViewModel` when that destination exists in the back stack, preserving its transient statistics selections across dashboard and Collection entry paths. The Watching and Watch Later launcher shortcuts open Collection directly above Home, without inserting Your Bingee. In that case Statistics shares the calling Collection's ViewModel (or its own entry if no caller remains). System Back and visible Up pop the existing stack: Statistics → Collection → Home for a shortcut, or Statistics → Collection → Your Bingee for a dashboard entry. Activity recreation retains the navigation and ViewModel ownership.
 
 AppRoute.ONBOARDING and DetailRoute are non-top-level routes. Startup reads local credential status and the non-sensitive first-run preference before constructing the graph. It starts at onboarding only for a first run without a usable stored credential; offline continuation and successful configuration both replace onboarding with Home. Removing a credential later does not force navigation away from the shell or delete cached details.
 
