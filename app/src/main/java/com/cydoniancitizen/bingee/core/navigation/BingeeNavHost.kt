@@ -124,12 +124,17 @@ fun BingeeNavHost(
             }
         }
         composable(AppRoute.STATISTICS) { entry ->
-            val profileEntry = remember(entry) {
-                navController.getBackStackEntry(TopLevelDestination.PROFILE.route)
+            val statisticsOwner = remember(entry) {
+                try {
+                    navController.getBackStackEntry(TopLevelDestination.PROFILE.route)
+                } catch (_: IllegalArgumentException) {
+                    // Launcher shortcuts open Collection without a Your Bingee ancestor.
+                    navController.previousBackStackEntry ?: entry
+                }
             }
             StatisticsScreen(
                 onBack = navController::popBackStack,
-                viewModel = hiltViewModel(profileEntry),
+                viewModel = hiltViewModel(statisticsOwner),
                 onOpenDetails = { reference, mediaType ->
                     navController.openDetails(reference, mediaType)
                 }
