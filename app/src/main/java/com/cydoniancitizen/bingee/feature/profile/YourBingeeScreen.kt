@@ -408,7 +408,7 @@ private fun WatchingSection(
     } else {
         PosterRow(
             items = items,
-            key = { it.mediaRef }
+            key = { "${it.mediaRef.source}:${it.mediaType}:${it.mediaRef.externalId}" }
         ) { item ->
             WatchingPosterItem(
                 item = item,
@@ -485,7 +485,7 @@ private fun FavoritesSection(
     } else {
         PosterRow(
             items = items,
-            key = { it.mediaRef }
+            key = { "${it.mediaRef.source}:${it.mediaType}:${it.mediaRef.externalId}" }
         ) { entry ->
             FavoritePosterItem(
                 entry = entry,
@@ -517,7 +517,7 @@ private fun SectionHeader(title: String, actionLabel: String? = null, onAction: 
 }
 
 @Composable
-private fun <T> PosterRow(items: List<T>, key: (T) -> ExternalMediaRef, itemContent: @Composable (T) -> Unit) {
+private fun <T> PosterRow(items: List<T>, key: (T) -> String, itemContent: @Composable (T) -> Unit) {
     // LazyRow so only the visible posters compose; a plain scrolling Row would compose and measure
     // every item up front, which stalls the screen for large watching/favorites lists.
     LazyRow(

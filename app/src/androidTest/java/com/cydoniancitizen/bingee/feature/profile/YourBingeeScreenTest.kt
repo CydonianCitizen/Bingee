@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -12,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.platform.app.InstrumentationRegistry
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.EpisodePosition
@@ -180,6 +183,60 @@ class YourBingeeScreenTest {
             .performClick()
 
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "42") to MediaType.MOVIE, opened.get())
+    }
+
+    @Test
+    fun movieAndSeriesFavoritesWithTheSameProviderIdSurviveStateRestoration() {
+        val reference = ExternalMediaRef(MediaSource.TMDB, "42")
+        val entries = listOf(MediaType.MOVIE, MediaType.SERIES).map { type ->
+            LibraryEntry(
+                mediaRef = reference,
+                mediaType = type,
+                title = "Favorite $type",
+                addedAt = Instant.EPOCH,
+                isFavorite = true
+            )
+        }
+        val opened = AtomicReference<Pair<ExternalMediaRef, MediaType>>()
+        val restorationTester = StateRestorationTester(composeRule)
+        restorationTester.setContent {
+            BingeeTheme {
+                YourBingeeContent(
+                    state = ProfileUiState(
+                        today = LocalDate.of(2026, 8, 18),
+                        isLoading = false,
+                        isStatisticsLoading = false,
+                        favorites = entries
+                    ),
+                    onOpenSettings = {},
+                    onOpenDetails = { ref, type -> opened.set(ref to type) },
+                    onOpenCollection = {},
+                    onNavigateToSearch = {},
+                    onOpenStatistics = {},
+                    onRetryStatistics = {},
+                    onRetry = {}
+                )
+            }
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        entries.forEach { entry ->
+            val mediaLabel = context.getString(
+                if (entry.mediaType == MediaType.MOVIE) {
+                    R.string.profile_media_type_movie_no_year
+                } else {
+                    R.string.profile_media_type_series_no_year
+                }
+            )
+            val description = context.getString(R.string.profile_favorite_accessibility, entry.title, mediaLabel)
+            composeRule.scrollListTo(hasContentDescription(description)).performClick()
+            assertEquals(reference to entry.mediaType, opened.get())
+        }
+
+        restorationTester.emulateSavedInstanceStateRestore()
+        entries.forEach { entry ->
+            composeRule.scrollListTo(hasText(entry.title)).assertIsDisplayed()
+        }
     }
 
     @Test
