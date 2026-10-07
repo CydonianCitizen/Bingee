@@ -47,6 +47,18 @@ Clone the repository, then run these commands from its root:
 
 On Windows, use `gradlew.bat` instead of `./gradlew`.
 
+Instrumented component tests resolve controls from string/plural resources and existing semantics.
+Run their screen suites in Italian on a connected emulator or device with:
+
+```bash
+./gradlew connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.package=com.cydoniancitizen.bingee.feature,com.cydoniancitizen.bingee.app,com.cydoniancitizen.bingee.core" "-Pandroid.testInstrumentationRunnerArguments.uiLocale=it"
+```
+
+`uiLocale` defaults to `en`. The test locale rule runs before the Compose Activity, so dialogs and
+menus use the same language; it restores the previous Android app locale after each test and does
+not change saved Bingee preferences. Activity navigation tests still exercise the app's own language setting.
+Tests that verify wording or grammar retain explicit expectations; fixture titles are not translated.
+
 To apply Kotlin formatting:
 
 ```bash

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performClick
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.EpisodePosition
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -32,6 +33,8 @@ import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
 import com.cydoniancitizen.bingee.feature.profile.StatisticsContent
 import com.cydoniancitizen.bingee.testutil.STATISTICS_RATINGS_ITEM
 import com.cydoniancitizen.bingee.testutil.TestCalendarDateSource
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import com.cydoniancitizen.bingee.testutil.scrollListTo
 import com.cydoniancitizen.bingee.testutil.scrollListToItem
 import java.time.Clock
@@ -61,7 +64,10 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class DefaultLibraryRepositoryTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     private lateinit var database: BingeeDatabase
@@ -468,9 +474,22 @@ class DefaultLibraryRepositoryTest {
             }
         }
 
-        composeRule.scrollListTo(hasContentDescription("Rating 8, 1 title")).performClick()
+        val uiContext = localizedTestContext
+        composeRule.scrollListTo(
+            hasContentDescription(
+                uiContext.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 1, 8, 1, "")
+            )
+        ).performClick()
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
-        composeRule.scrollListTo(hasContentDescription("Arrival, Movie · 2016")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                uiContext.getString(
+                    R.string.statistics_rating_poster_accessibility,
+                    "Arrival",
+                    uiContext.getString(R.string.profile_media_type_movie, 2016)
+                )
+            )
+        ).performClick()
 
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "42"), opened)
     }

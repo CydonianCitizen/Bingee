@@ -1,12 +1,23 @@
 package com.cydoniancitizen.bingee.feature.notifications
 
-import android.content.Context
-import androidx.compose.foundation.clickable
+import android.graphics.Bitmap
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -16,29 +27,67 @@ import com.cydoniancitizen.bingee.core.model.ReleaseEvent
 import com.cydoniancitizen.bingee.core.model.ReleaseEventType
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
+import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
+import java.io.File
 import java.time.LocalDate
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
 class NotificationsScreenTest {
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
 
-    @get:Rule
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     private val today = LocalDate.of(2026, 8, 8)
-    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val context = localizedTestContext
+
+    @Test
+    fun loadingErrorRetryAndBackUseProductionControls() {
+        var state by mutableStateOf(NotificationsUiState(today = today))
+        val refreshed = AtomicInteger()
+        val backed = AtomicInteger()
+        composeRule.setContent {
+            BingeeTheme {
+                NotificationsContent(
+                    state = state,
+                    onBack = { backed.incrementAndGet() },
+                    onRefresh = {
+                        refreshed.incrementAndGet()
+                        state = state.copy(refreshState = NotificationRefreshState.Refreshing)
+                    },
+                    onOpenDetails = { _, _ -> }
+                )
+            }
+        }
+        composeRule.onNodeWithText(context.getString(R.string.notifications_loading)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.detail_back)).performClick()
+        assertEquals(1, backed.get())
+        composeRule.runOnIdle {
+            state = state.copy(contentState = NotificationsContentState.Error(AppError.NetworkUnavailable))
+        }
+        composeRule.onNodeWithText(context.getString(R.string.notifications_refresh_failed)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).performClick().assertIsNotEnabled()
+        assertEquals(1, refreshed.get())
+    }
 
     @Test
     fun noFollowedSeriesEmptyStateIsDisplayed() {
         composeRule.setContent {
             BingeeTheme {
-                NotificationsListOrEmptyState(
+                NotificationsContent(
                     state = NotificationsUiState(
                         contentState = NotificationsContentState.NoFollowedSeries,
                         today = today
                     ),
+                    onBack = {},
+                    onRefresh = {},
                     onOpenDetails = { _, _ -> }
                 )
             }
@@ -53,11 +102,13 @@ class NotificationsScreenTest {
     fun noEventsEmptyStateIsDisplayed() {
         composeRule.setContent {
             BingeeTheme {
-                NotificationsListOrEmptyState(
+                NotificationsContent(
                     state = NotificationsUiState(
                         contentState = NotificationsContentState.NoEvents,
                         today = today
                     ),
+                    onBack = {},
+                    onRefresh = {},
                     onOpenDetails = { _, _ -> }
                 )
             }
@@ -79,11 +130,13 @@ class NotificationsScreenTest {
 
         composeRule.setContent {
             BingeeTheme {
-                NotificationsListOrEmptyState(
+                NotificationsContent(
                     state = NotificationsUiState(
                         contentState = NotificationsContentState.Content(groups),
                         today = today
                     ),
+                    onBack = {},
+                    onRefresh = {},
                     onOpenDetails = { ref, mediaType -> opened.set(ref to mediaType) }
                 )
             }
@@ -91,8 +144,21 @@ class NotificationsScreenTest {
 
         composeRule.onNodeWithText(context.getString(R.string.notifications_group_upcoming)).assertIsDisplayed()
         composeRule.onNodeWithText("Severance").assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.notifications_group_today)).assertIsDisplayed()
+        composeRule.onNode(
+            hasText(context.getString(R.string.notifications_group_today)) and isHeading()
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("Breaking Bad").assertIsDisplayed()
+
+        // Exercise the production poster: neither its placeholder nor artwork repeats the card title.
+        composeRule.onAllNodesWithContentDescription(context.getString(R.string.poster_missing, "Breaking Bad"))
+            .assertCountEquals(0)
+        if (InstrumentationRegistry.getArguments().getString("captureUi") == "true") {
+            val file =
+                File(context.cacheDir, "notifications-${context.resources.configuration.locales[0].language}.png")
+            file.outputStream().use {
+                composeRule.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
 
         composeRule.onNodeWithText("Breaking Bad").performClick()
         assertEquals(todayEvent.mediaRef to MediaType.SERIES, opened.get())
@@ -113,59 +179,4 @@ class NotificationsScreenTest {
         episodeNumber = 1,
         subjectTitle = "Episode title $id"
     )
-}
-
-@androidx.compose.runtime.Composable
-private fun NotificationsListOrEmptyState(
-    state: NotificationsUiState,
-    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit
-) {
-    when (val contentState = state.contentState) {
-        NotificationsContentState.NoFollowedSeries -> {
-            com.cydoniancitizen.bingee.core.designsystem.component.EmptyState(
-                title = androidx.compose.ui.res.stringResource(R.string.notifications_title),
-                body = androidx.compose.ui.res.stringResource(
-                    com.cydoniancitizen.bingee.R.string.notifications_empty_no_followed_series
-                )
-            )
-        }
-
-        NotificationsContentState.NoEvents -> {
-            com.cydoniancitizen.bingee.core.designsystem.component.EmptyState(
-                title = androidx.compose.ui.res.stringResource(R.string.notifications_title),
-                body = androidx.compose.ui.res.stringResource(
-                    com.cydoniancitizen.bingee.R.string.notifications_empty_no_events
-                )
-            )
-        }
-
-        is NotificationsContentState.Content -> {
-            androidx.compose.foundation.layout.Column {
-                contentState.groups.forEach { group ->
-                    androidx.compose.material3.Text(
-                        text = when (group.category) {
-                            NotificationGroupCategory.UPCOMING ->
-                                androidx.compose.ui.res.stringResource(R.string.notifications_group_upcoming)
-                            NotificationGroupCategory.TODAY ->
-                                androidx.compose.ui.res.stringResource(R.string.notifications_group_today)
-                            NotificationGroupCategory.THIS_WEEK ->
-                                androidx.compose.ui.res.stringResource(R.string.notifications_group_this_week)
-                            NotificationGroupCategory.EARLIER ->
-                                androidx.compose.ui.res.stringResource(R.string.notifications_group_earlier)
-                        }
-                    )
-                    group.items.forEach { event ->
-                        androidx.compose.material3.Text(
-                            text = event.title,
-                            modifier = androidx.compose.ui.Modifier.clickable {
-                                onOpenDetails(event.mediaRef, MediaType.SERIES)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        else -> {}
-    }
 }

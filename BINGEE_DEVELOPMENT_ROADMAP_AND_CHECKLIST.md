@@ -354,6 +354,34 @@ Document only technical behavior materially changed by the above work.
 
 ---
 
+## 7. Global hardware-efficiency audit
+
+### Goal
+
+Audit the entire current project for efficient use of device resources before closing v1.2.4.
+
+### Required operation
+
+- Review CPU and main-thread work, Compose recomposition, list composition and rendering, including expensive chart and image operations.
+- Review memory usage, allocations, image sizing/cache ownership, retained objects and lifecycle cleanup.
+- Review Room query cost, indexes, shared observations, database writes and disk I/O.
+- Review network calls, refresh batching, cancellation, retries and cache freshness.
+- Review battery impact, WorkManager scheduling, notifications and Glance/widget updates, including work performed without active consumers.
+- Use reproducible measurements or bounded profiling for suspected bottlenecks where feasible. Separate source-level risks from measured runtime problems.
+- Rank findings by severity, user impact and evidence. Record device/build configuration, reproduction steps and measurement limits.
+- Apply only small, evidence-backed fixes compatible with v1.2.4 scope; defer structural changes or speculative optimizations to an explicitly planned milestone.
+
+### Acceptance criteria
+
+- The global audit covers CPU/rendering, memory, database/disk, network and battery/background work.
+- Measured issues and unmeasured hypotheses are clearly distinguished; no performance improvement is claimed without comparable before/after evidence.
+- Any applied fix preserves local-first behavior, user data, cancellation and existing functionality, with proportionate regression verification.
+- Temporary reports and profiling evidence remain under `.audit/`; only deliberately adopted policies enter canonical documentation.
+
+This audit complements the mandatory per-modification and final global audits; it does not replace them.
+
+---
+
 # v1.2.5 — Dedicated global dead-code cleanup + canonical documentation sync
 
 ## Goal
@@ -1299,9 +1327,9 @@ UI gate uses the recorded per-item native evidence at 320dp/IT/font 1.5, 360dp/I
 
 # v1.2.4 checklist
 
-- [ ] Bump to v1.2.4 / code 8.
-- [ ] Audit English-literal instrumentation selectors.
-- [ ] Replace only brittle selectors with semantic/resource-based equivalents.
+- [x] Bump to v1.2.4 / code 8.
+- [x] Audit English-literal instrumentation selectors.
+- [x] Replace only brittle selectors with semantic/resource-based equivalents.
 - [ ] Run release/minified smoke including Glance, notification deep links and shortcuts.
 - [ ] Review Home observation error swallowing.
 - [ ] Change only if inconsistent behavior is proven.
@@ -1309,9 +1337,17 @@ UI gate uses the recorded per-item native evidence at 320dp/IT/font 1.5, 360dp/I
 - [ ] Change only if a concrete issue is proven.
 - [ ] Make radar sizing container-aware where window assumption remains.
 - [ ] Update directly affected docs.
+- [ ] Run modification #7 global hardware-efficiency audit covering CPU/rendering, memory, database/disk, network and battery/background work.
+- [ ] Classify measured bottlenecks separately from source-level hypotheses; verify any applied optimization with comparable evidence.
 - [ ] Run mandatory GLOBAL audit after each numbered modification.
 - [ ] Run final v1.2.4 global audit.
 - [ ] Pass release gate.
+
+Modification #1 completion record (2026-10-08): Part II A1–A7 applied from clean `main` at `fb1358a025fa681b1b4b07e73c0c75de18684bb6`. Ordinary instrumentation selectors now use existing resources, plurals, localized month arrays and semantic roles/state across screens and Activity navigation; fixture titles and deliberate visible-copy contracts remain literal. Explicit EN/IT vocabulary and singular/plural expectations remain. A test-only `TestLocaleRule` applies `uiLocale=en` (default) or `it` before Compose Activity creation, including native dialogs/menus, and restores the previous Android app locale without changing saved Bingee preferences. README documents the Italian suite command. Notifications tests now exercise the production content instead of a test-local replacement; the route retains ViewModel, Flow and snackbar ownership. Added loading/error/retry/Back coverage. No visual geometry, persistence, dependency or navigation change. Production Kotlin +22/-2 LOC; one route/content boundary reused by production and tests, no generic framework or new reactive query. App 1.2.4 / code 8, Room 9 and Backup 3 unchanged.
+
+Verification: full JVM **460**, full connected Android **247**, and Italian component/package suite **105**, all with zero failures/errors/skips on Pixel_9 API 35. Full spotlessCheck, lintDebug (0 errors; 51 pre-existing warnings), assembleDebug, assembleDebugAndroidTest, diff check and 47 local Markdown links passed. Real Notifications content captures at 411dp / font 1.0 cover EN/Light and IT/Dark; headings, event copy, decorative posters and navigation remain coherent. Initial Italian failures were test-context and selector issues, corrected and rerun without disabling tests or adding sleeps. Full TalkBack, expanded-window/font-2.0 coverage and release/minified runtime remain their dedicated milestones. The requested global hardware-efficiency audit was added as planned #7 before #1 implementation; no hardware improvement or completed #7 is claimed.
+
+- [x] Mandatory GLOBAL read-only audit for **modification #1 only**, covering all eleven A5 categories with Caveman ultra, Ponytail Audit, Impeccable native Android and applicable Android testing/adaptive/intent-security guidance. No introduced unresolved P0/P1, dead production code or unjustified abstraction found. Existing Home error handling/retry/radar remain #3–#5; hardware profiling hypotheses remain #7; source-proven cleanup candidates and general documentation drift remain v1.2.5. Reports, scoped checklist, diagnostic/final logs and visual evidence remain temporary under `.audit/v1.2.4-mod1/`. This does **not** complete the all-modifications audit item, final v1.2.4 global audit or release gate above.
 
 # v1.2.5 checklist
 

@@ -4,12 +4,20 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import org.junit.Rule
 import org.junit.Test
 
 class PrivacySettingsScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -29,14 +37,16 @@ class PrivacySettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Privacy").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.privacy_title)).assertIsDisplayed()
         composeRule.onNodeWithText(
-            "Bingee does not require an account. Personal tracking data is stored locally on your device. TMDB provides movie and TV metadata."
+            context.getString(R.string.privacy_body)
         )
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText("TMDB configuration").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+        composeRule.onNodeWithText(
+            context.getString(R.string.settings_tmdb_title)
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tmdb_attribution))
             .performScrollTo()
             .assertIsDisplayed()
     }

@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.feature.settings
 
-import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,19 +10,23 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.test.core.app.ApplicationProvider
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.data.settings.AppLanguage
 import com.cydoniancitizen.bingee.data.settings.AppTheme
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
 class SettingsScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
-    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val context = localizedTestContext
 
     @Test
     fun languageDropdownShowsOnlyEnglishAndItalianoAndNoSystemDefault() {

@@ -5,14 +5,22 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class SettingsIndexScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -36,26 +44,26 @@ class SettingsIndexScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Settings").assertIsDisplayed()
-        composeRule.onNodeWithText("Appearance & Language").assertIsDisplayed()
-        composeRule.onNodeWithText("Notifications").assertIsDisplayed()
-        composeRule.onNodeWithText("Data & Backup").assertIsDisplayed()
-        composeRule.onNodeWithText("Privacy").assertIsDisplayed()
-        composeRule.onNodeWithText("About Bingee").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.nav_settings)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_appearance)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_notifications)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_data_backup)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.privacy_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_about)).assertIsDisplayed()
 
-        composeRule.onNodeWithText("Appearance & Language").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_appearance)).performClick()
         assertTrue(appearanceClicked.get())
 
-        composeRule.onNodeWithText("Notifications").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_notifications)).performClick()
         assertTrue(notificationsClicked.get())
 
-        composeRule.onNodeWithText("Data & Backup").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_data_backup)).performClick()
         assertTrue(dataBackupClicked.get())
 
-        composeRule.onNodeWithText("Privacy").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.privacy_title)).performClick()
         assertTrue(privacyClicked.get())
 
-        composeRule.onNodeWithText("About Bingee").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_about)).performClick()
         assertTrue(aboutClicked.get())
     }
 
@@ -77,8 +85,8 @@ class SettingsIndexScreenTest {
         }
 
         // Settings is reached from Your Bingee, so system Back alone is not the whole affordance.
-        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.detail_back)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.detail_back)).performClick()
 
         assertTrue(back.get())
     }

@@ -29,7 +29,6 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
-import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
@@ -52,6 +51,8 @@ import com.cydoniancitizen.bingee.core.model.TrackedEpisode
 import com.cydoniancitizen.bingee.core.model.deriveSeasonProgress
 import com.cydoniancitizen.bingee.core.model.deriveSeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -63,7 +64,13 @@ import org.junit.Rule
 import org.junit.Test
 
 class MediaDetailsScreenTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
+    val composeRule = createComposeRule()
 
     @Test
     fun movieDetailsRenderWatchedActionAndTitleRatingControls() {
@@ -78,22 +85,27 @@ class MediaDetailsScreenTest {
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
         // The runtime now lives inside the hero's meta line ("Movie · 120 min") instead of its own
         // labelled field, so it is asserted as a substring of that line.
-        composeRule.onNode(hasText("120 min", substring = true)).assertIsDisplayed()
+        composeRule.onNode(
+            hasText(context.getString(R.string.detail_minutes, 120), substring = true)
+        ).assertIsDisplayed()
         // Status and genres are individual chips now, not a status Text plus one joined string.
-        scrollTo(hasText("Released"))
-        composeRule.onNodeWithText("Released").assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_status_released)))
+        composeRule.onNodeWithText(context.getString(R.string.detail_status_released)).assertIsDisplayed()
         composeRule.onNodeWithText("Drama").assertIsDisplayed()
         composeRule.onNodeWithText("Thriller").assertIsDisplayed()
-        scrollTo(hasText("Personal rating"))
-        composeRule.onNodeWithText("Personal rating").assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_rating_title)))
+        composeRule.onNodeWithText(context.getString(R.string.detail_rating_title)).assertIsDisplayed()
         // The hero meta line only carries the year, so the full date has to survive further down.
-        scrollTo(hasText("Release date"))
-        composeRule.onNodeWithText("Release date").assertIsDisplayed()
-        scrollTo(hasText("Mark watched"))
+        scrollTo(hasText(context.getString(R.string.detail_date)))
+        composeRule.onNodeWithText(context.getString(R.string.detail_date)).assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_mark_watched)))
         composeRule.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not watched")
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription,
+                context.getString(R.string.detail_movie_unwatched)
+            )
         ).assertIsDisplayed()
-        composeRule.onNodeWithText("Mark watched").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.detail_mark_watched)).performClick()
         assertTrue(toggled.get())
     }
 
@@ -105,7 +117,7 @@ class MediaDetailsScreenTest {
             onToggleFavorite = { toggled.set(true) }
         )
 
-        composeRule.onNodeWithContentDescription("Add to Favorites")
+        composeRule.onNodeWithContentDescription(context.getString(R.string.favorite_add))
             .assert(isToggleable())
             .assert(
                 SemanticsMatcher.expectValue(
@@ -138,7 +150,7 @@ class MediaDetailsScreenTest {
     }
 
     private fun assertDateActions(initialState: MediaDetailsUiState, editLabelRes: Int) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = localizedTestContext
         val clearLabel = context.getString(R.string.watched_date_clear)
         val editLabel = context.getString(editLabelRes)
         val cancelLabel = context.getString(R.string.action_cancel)
@@ -198,19 +210,28 @@ class MediaDetailsScreenTest {
         )
 
         // The hero meta line reads "TV Series · 3 seasons", so the type is a substring of it.
-        composeRule.onNode(hasText("TV Series", substring = true)).assertIsDisplayed()
+        composeRule.onNode(hasText(context.getString(R.string.library_type_tv), substring = true)).assertIsDisplayed()
         // Each season is its own lazy item, so every assertion first scrolls its target into composition.
         scrollTo(hasText("Season 1"))
         composeRule.onNodeWithText("Season 1").assertIsDisplayed()
-        scrollTo(hasText("Episode 1 · Watched episode"))
-        composeRule.onNodeWithText("Episode 1 · Watched episode").performScrollTo().assertIsDisplayed()
-        scrollTo(hasText("Episode 3 · Future episode"))
-        composeRule.onNodeWithText("Episode 3 · Future episode").performScrollTo().assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_episode_title, 1, "Watched episode")))
+        composeRule.onNodeWithText(
+            context.getString(R.string.detail_episode_title, 1, "Watched episode")
+        ).performScrollTo().assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_episode_title, 3, "Future episode")))
+        composeRule.onNodeWithText(
+            context.getString(R.string.detail_episode_title, 3, "Future episode")
+        ).performScrollTo().assertIsDisplayed()
         composeRule.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not aired yet")
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription,
+                context.getString(R.string.detail_episode_future)
+            )
         ).assertIsNotEnabled()
-        scrollTo(hasText("Specials"))
-        composeRule.onAllNodesWithText("Specials")[0].performScrollTo().assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_specials_title)))
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.detail_specials_title)
+        )[0].performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Rate episode").assertDoesNotExist()
         composeRule.onNodeWithText("Rate season").assertDoesNotExist()
     }
@@ -244,7 +265,9 @@ class MediaDetailsScreenTest {
         // offer every episode twice.
         composeRule.onAllNodes(isToggleable()).assertCountEquals(5)
         // The tap lands on the title, not on the checkbox: the whole row is the target.
-        composeRule.onNodeWithText("Episode 2 · Unwatched episode").performScrollTo().performClick()
+        composeRule.onNodeWithText(
+            context.getString(R.string.detail_episode_title, 2, "Unwatched episode")
+        ).performScrollTo().performClick()
         assertTrue(toggled.get())
     }
 
@@ -264,13 +287,15 @@ class MediaDetailsScreenTest {
         scrollTo(hasText("Season 1"))
         // The season action left the overflow, which went with its last item.
         composeRule.onNodeWithContentDescription("Actions for Season 1").assertDoesNotExist()
-        assertSeasonState("Season 1", "All trackable episodes watched")
-        assertSeasonState("Season 2", "Partly watched")
-        assertSeasonState("Season 3", "Not watched")
+        assertSeasonState("Season 1", context.getString(R.string.detail_season_watched_state))
+        assertSeasonState("Season 2", context.getString(R.string.detail_season_partial_state))
+        assertSeasonState("Season 3", context.getString(R.string.detail_movie_unwatched))
 
         // A complete season offers the inverse action, and the checkbox is its only home now.
         scrollTo(hasText("Season 1"))
-        composeRule.onNodeWithContentDescription("Mark season unwatched").performClick()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.detail_mark_season_unwatched)
+        ).performClick()
         assertEquals(1, toggled.get())
         // A press the checkbox handled must not also expand the card behind it.
         assertEquals(0, expandTaps.get())
@@ -287,11 +312,11 @@ class MediaDetailsScreenTest {
         )
 
         // The checkbox cannot say why it is disabled, so the card body still carries the reason.
-        scrollTo(hasText("Updating…"))
-        composeRule.onNodeWithText("Updating…").assertIsDisplayed()
-        seasonCheckbox("Partly watched").assertIsNotEnabled().performClick()
+        scrollTo(hasText(context.getString(R.string.detail_progress_updating)))
+        composeRule.onNodeWithText(context.getString(R.string.detail_progress_updating)).assertIsDisplayed()
+        seasonCheckbox(context.getString(R.string.detail_season_partial_state)).assertIsNotEnabled().performClick()
         scrollTo(hasText("Season 2"))
-        seasonCheckbox("Not watched").assertIsNotEnabled().performClick()
+        seasonCheckbox(context.getString(R.string.detail_movie_unwatched)).assertIsNotEnabled().performClick()
     }
 
     @Test
@@ -310,9 +335,11 @@ class MediaDetailsScreenTest {
         // A checkbox lays out at 24dp and gets its 48dp target from minimumInteractiveComponentSize,
         // which widens the touch bounds without widening the layout bounds. Only touchBoundsInRoot
         // describes what a finger can actually hit.
-        val checkboxTouch = composeRule.onNodeWithContentDescription("Mark trackable episodes watched")
+        val checkboxTouch = composeRule.onNodeWithContentDescription(
+            context.getString(R.string.detail_mark_season_watched)
+        )
             .fetchSemanticsNode().touchBoundsInRoot
-        val refreshTouch = composeRule.onNodeWithContentDescription("Refresh season metadata")
+        val refreshTouch = composeRule.onNodeWithContentDescription(context.getString(R.string.detail_refresh_season))
             .fetchSemanticsNode().touchBoundsInRoot
         with(composeRule.density) {
             assertTrue(
@@ -360,16 +387,16 @@ class MediaDetailsScreenTest {
             onRemoveRating = { removed.set(true) }
         )
 
-        scrollTo(hasText("10 out of 10"))
-        composeRule.onNodeWithText("10 out of 10").assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.detail_rating_value, 10)))
+        composeRule.onNodeWithText(context.getString(R.string.detail_rating_value, 10)).assertIsDisplayed()
         composeRule.onNode(
             SemanticsMatcher.expectValue(
                 SemanticsProperties.StateDescription,
-                "Personal rating, 10 out of 10"
+                context.getString(R.string.detail_rating_slider, 10)
             )
         ).assertIsDisplayed()
-        composeRule.onNodeWithText("Save rating").performScrollTo().performClick()
-        composeRule.onNodeWithText("Remove personal rating").performScrollTo().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.detail_rating_set)).performScrollTo().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.detail_rating_remove)).performScrollTo().performClick()
         assertTrue(saved.get())
         assertTrue(removed.get())
     }
@@ -389,7 +416,7 @@ class MediaDetailsScreenTest {
             onRetry = { retried.set(true) },
             onOpenSettings = { settings.set(true) }
         )
-        composeRule.onNodeWithText("Loading title details").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.detail_loading)).assertIsDisplayed()
 
         composeRule.runOnIdle {
             state = MediaDetailsUiState(
@@ -397,7 +424,7 @@ class MediaDetailsScreenTest {
                 content = DetailContentState.Error(AppError.NetworkUnavailable)
             )
         }
-        composeRule.onNodeWithText("Retry").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).performClick()
         assertTrue(retried.get())
 
         composeRule.runOnIdle {
@@ -406,7 +433,7 @@ class MediaDetailsScreenTest {
                 content = DetailContentState.Error(AppError.Unauthorized)
             )
         }
-        composeRule.onNodeWithText("Open Settings").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_open_settings)).performClick()
         assertTrue(settings.get())
     }
 
@@ -417,7 +444,9 @@ class MediaDetailsScreenTest {
         )
         setDetailsState({ state })
         composeRule.onNodeWithText("Movie title").assertIsDisplayed()
-        composeRule.onNodeWithText("Saved details remain available.", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.detail_refresh_failed, context.getString(R.string.error_network_unavailable))
+        ).assertIsDisplayed()
 
         composeRule.runOnIdle {
             state = content(movie()).copy(refresh = DetailRefreshState.Refreshing)
@@ -436,7 +465,7 @@ class MediaDetailsScreenTest {
     }
 
     private fun assertHeroSemantics(media: MediaDetails) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = localizedTestContext
         val details = media.copy(
             title = "A very long localized title that exceeds the hero's two visible lines",
             originalTitle = "Distinct original title"
@@ -477,10 +506,10 @@ class MediaDetailsScreenTest {
         setDetails(content(movie().copy(posterUrl = null, backdropUrl = null)), onToggle = { toggled.set(true) })
 
         composeRule.onNodeWithText("Movie title").assertIsDisplayed().assert(isHeading())
-        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Refresh details").assertIsDisplayed()
-        scrollTo(hasText("Add to library"))
-        composeRule.onNodeWithText("Add to library").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.detail_back)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.detail_refresh)).assertIsDisplayed()
+        scrollTo(hasText(context.getString(R.string.library_action_add)))
+        composeRule.onNodeWithText(context.getString(R.string.library_action_add)).performClick()
         assertTrue(toggled.get())
     }
 

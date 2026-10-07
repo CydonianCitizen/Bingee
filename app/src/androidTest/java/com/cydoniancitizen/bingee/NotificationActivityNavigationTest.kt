@@ -45,9 +45,9 @@ class NotificationActivityNavigationTest {
             )
         )
         try {
-            composeRule.onNodeWithText("Title details").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.detail_screen_title)).assertIsDisplayed()
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         } finally {
             scenario.onActivity { it.finish() }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
@@ -57,7 +57,7 @@ class NotificationActivityNavigationTest {
     @Test
     fun warmTvIntentNavigatesToExistingDetailRoute() {
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
             scenario.onActivity { activity ->
                 InstrumentationRegistry.getInstrumentation().callActivityOnNewIntent(
                     activity,
@@ -68,9 +68,9 @@ class NotificationActivityNavigationTest {
                 )
             }
 
-            composeRule.onNodeWithText("Title details").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.detail_screen_title)).assertIsDisplayed()
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         }
     }
 
@@ -80,7 +80,7 @@ class NotificationActivityNavigationTest {
             action = NotificationDetailIntent.ACTION_OPEN_DETAILS
         }
         ActivityScenario.launch<MainActivity>(malformed).use {
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         }
     }
 
@@ -93,7 +93,7 @@ class NotificationActivityNavigationTest {
             putExtra("notification_external_id", "tt123")
         }
         ActivityScenario.launch<MainActivity>(unsupported).use {
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         }
     }
 }

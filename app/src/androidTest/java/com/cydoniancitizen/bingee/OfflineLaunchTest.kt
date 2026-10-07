@@ -33,10 +33,14 @@ class OfflineLaunchTest {
 
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
             composeRule.waitUntil(10_000) {
-                composeRule.onAllNodesWithText("Continue without TMDB").fetchSemanticsNodes().isNotEmpty()
+                composeRule.onAllNodesWithText(
+                    context.getString(R.string.onboarding_continue_offline)
+                ).fetchSemanticsNodes().isNotEmpty()
             }
-            composeRule.onNodeWithText("Continue without TMDB").performScrollTo().performClick()
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(
+                context.getString(R.string.onboarding_continue_offline)
+            ).performScrollTo().performClick()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         }
     }
 }

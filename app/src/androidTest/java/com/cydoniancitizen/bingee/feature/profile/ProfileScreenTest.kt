@@ -19,7 +19,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
-import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -34,6 +33,8 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCategory
 import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,8 +45,12 @@ import org.junit.Rule
 import org.junit.Test
 
 class ProfileScreenTest {
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
 
-    @get:Rule
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     private fun seriesEntry(id: String, title: String, watched: Int, trackable: Int) = LibraryEntry(
@@ -88,8 +93,21 @@ class ProfileScreenTest {
         }
 
         // A fixed string reads "1 of 1 episodes watched"; the plural resource has to pick the singular.
-        composeRule.onNodeWithText("1 of 1 episode watched").assertIsDisplayed()
-        composeRule.onNodeWithText("2 of 6 episodes watched").assertIsDisplayed()
+        val italian = context.resources.configuration.locales[0].language == "it"
+        assertEquals(
+            if (italian) "1 di 1 episodio visto" else "1 of 1 episode watched",
+            context.resources.getQuantityString(R.plurals.library_progress_episodes, 1, 1, 1)
+        )
+        assertEquals(
+            if (italian) "2 di 6 episodi visti" else "2 of 6 episodes watched",
+            context.resources.getQuantityString(R.plurals.library_progress_episodes, 6, 2, 6)
+        )
+        composeRule.onNodeWithText(
+            context.resources.getQuantityString(R.plurals.library_progress_episodes, 1, 1, 1)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.resources.getQuantityString(R.plurals.library_progress_episodes, 6, 2, 6)
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -114,8 +132,8 @@ class ProfileScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Your collection").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile_collection_title)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.nav_settings)).performClick()
         assertTrue(settingsClicked.get())
     }
 
@@ -142,7 +160,7 @@ class ProfileScreenTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Statistics").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.statistics_title)).performClick()
         assertTrue(statisticsClicked.get())
     }
 
@@ -170,10 +188,10 @@ class ProfileScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Watch Later").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile_tab_watch_later)).performClick()
         assertEquals(ProfileCollection.WATCH_LATER, selectedCollection.get())
 
-        composeRule.onNodeWithText("TV Series").performScrollTo().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile_tab_tv_series)).performScrollTo().performClick()
         assertEquals(ProfileCategory.TV_SERIES, selectedCategory.get())
     }
 
@@ -205,8 +223,8 @@ class ProfileScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("No watched movies").assertIsDisplayed()
-        composeRule.onNodeWithText("Explore in Search").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile_empty_watched_movies_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.profile_empty_action_search)).performClick()
         assertTrue(searchNavigated.get())
 
         composeRule.onNode(hasSetTextAction()).performTextInput("Inception")
@@ -249,7 +267,7 @@ class ProfileScreenTest {
         }
 
         composeRule.onNodeWithText("Inception").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Open details for Inception").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.open_details, "Inception")).performClick()
         assertTrue(detailsOpened.get())
     }
 
@@ -289,7 +307,7 @@ class ProfileScreenTest {
         }
 
         composeRule.onNodeWithText("Interstellar").assertIsDisplayed()
-        composeRule.onNodeWithText("Remove from library").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.library_action_remove)).performClick()
         assertTrue(itemRemoved.get())
     }
 
@@ -300,7 +318,7 @@ class ProfileScreenTest {
     fun listFavoriteActionExposesItsCurrentToggleState() = assertFavoriteToggle(ProfileViewMode.LIST)
 
     private fun assertFavoriteToggle(mode: ProfileViewMode) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = localizedTestContext
         val add = context.getString(R.string.favorite_add)
         val remove = context.getString(R.string.favorite_remove)
         var favorite by mutableStateOf(false)

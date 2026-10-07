@@ -16,7 +16,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
-import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -25,6 +24,8 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaSource
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -34,7 +35,12 @@ import org.junit.Rule
 import org.junit.Test
 
 class SearchScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -62,8 +68,8 @@ class SearchScreenTest {
         )
 
         composeRule.onNode(hasSetTextAction()).performTextReplacement("Aliens")
-        composeRule.onNodeWithContentDescription("Clear search query").performClick()
-        composeRule.onNodeWithText("TV Series").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.search_clear_query)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_category_tv)).performClick()
 
         assertEquals("Aliens", query.get())
         assertTrue(cleared.get())
@@ -84,7 +90,7 @@ class SearchScreenTest {
             .onNode(
                 SemanticsMatcher.expectValue(
                     SemanticsProperties.StateDescription,
-                    "Searching TMDB"
+                    context.getString(R.string.search_loading)
                 )
             ).assertIsDisplayed()
 
@@ -95,7 +101,7 @@ class SearchScreenTest {
                 content = SearchContentState.Empty
             )
         }
-        composeRule.onNodeWithText("No results").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.search_empty_title)).assertIsDisplayed()
     }
 
     @Test
@@ -114,7 +120,7 @@ class SearchScreenTest {
             onRetryInitial = { retried.set(true) },
             onOpenSettings = { opened.set(true) }
         )
-        composeRule.onNodeWithText("Retry").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).performClick()
         assertTrue(retried.get())
 
         composeRule.runOnIdle {
@@ -124,7 +130,7 @@ class SearchScreenTest {
                 content = SearchContentState.Error(AppError.Unauthorized)
             )
         }
-        composeRule.onNodeWithText("Open Settings").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_open_settings)).performClick()
         assertTrue(opened.get())
     }
 
@@ -134,13 +140,13 @@ class SearchScreenTest {
 
         composeRule.onNodeWithText("Fixed Movie").assertIsDisplayed()
         composeRule.onNodeWithText("Original Movie").assertIsDisplayed()
-        composeRule.onNodeWithText("Year: 2024").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.search_release_year, 2024)).assertIsDisplayed()
         // The result card owns one description; its poster, placeholder included, stays decorative
         // so the title is not announced twice.
         composeRule
-            .onNodeWithContentDescription("Open details for Fixed Movie")
-            .assertContentDescriptionEquals("Open details for Fixed Movie")
-        composeRule.onNodeWithText("End of results").assertIsDisplayed()
+            .onNodeWithContentDescription(context.getString(R.string.open_details, "Fixed Movie"))
+            .assertContentDescriptionEquals(context.getString(R.string.open_details, "Fixed Movie"))
+        composeRule.onNodeWithText(context.getString(R.string.search_end_of_results)).assertIsDisplayed()
     }
 
     @Test
@@ -149,7 +155,7 @@ class SearchScreenTest {
         var state by mutableStateOf(resultsState(NextPageState.Loading))
         setSearchState({ state }, onRetryNextPage = { retried.set(true) })
         composeRule.onNodeWithText("Fixed Movie").assertIsDisplayed()
-        composeRule.onNodeWithText("Loading more results").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.search_loading_more)).assertIsDisplayed()
 
         composeRule.runOnIdle {
             state = resultsState(
@@ -157,7 +163,7 @@ class SearchScreenTest {
             )
         }
         composeRule.onNodeWithText("Fixed Movie").assertIsDisplayed()
-        composeRule.onNodeWithText("Retry loading more").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_retry_more)).performClick()
         assertTrue(retried.get())
     }
 
@@ -169,7 +175,7 @@ class SearchScreenTest {
             onLoadNextPage = { loaded.set(true) }
         )
 
-        composeRule.onNodeWithText("Load more results").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_load_more)).performClick()
 
         assertTrue(loaded.get())
     }
@@ -179,7 +185,7 @@ class SearchScreenTest {
         val toggled = AtomicReference<MediaSearchResult?>(null)
         var state by mutableStateOf(resultsState(NextPageState.End))
         val results = state.content as SearchContentState.Results
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = localizedTestContext
         val addLabel = context.getString(R.string.collection_action_add)
         val removeLabel = context.getString(R.string.collection_action_remove)
         setSearchState(state = { state }, onToggleLibrary = toggled::set)
@@ -214,11 +220,11 @@ class SearchScreenTest {
             onOpenDetails = { ref, type -> opened.set(ref to type) }
         )
 
-        composeRule.onNodeWithContentDescription("Open details for Fixed Movie").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.open_details, "Fixed Movie")).performClick()
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "1") to MediaType.MOVIE, opened.get())
         opened.set(null)
         composeRule.onNodeWithText(
-            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.collection_action_add)
+            localizedTestContext.getString(R.string.collection_action_add)
         ).performClick()
         assertTrue(toggled.get())
         assertEquals(null, opened.get())

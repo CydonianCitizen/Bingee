@@ -21,7 +21,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
-import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
@@ -40,6 +39,8 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import com.cydoniancitizen.bingee.testutil.scrollListTo
 import java.time.Instant
 import java.time.LocalDate
@@ -51,12 +52,18 @@ import org.junit.Rule
 import org.junit.Test
 
 class HomeScreenTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
+    val composeRule = createComposeRule()
     private val today = LocalDate.of(2026, 8, 3)
 
     @Test
     fun featuredMembershipActionAndSavedStateDescribeCollectionForMoviesAndSeries() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = localizedTestContext
         val addLabel = context.getString(R.string.collection_action_add)
         val savedLabel = context.getString(R.string.collection_state_in)
         val added = AtomicReference<MediaSearchResult?>(null)
@@ -94,7 +101,7 @@ class HomeScreenTest {
     fun emptyLoadingAndLastUpdateStatesAreVisible() {
         var state by mutableStateOf(HomeUiState(content = HomeContentState.Loading, today = today))
         setHomeState({ state })
-        composeRule.onNodeWithText("Loading saved release events").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.home_loading)).assertIsDisplayed()
 
         composeRule.runOnIdle {
             state = HomeUiState(
@@ -103,8 +110,11 @@ class HomeScreenTest {
                 today = today
             )
         }
-        composeRule.onNodeWithText("No releases to show").assertIsDisplayed()
-        composeRule.onNodeWithText("Last successful update:", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.home_empty_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_last_updated, "").trim(),
+            substring = true
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -125,15 +135,23 @@ class HomeScreenTest {
             onOpenDetails = { ref, type -> opened.set(ref to type) }
         )
 
-        composeRule.onNodeWithText("Movie release").assertIsDisplayed()
-        composeRule.onNodeWithText("Season premiere · S1", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Season 1, episode 1", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.home_event_movie_release)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_event_season, 1, "Subject season"),
+            substring = true
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_event_episode, 1, 1, "Subject episode"),
+            substring = true
+        ).assertIsDisplayed()
         // The card owns one description for the whole row; its poster stays decorative so the
         // title is not announced a second time.
-        composeRule.onNodeWithContentDescription("Open title details for Title movie")
-            .assertContentDescriptionEquals("Open title details for Title movie")
+        composeRule.onNodeWithContentDescription(context.getString(R.string.home_open_event_details, "Title movie"))
+            .assertContentDescriptionEquals(context.getString(R.string.home_open_event_details, "Title movie"))
         composeRule.onNodeWithText("Remind me").assertDoesNotExist()
-        composeRule.onNodeWithContentDescription("Open title details for Title episode").performClick()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.home_open_event_details, "Title episode")
+        ).performClick()
         assertEquals(events.last().mediaRef to MediaType.SERIES, opened.get())
     }
 
@@ -154,17 +172,29 @@ class HomeScreenTest {
             onMarkNextEpisode = marked::set
         )
 
-        composeRule.onNodeWithText("Continue Watching").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.home_continue_watching)).assertIsDisplayed()
         // The card spans the row, so it keeps the same margin to both screen edges.
         val root = composeRule.onRoot().getBoundsInRoot()
-        val card = composeRule.onNodeWithContentDescription("Open details for Continuing Series").getBoundsInRoot()
+        val card = composeRule.onNodeWithContentDescription(
+            context.getString(R.string.home_open_continue_details, "Continuing Series")
+        ).getBoundsInRoot()
         assertEquals(card.left.value, (root.right - card.right).value, 1f)
-        composeRule.onNodeWithText("3 of 8 episodes").assertIsDisplayed()
-        composeRule.onNodeWithText("Last watched: Season 2 • Episode 4").assertIsDisplayed()
-        composeRule.onNodeWithText("Next: Season 2 • Episode 5").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Mark Season 2 • Episode 5 as watched").performClick()
+        composeRule.onNodeWithText(
+            context.resources.getQuantityString(R.plurals.home_continue_watching_progress, 8, 3, 8)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_continue_watching_last_episode, 2, 4)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_continue_watching_next_episode, 2, 5)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.home_continue_watching_mark_watched, 2, 5)
+        ).performClick()
         assertEquals(item, marked.get())
-        composeRule.onNodeWithContentDescription("Open details for Continuing Series").performClick()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.home_open_continue_details, "Continuing Series")
+        ).performClick()
         assertEquals(item.mediaRef to MediaType.SERIES, opened.get())
     }
 
@@ -188,9 +218,13 @@ class HomeScreenTest {
             onUndoMarkedEpisode = { undone.set(true) }
         )
 
-        composeRule.onNodeWithContentDescription("Mark Season 2 • Episode 5 as watched").assertDoesNotExist()
-        composeRule.onNodeWithText("Continuing Series: Season 2 • Episode 5 marked as watched").assertIsDisplayed()
-        composeRule.onNodeWithText("Undo").performClick()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.home_continue_watching_mark_watched, 2, 5)
+        ).assertDoesNotExist()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_continue_watching_marked, "Continuing Series", 2, 5)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.action_undo)).performClick()
         composeRule.waitForIdle()
         assertTrue(undone.get())
     }
@@ -211,7 +245,7 @@ class HomeScreenTest {
     fun continueWatchingSectionIsAbsentWhenEmpty() {
         setHome(HomeUiState(content = HomeContentState.Empty, today = today))
 
-        composeRule.onNodeWithText("Continue Watching").assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.home_continue_watching)).assertDoesNotExist()
     }
 
     @Test
@@ -254,8 +288,11 @@ class HomeScreenTest {
             onOpenSettings = { settings.set(true) }
         )
 
-        composeRule.onNodeWithText("Succeeded: 1 · Failed: 1.", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Retry").performClick()
+        composeRule.onNodeWithText(
+            context.getString(R.string.home_refresh_partial, 1, 1),
+            substring = true
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).performClick()
         assertTrue(refreshed.get())
         composeRule.onNodeWithText("Title movie").assertIsDisplayed()
 
@@ -266,7 +303,7 @@ class HomeScreenTest {
                 today = today
             )
         }
-        composeRule.onNodeWithText("Open Settings").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_open_settings)).performClick()
         assertTrue(settings.get())
     }
 
@@ -279,7 +316,9 @@ class HomeScreenTest {
         )
 
         composeRule.onNodeWithContentDescription("Refresh release calendar").assertDoesNotExist()
-        composeRule.onNodeWithContentDescription("Notifications").assertIsDisplayed().performClick()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.notifications_title)
+        ).assertIsDisplayed().performClick()
         assertTrue(notificationsClicked.get())
     }
 
@@ -310,9 +349,9 @@ class HomeScreenTest {
         )
         setHome(HomeUiState(content = HomeContentState.Events(groups), today = today))
 
-        composeRule.scrollListTo(hasText("Recently released")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Releases today")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Upcoming release")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.home_event_recent))).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.home_event_today))).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.home_event_upcoming))).assertIsDisplayed()
     }
 
     @Test
@@ -347,8 +386,8 @@ class HomeScreenTest {
 
         composeRule.onNodeWithText(longEvent.title).assertIsDisplayed()
         // A missing poster falls back to the placeholder without adding a second description.
-        composeRule.onNodeWithContentDescription("Open title details for ${longEvent.title}")
-            .assertContentDescriptionEquals("Open title details for ${longEvent.title}")
+        composeRule.onNodeWithContentDescription(context.getString(R.string.home_open_event_details, longEvent.title))
+            .assertContentDescriptionEquals(context.getString(R.string.home_open_event_details, longEvent.title))
     }
 
     private fun setHome(

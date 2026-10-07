@@ -26,13 +26,20 @@ import com.cydoniancitizen.bingee.feature.search.SearchCredentialAvailability
 import com.cydoniancitizen.bingee.feature.search.SearchUiState
 import com.cydoniancitizen.bingee.feature.settings.PrivacySettingsContent
 import com.cydoniancitizen.bingee.feature.settings.PrivacyUiState
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class CredentialFlowsTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -57,14 +64,14 @@ class CredentialFlowsTest {
             .onNode(hasSetTextAction())
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
 
-        composeRule.onNodeWithText("Show").performClick()
-        composeRule.onNodeWithText("Hide").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.credential_show)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.credential_hide)).assertIsDisplayed()
         composeRule
             .onNode(hasSetTextAction())
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
 
-        composeRule.onNodeWithText("Hide").performClick()
-        composeRule.onNodeWithText("Show").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.credential_hide)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.credential_show)).assertIsDisplayed()
         composeRule
             .onNode(hasSetTextAction())
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
@@ -87,8 +94,8 @@ class CredentialFlowsTest {
             }
         }
 
-        composeRule.onNodeWithText("Validate").assertIsNotEnabled()
-        composeRule.onNodeWithText("Check the entered information and try again.").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.credential_validate)).assertIsNotEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.error_invalid_input)).assertIsDisplayed()
     }
 
     @Test
@@ -117,9 +124,9 @@ class CredentialFlowsTest {
             }
         }
 
-        composeRule.onNodeWithText("Retry").performClick()
-        composeRule.onNodeWithText("TMDB credential is valid.").assertIsDisplayed()
-        composeRule.onNodeWithText("•••••••• (stored securely)").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.credential_status_valid)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.credential_stored_mask)).assertIsDisplayed()
     }
 
     @Test
@@ -139,7 +146,7 @@ class CredentialFlowsTest {
             }
         }
 
-        composeRule.onNodeWithText("Validating with TMDB…").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.credential_status_validating)).assertIsDisplayed()
     }
 
     @Test
@@ -163,8 +170,12 @@ class CredentialFlowsTest {
             }
         }
 
-        composeRule.onNodeWithText("Continue to Bingee").performScrollTo().performClick()
-        composeRule.onNodeWithText("Continue without TMDB").performScrollTo().performClick()
+        composeRule.onNodeWithText(
+            context.getString(R.string.onboarding_continue_configured)
+        ).performScrollTo().performClick()
+        composeRule.onNodeWithText(
+            context.getString(R.string.onboarding_continue_offline)
+        ).performScrollTo().performClick()
 
         assertTrue(configured.get())
         assertTrue(offline.get())
@@ -188,7 +199,7 @@ class CredentialFlowsTest {
             }
         }
 
-        composeRule.onNodeWithText("Remove credential").performScrollTo().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.credential_remove)).performScrollTo().performClick()
 
         assertTrue(requested.get())
     }
@@ -214,7 +225,7 @@ class CredentialFlowsTest {
             }
         }
 
-        composeRule.onNodeWithText("Open Settings").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.search_open_settings)).performClick()
 
         assertTrue(opened.get())
     }

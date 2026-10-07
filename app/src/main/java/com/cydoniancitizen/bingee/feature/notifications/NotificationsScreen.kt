@@ -83,6 +83,26 @@ internal fun NotificationsScreen(
         }
     }
 
+    NotificationsContent(
+        state = state,
+        onBack = onBack,
+        onRefresh = viewModel::refresh,
+        onOpenDetails = onOpenDetails,
+        snackbarHostState = snackbarHostState,
+        modifier = modifier
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun NotificationsContent(
+    state: NotificationsUiState,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpenDetails: (ExternalMediaRef, MediaType) -> Unit,
+    modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
+) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -92,7 +112,7 @@ internal fun NotificationsScreen(
     ) { innerPadding ->
         PullToRefreshBox(
             isRefreshing = state.refreshState == NotificationRefreshState.Refreshing,
-            onRefresh = viewModel::refresh,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -166,7 +186,7 @@ internal fun NotificationsScreen(
                                 color = MaterialTheme.colorScheme.error
                             )
                             Button(
-                                onClick = viewModel::refresh,
+                                onClick = onRefresh,
                                 enabled = state.refreshState != NotificationRefreshState.Refreshing
                             ) {
                                 Text(stringResource(R.string.action_retry))

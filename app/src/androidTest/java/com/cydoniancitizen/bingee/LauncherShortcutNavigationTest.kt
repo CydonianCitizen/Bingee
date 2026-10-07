@@ -48,9 +48,9 @@ class LauncherShortcutNavigationTest {
     fun searchShortcutOpensSearchAndBackReturnsToHome() {
         val scenario = ActivityScenario.launch<MainActivity>(shortcut("search"))
         try {
-            composeRule.onNodeWithText("Search TMDB").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.search_title)).assertIsDisplayed()
             scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         } finally {
             scenario.onActivity { it.finish() }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
@@ -60,7 +60,7 @@ class LauncherShortcutNavigationTest {
     @Test
     fun unknownShortcutDestinationLeavesLauncherBehaviorUnchanged() {
         ActivityScenario.launch<MainActivity>(shortcut("nowhere")).use {
-            composeRule.onNodeWithText("Release calendar").assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.home_title)).assertIsDisplayed()
         }
     }
 

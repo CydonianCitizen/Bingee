@@ -23,15 +23,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.navigation.TopLevelDestination
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
 class BingeeBottomBarTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -46,10 +54,18 @@ class BingeeBottomBarTest {
             }
         }
 
-        composeRule.onNodeWithText("Your Bingee").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            if (context.resources.configuration.locales[0].language ==
+                "it"
+            ) {
+                "Il tuo Bingee"
+            } else {
+                "Your Bingee"
+            }
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("Profile").assertDoesNotExist()
 
-        composeRule.onNodeWithText("Your Bingee").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile_title_dashboard)).performClick()
 
         // The visible vocabulary changed; the route the destination navigates to did not.
         assertEquals(TopLevelDestination.PROFILE, selected.get())
@@ -67,9 +83,9 @@ class BingeeBottomBarTest {
             }
         }
 
-        composeRule.onNodeWithText("Your Bingee").assertIsSelected()
-        composeRule.onNodeWithText("Home").assertIsNotSelected()
-        composeRule.onNodeWithText("Search").assertIsNotSelected()
+        composeRule.onNodeWithText(context.getString(R.string.profile_title_dashboard)).assertIsSelected()
+        composeRule.onNodeWithText(context.getString(R.string.nav_home)).assertIsNotSelected()
+        composeRule.onNodeWithText(context.getString(R.string.nav_search)).assertIsNotSelected()
     }
 
     @Test
@@ -81,8 +97,8 @@ class BingeeBottomBarTest {
             }
         }
 
-        composeRule.onNodeWithText("Home").assertIsSelected()
-        composeRule.onNodeWithText("Your Bingee").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.nav_home)).assertIsSelected()
+        composeRule.onNodeWithText(context.getString(R.string.profile_title_dashboard)).performClick()
         assertEquals(TopLevelDestination.PROFILE, selected.get())
     }
 
@@ -90,7 +106,7 @@ class BingeeBottomBarTest {
     fun wideWindowWithoutRailKeepsTheStartInsetForDetailsAndSettings() {
         val inset = setShell(width = 700.dp, destination = null)
 
-        composeRule.onNodeWithText("Home").assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.nav_home)).assertDoesNotExist()
         assertEquals(inset.value, contentLeft().value, TOLERANCE)
     }
 
@@ -99,7 +115,7 @@ class BingeeBottomBarTest {
         setShell(width = 700.dp, destination = TopLevelDestination.HOME)
 
         // The rail absorbs the cutout; the content starts where the rail ends, with no second inset.
-        val railEnd = composeRule.onNodeWithText("Home").getUnclippedBoundsInRoot().right
+        val railEnd = composeRule.onNodeWithText(context.getString(R.string.nav_home)).getUnclippedBoundsInRoot().right
         assertEquals(railEnd.value, contentLeft().value, TOLERANCE)
     }
 
@@ -107,7 +123,7 @@ class BingeeBottomBarTest {
     fun compactWindowKeepsTheStartInsetBesideTheBottomBar() {
         val inset = setShell(width = 400.dp, destination = TopLevelDestination.HOME)
 
-        composeRule.onNodeWithText("Your Bingee").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.profile_title_dashboard)).assertIsDisplayed()
         assertEquals(inset.value, contentLeft().value, TOLERANCE)
     }
 

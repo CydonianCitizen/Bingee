@@ -13,7 +13,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.test.platform.app.InstrumentationRegistry
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
@@ -25,6 +24,8 @@ import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.domain.model.GenreStatistic
 import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import com.cydoniancitizen.bingee.testutil.scrollListTo
 import java.time.Instant
 import java.time.LocalDate
@@ -36,7 +37,12 @@ import org.junit.Rule
 import org.junit.Test
 
 class YourBingeeScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -66,10 +72,10 @@ class YourBingeeScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasText("Your statistics")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.profile_statistics_title))).assertIsDisplayed()
         composeRule.scrollListTo(hasText("42")).assertIsDisplayed()
         composeRule.scrollListTo(hasText("Drama")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("View all statistics")).performClick()
+        composeRule.scrollListTo(hasText(context.getString(R.string.profile_statistics_view_all))).performClick()
 
         assertTrue(opened.get())
     }
@@ -101,8 +107,10 @@ class YourBingeeScreenTest {
 
         // Movies has two genres and Series has none, and each block falls back on its own count,
         // so the restrained empty state is expected once per block rather than once per screen.
-        composeRule.scrollListTo(hasText("Your statistics")).assertIsDisplayed()
-        composeRule.onAllNodesWithText("Not enough data yet").assertCountEquals(2)
+        composeRule.scrollListTo(hasText(context.getString(R.string.profile_statistics_title))).assertIsDisplayed()
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.profile_statistics_not_enough_data)
+        ).assertCountEquals(2)
     }
 
     @Test
@@ -138,9 +146,16 @@ class YourBingeeScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Watching").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.profile_watching_title)).assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
-            "Open Actionable Series. 3 of 8 episodes watched. Next position S2 E5."
+            context.resources.getQuantityString(
+                R.plurals.profile_watching_accessibility,
+                8,
+                "Actionable Series",
+                3,
+                8,
+                context.getString(R.string.profile_episode_position, 2, 5)
+            )
         ).performClick()
 
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "100") to MediaType.SERIES, opened.get())
@@ -178,8 +193,16 @@ class YourBingeeScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasText("Your favorites")).assertIsDisplayed()
-        composeRule.scrollListTo(hasContentDescription("Open Favorite Movie. Movie · 2016."))
+        composeRule.scrollListTo(hasText(context.getString(R.string.profile_favorites_title))).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.profile_favorite_accessibility,
+                    "Favorite Movie",
+                    context.getString(R.string.profile_media_type_movie, 2016)
+                )
+            )
+        )
             .performClick()
 
         assertEquals(ExternalMediaRef(MediaSource.TMDB, "42") to MediaType.MOVIE, opened.get())
@@ -219,7 +242,7 @@ class YourBingeeScreenTest {
             }
         }
 
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = localizedTestContext
         entries.forEach { entry ->
             val mediaLabel = context.getString(
                 if (entry.mediaType == MediaType.MOVIE) {
@@ -264,16 +287,24 @@ class YourBingeeScreenTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Settings").performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.nav_settings)).performClick()
         assertTrue(settingsOpened.get())
 
         // The shortcut carries which collection to open, so the route argument is the assertion.
-        composeRule.scrollListTo(hasContentDescription("Watch later · 0")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.profile_collection_shortcut,
+                    context.getString(R.string.profile_collection_watch_later),
+                    0
+                )
+            )
+        ).performClick()
         assertEquals(ProfileCollectionShortcut.WATCH_LATER, collection.get())
 
         // Watching and Favorites share the CTA label; Watching is the first section in the list.
-        composeRule.onNodeWithText("No series in progress").performScrollTo()
-        composeRule.onAllNodesWithText("Explore in Search").onFirst().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.profile_watching_empty_title)).performScrollTo()
+        composeRule.onAllNodesWithText(context.getString(R.string.profile_empty_action_search)).onFirst().performClick()
         assertTrue(searchOpened.get())
     }
 
@@ -304,14 +335,50 @@ class YourBingeeScreenTest {
 
         // Height, podium position, and the gold/silver/bronze surfaces are the only visual carriers
         // of rank, so each step has to speak its own place, genre, and count.
-        composeRule.scrollListTo(hasContentDescription("1st place, Drama, 18 titles")).assertIsDisplayed()
-        composeRule.scrollListTo(hasContentDescription("2nd place, Comedy, 10 titles")).assertIsDisplayed()
-        composeRule.scrollListTo(hasContentDescription("3rd place, Thriller, 8 titles")).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(
+                    R.plurals.profile_statistics_podium_accessibility,
+                    18,
+                    context.getString(R.string.profile_statistics_podium_rank_first),
+                    "Drama",
+                    18
+                )
+            )
+        ).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(
+                    R.plurals.profile_statistics_podium_accessibility,
+                    10,
+                    context.getString(R.string.profile_statistics_podium_rank_second),
+                    "Comedy",
+                    10
+                )
+            )
+        ).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(
+                    R.plurals.profile_statistics_podium_accessibility,
+                    8,
+                    context.getString(R.string.profile_statistics_podium_rank_third),
+                    "Thriller",
+                    8
+                )
+            )
+        ).assertIsDisplayed()
 
         // The visual design stays free of rank labels and medals.
-        composeRule.onAllNodesWithText("1st place").assertCountEquals(0)
-        composeRule.onAllNodesWithText("2nd place").assertCountEquals(0)
-        composeRule.onAllNodesWithText("3rd place").assertCountEquals(0)
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.profile_statistics_podium_rank_first)
+        ).assertCountEquals(0)
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.profile_statistics_podium_rank_second)
+        ).assertCountEquals(0)
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.profile_statistics_podium_rank_third)
+        ).assertCountEquals(0)
     }
 
     @Test
@@ -347,8 +414,22 @@ class YourBingeeScreenTest {
 
         // A merged node concatenates the descriptions of its children, so the decorative poster has
         // to contribute nothing: exactly one description reaches TalkBack.
-        composeRule.scrollListTo(hasContentDescription("Open Favorite Movie. Movie · 2016."))
-            .assertContentDescriptionEquals("Open Favorite Movie. Movie · 2016.")
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.profile_favorite_accessibility,
+                    "Favorite Movie",
+                    context.getString(R.string.profile_media_type_movie, 2016)
+                )
+            )
+        )
+            .assertContentDescriptionEquals(
+                context.getString(
+                    R.string.profile_favorite_accessibility,
+                    "Favorite Movie",
+                    context.getString(R.string.profile_media_type_movie, 2016)
+                )
+            )
     }
 
     @Test
@@ -380,10 +461,28 @@ class YourBingeeScreenTest {
 
         // The label and the count are separate nodes so a wrapping label cannot take the count with it,
         // while the merged description still reads as one phrase.
-        composeRule.scrollListTo(hasText("Abandoned")).assertIsDisplayed()
-        composeRule.scrollListTo(hasContentDescription("Abandoned · 1")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Watch later")).assertIsDisplayed()
-        composeRule.scrollListTo(hasContentDescription("Watch later · 2")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.profile_collection_abandoned))).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.profile_collection_shortcut,
+                    context.getString(R.string.profile_collection_abandoned),
+                    1
+                )
+            )
+        ).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasText(context.getString(R.string.profile_collection_watch_later))
+        ).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.profile_collection_shortcut,
+                    context.getString(R.string.profile_collection_watch_later),
+                    2
+                )
+            )
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -419,8 +518,21 @@ class YourBingeeScreenTest {
         }
 
         // A one-episode series used to read "0/1 episodes"; the plural resource has to say "episode".
+        assertEquals(
+            if (context.resources.configuration.locales[0].language == "it") "0/1 episodio" else "0/1 episode",
+            context.resources.getQuantityString(R.plurals.profile_watching_progress_position, 1, 0, 1)
+        )
         composeRule.scrollListTo(
-            hasContentDescription("Open Single Episode Series. 0 of 1 episode watched. Next position 0/1 episode.")
+            hasContentDescription(
+                context.resources.getQuantityString(
+                    R.plurals.profile_watching_accessibility,
+                    1,
+                    "Single Episode Series",
+                    0,
+                    1,
+                    context.resources.getQuantityString(R.plurals.profile_watching_progress_position, 1, 0, 1)
+                )
+            )
         ).assertIsDisplayed()
     }
 

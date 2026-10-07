@@ -1,6 +1,5 @@
 package com.cydoniancitizen.bingee.feature.settings
 
-import android.content.Context
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -11,18 +10,24 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.test.core.app.ApplicationProvider
 import com.cydoniancitizen.bingee.BuildConfig
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.result.AppError
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class AboutSettingsScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -38,13 +43,19 @@ class AboutSettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("About Bingee").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_nav_about)).assertIsDisplayed()
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
-        composeRule.onNodeWithText("Bingee").assertIsDisplayed()
-        composeRule.onNodeWithText("Version ${BuildConfig.VERSION_NAME}").assertIsDisplayed()
-        composeRule.onNodeWithText("Open Source").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("View on GitHub").performScrollTo().assertIsDisplayed()
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        composeRule.onNodeWithText(context.getString(R.string.app_name)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.about_version_label, BuildConfig.VERSION_NAME)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.settings_open_source_title)
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.settings_open_source_github_action)
+        ).performScrollTo().assertIsDisplayed()
+        val context = localizedTestContext
         composeRule.onNodeWithContentDescription(context.getString(R.string.detail_back))
             .performScrollTo().performClick()
         assertTrue(wentBack.get())
@@ -65,8 +76,10 @@ class AboutSettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Bingee is up to date").performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("Version 1.0.1")[0].performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.update_up_to_date)).performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText(
+            context.getString(R.string.about_version_label, "1.0.1")
+        )[0].performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -88,10 +101,16 @@ class AboutSettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Update available").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Installed version: 1.0.1").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Latest version: 1.1.0").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("View release").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.update_available)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.update_current_version, "1.0.1")
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.update_latest_version, "1.1.0")
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.update_view_release)
+        ).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -110,10 +129,10 @@ class AboutSettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("No network connection. Check your connection and try again.")
+        composeRule.onNodeWithText(context.getString(R.string.update_error_network))
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText("Retry").performScrollTo().performClick()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).performScrollTo().performClick()
         assertTrue(retried.get())
     }
 }

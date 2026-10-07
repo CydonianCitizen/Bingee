@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.Genre
@@ -41,6 +42,8 @@ import com.cydoniancitizen.bingee.domain.model.WatchedStatistics
 import com.cydoniancitizen.bingee.domain.model.calculateTasteStatistics
 import com.cydoniancitizen.bingee.domain.model.calculateWatchedStatistics
 import com.cydoniancitizen.bingee.testutil.STATISTICS_RATINGS_ITEM
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import com.cydoniancitizen.bingee.testutil.scrollListTo
 import com.cydoniancitizen.bingee.testutil.scrollListToItem
 import com.cydoniancitizen.bingee.testutil.scrollRowTo
@@ -51,7 +54,12 @@ import org.junit.Rule
 import org.junit.Test
 
 class StatisticsScreenTest {
-    @get:Rule
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
     val composeRule = createComposeRule()
 
     @Test
@@ -75,12 +83,17 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Your taste").assertIsDisplayed()
-        composeRule.onNodeWithText("Your genres").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.statistics_taste)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.statistics_genres)).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Crime").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Drama: 18 titles").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
-            "Relative genre taste chart. Genres: Drama, Comedy, Thriller, Science Fiction, Horror, Romance"
+            context.resources.getQuantityString(R.plurals.statistics_genre_row_description, 18, "Drama", 18)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_radar_description,
+                "Drama, Comedy, Thriller, Science Fiction, Horror, Romance"
+            )
         ).assertIsDisplayed()
     }
 
@@ -110,16 +123,27 @@ class StatisticsScreenTest {
         }
 
         composeRule.scrollListTo(
-            hasContentDescription("Relative genre taste chart. Genres: Drama, Horror, Comedy, Thriller, Crime, Romance")
+            hasContentDescription(
+                context.getString(
+                    R.string.statistics_radar_description,
+                    "Drama, Horror, Comedy, Thriller, Crime, Romance"
+                )
+            )
         ).assertIsDisplayed()
 
-        composeRule.onNodeWithText("Movies").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.statistics_filter_movies)).performClick()
 
         // Radar and complete ranking are driven by the same scoped ranking, so both drop the series
         // genres. The ranking row reports the title count, not the TMDB genre id.
-        composeRule.scrollListTo(hasContentDescription("Relative genre taste chart. Genres: Drama, Comedy, Thriller"))
+        composeRule.scrollListTo(
+            hasContentDescription(context.getString(R.string.statistics_radar_description, "Drama, Comedy, Thriller"))
+        )
             .assertIsDisplayed()
-        composeRule.scrollListTo(hasContentDescription("Drama: 1 title")).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_genre_row_description, 1, "Drama", 1)
+            )
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("Horror").assertDoesNotExist()
     }
 
@@ -136,8 +160,8 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Not enough data yet").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Relative genre taste chart. Not enough data yet")
+        composeRule.onNodeWithText(context.getString(R.string.statistics_not_enough_data)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.statistics_radar_empty_description))
             .assertIsDisplayed()
     }
 
@@ -179,20 +203,55 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Your viewing").assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Viewing time")).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("March 2026, Movies 2h, Series 1h, Total 3h")
+        composeRule.onNodeWithText(context.getString(R.string.statistics_viewing)).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_viewing_time))).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_viewing_month_accessibility,
+                context.resources.getStringArray(R.array.statistics_months_full)[2],
+                2026,
+                "2" + context.getString(R.string.statistics_duration_hour_short),
+                "1" + context.getString(R.string.statistics_duration_hour_short),
+                "3" + context.getString(R.string.statistics_duration_hour_short)
+            )
+        )
             .performScrollTo()
             .assertWidthIsAtLeast(48.dp)
             .assertHeightIsAtLeast(48.dp)
             .performClick()
-        composeRule.onNodeWithContentDescription("March 2026, Movies 2h, Series 1h, Total 3h")
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_viewing_month_accessibility,
+                context.resources.getStringArray(R.array.statistics_months_full)[2],
+                2026,
+                "2" + context.getString(R.string.statistics_duration_hour_short),
+                "1" + context.getString(R.string.statistics_duration_hour_short),
+                "3" + context.getString(R.string.statistics_duration_hour_short)
+            )
+        )
             .assertIsSelected()
-        composeRule.onNodeWithContentDescription("September 2026, Movies 0m, Series 0m, Total 0m")
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_viewing_month_accessibility,
+                context.resources.getStringArray(R.array.statistics_months_full)[8],
+                2026,
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short)
+            )
+        )
             .performScrollTo()
             .assertIsNotEnabled()
         // The detail renders below the chart, so the list has to scroll to it in its own right.
-        composeRule.scrollListTo(hasText("March 2026")).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasText(
+                context.getString(
+                    R.string.statistics_viewing_month_title,
+                    context.resources.getStringArray(R.array.statistics_months_full)[2],
+                    2026
+                )
+            )
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -231,37 +290,78 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasText("Viewing time"))
-        composeRule.onNodeWithContentDescription("January 2026, Movies 0m, Series 0m, Total 0m")
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_viewing_time)))
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_viewing_month_accessibility,
+                context.resources.getStringArray(R.array.statistics_months_full)[0],
+                2026,
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short)
+            )
+        )
             .assertIsDisplayed()
             .assertWidthIsAtLeast(48.dp)
             .assertHeightIsAtLeast(48.dp)
         // December is the last slot behind the end padding; it must scroll fully into view and,
         // because the current month is December, still be selectable rather than future-disabled.
-        composeRule.onNodeWithContentDescription("December 2026, Movies 0m, Series 0m, Total 0m")
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_viewing_month_accessibility,
+                context.resources.getStringArray(R.array.statistics_months_full)[11],
+                2026,
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short)
+            )
+        )
             .performScrollTo()
             .assertIsDisplayed()
             .assertWidthIsAtLeast(48.dp)
             .assertHeightIsAtLeast(48.dp)
             .performClick()
-        composeRule.onNodeWithContentDescription("December 2026, Movies 0m, Series 0m, Total 0m")
+        composeRule.onNodeWithContentDescription(
+            context.getString(
+                R.string.statistics_viewing_month_accessibility,
+                context.resources.getStringArray(R.array.statistics_months_full)[11],
+                2026,
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short),
+                "0" + context.getString(R.string.statistics_duration_minute_short)
+            )
+        )
             .assertIsSelected()
 
-        composeRule.scrollListTo(hasText("Your ratings"))
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_ratings)))
         (1..9).forEach { rating ->
-            composeRule.onNodeWithContentDescription("Rating $rating, 0 titles").assertIsNotEnabled()
+            composeRule.onNodeWithContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 0, rating, 0, "")
+            ).assertIsNotEnabled()
         }
-        composeRule.onNodeWithContentDescription("Rating 1, 0 titles")
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 0, 1, 0, "")
+        )
             .assertIsDisplayed()
             .assertWidthIsAtLeast(200.dp)
             .assertHeightIsAtLeast(48.dp)
-        composeRule.onNodeWithContentDescription("Rating 10, 1 title")
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 1, 10, 1, "")
+        )
             .performScrollTo()
             .assertIsDisplayed()
             .assertWidthIsAtLeast(200.dp)
             .assertHeightIsAtLeast(48.dp)
             .performClick()
-        composeRule.onNodeWithContentDescription("Rating 10, 1 title, selected").assertIsSelected()
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(
+                R.plurals.statistics_rating_bar_description,
+                1,
+                10,
+                1,
+                context.getString(R.string.statistics_rating_selected_suffix)
+            )
+        ).assertIsSelected()
     }
 
     @Test
@@ -284,31 +384,73 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasText("Your ratings")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Average rating")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Rated titles")).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_ratings))).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_rating_average))).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_rating_count))).assertIsDisplayed()
         composeRule.onNodeWithText("movie").assertDoesNotExist()
         // "Movies" is also the viewing legend and a rating shelf title, so target the scope control.
-        composeRule.scrollListTo(scopeSelector("Movies")).performClick()
+        composeRule.scrollListTo(scopeSelector(context.getString(R.string.statistics_filter_movies))).performClick()
 
-        composeRule.scrollListTo(hasContentDescription("Rating 8, 2 titles")).performClick()
-        composeRule.onNodeWithContentDescription("Rating 8, 2 titles, selected").assertIsSelected()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 2, 8, 2, "")
+            )
+        ).performClick()
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(
+                R.plurals.statistics_rating_bar_description,
+                2,
+                8,
+                2,
+                context.getString(R.string.statistics_rating_selected_suffix)
+            )
+        ).assertIsSelected()
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
-        composeRule.scrollListTo(hasText("Movies") and isHeading()).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasText(context.getString(R.string.statistics_rating_movies)) and isHeading()
+        ).assertIsDisplayed()
         composeRule.scrollListTo(hasText("movie")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Series") and isHeading()).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasText(context.getString(R.string.statistics_rating_series)) and isHeading()
+        ).assertIsDisplayed()
         composeRule.scrollListTo(hasText("series")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Movie · 2024")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("Series · 2022")).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasText(context.getString(R.string.profile_media_type_movie, 2024))
+        ).assertIsDisplayed()
+        composeRule.scrollListTo(
+            hasText(context.getString(R.string.profile_media_type_series, 2022))
+        ).assertIsDisplayed()
 
-        composeRule.scrollListTo(hasContentDescription("Rating 9, 1 title")).performClick()
-        composeRule.onNodeWithContentDescription("Rating 9, 1 title, selected").assertIsSelected()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 1, 9, 1, "")
+            )
+        ).performClick()
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(
+                R.plurals.statistics_rating_bar_description,
+                1,
+                9,
+                1,
+                context.getString(R.string.statistics_rating_selected_suffix)
+            )
+        ).assertIsSelected()
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
         composeRule.scrollListTo(hasText("other")).assertIsDisplayed()
         composeRule.onNodeWithText("movie").assertDoesNotExist()
         composeRule.onNodeWithText("series").assertDoesNotExist()
 
-        composeRule.scrollListTo(hasContentDescription("Rating 9, 1 title, selected")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(
+                    R.plurals.statistics_rating_bar_description,
+                    1,
+                    9,
+                    1,
+                    context.getString(R.string.statistics_rating_selected_suffix)
+                )
+            )
+        ).performClick()
         composeRule.onNodeWithText("other").assertDoesNotExist()
     }
 
@@ -330,10 +472,22 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasContentDescription("Rating 8, 9 titles")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 9, 8, 9, "")
+            )
+        ).performClick()
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
         composeRule.scrollListTo(hasText("title-1")).assertIsDisplayed()
-        composeRule.scrollRowTo(hasContentDescription("title-9, Movie · 2024")).assertIsDisplayed()
+        composeRule.scrollRowTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.statistics_rating_poster_accessibility,
+                    "title-9",
+                    context.getString(R.string.profile_media_type_movie, 2024)
+                )
+            )
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -347,10 +501,14 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasText("Your ratings")).assertIsDisplayed()
-        composeRule.scrollListTo(hasText("You haven't rated any titles yet")).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Rating 10, 0 titles").assertExists()
-        composeRule.onNodeWithContentDescription("Rating 1, 0 titles").assertIsNotEnabled()
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_ratings))).assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.statistics_rating_empty))).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 0, 10, 0, "")
+        ).assertExists()
+        composeRule.onNodeWithContentDescription(
+            context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 0, 1, 0, "")
+        ).assertIsNotEnabled()
     }
 
     @Test
@@ -372,9 +530,21 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasContentDescription("Rating 8, 1 title")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 1, 8, 1, "")
+            )
+        ).performClick()
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
-        composeRule.scrollListTo(hasContentDescription("movie, Movie · 2024")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.statistics_rating_poster_accessibility,
+                    "movie",
+                    context.getString(R.string.profile_media_type_movie, 2024)
+                )
+            )
+        ).performClick()
 
         assertEquals(entry.mediaRef, opened?.first)
         assertEquals(MediaType.MOVIE, opened?.second)
@@ -396,9 +566,21 @@ class StatisticsScreenTest {
             }
         }
 
-        composeRule.scrollListTo(hasContentDescription("Rating 8, 1 title")).performClick()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.resources.getQuantityString(R.plurals.statistics_rating_bar_description, 1, 8, 1, "")
+            )
+        ).performClick()
         composeRule.scrollListToItem(STATISTICS_RATINGS_ITEM)
-        composeRule.scrollListTo(hasContentDescription("legacy, Movie · 2024")).assertIsNotEnabled()
+        composeRule.scrollListTo(
+            hasContentDescription(
+                context.getString(
+                    R.string.statistics_rating_poster_accessibility,
+                    "legacy",
+                    context.getString(R.string.profile_media_type_movie, 2024)
+                )
+            )
+        ).assertIsNotEnabled()
     }
 
     /** The scope control is the only "All / Movies / Series" node carrying a selected state. */

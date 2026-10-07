@@ -4,17 +4,26 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
 import com.cydoniancitizen.bingee.data.imports.model.ImportedSourceSummary
 import com.cydoniancitizen.bingee.data.imports.model.ImportedUnsupportedFields
 import com.cydoniancitizen.bingee.data.imports.tvtime.TvTimeImportPreview
+import com.cydoniancitizen.bingee.testutil.TestLocaleRule
+import com.cydoniancitizen.bingee.testutil.localizedTestContext
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class TvTimeImportScreenTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule(order = 0)
+    val localeRule = TestLocaleRule()
+
+    private val context get() = localizedTestContext
+
+    @get:Rule(order = 1)
+    val composeRule = createComposeRule()
 
     @Test
     fun idleStateExplainsExperimentalProfileAndSelectionAction() {
@@ -40,8 +49,8 @@ class TvTimeImportScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Experimental: supports one documented JSON ZIP format.").assertIsDisplayed()
-        composeRule.onNodeWithText("Select TV Time ZIP").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.tvtime_import_experimental)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tvtime_import_select_archive)).performClick()
         assertTrue(selected.get())
     }
 
@@ -84,9 +93,11 @@ class TvTimeImportScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Source summary").assertIsDisplayed()
-        composeRule.onNodeWithText("Movies 1 · series 1 · seasons 1 · episodes 2").assertIsDisplayed()
-        composeRule.onNodeWithText("Match with TMDB").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.tvtime_import_source_summary)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.tvtime_import_summary_counts, 1, 1, 1, 2)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tvtime_import_start_matching)).performClick()
         assertTrue(startMatching)
     }
 
@@ -125,8 +136,8 @@ class TvTimeImportScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Preview additive import").assertIsDisplayed()
-        composeRule.onNodeWithText("Confirm import").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.tvtime_import_preview_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.tvtime_import_confirm)).performClick()
         assertTrue(confirm)
         composeRule.onNodeWithText("No local data was removed.").assertDoesNotExist()
     }
