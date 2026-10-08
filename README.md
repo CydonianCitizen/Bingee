@@ -67,6 +67,45 @@ To apply Kotlin formatting:
 
 The debug APK is generated under `app/build/outputs/apk/debug/`.
 
+### Optimized release smoke
+
+Build the actual optimized variant before testing release behavior:
+
+```bash
+./gradlew :app:assembleRelease
+```
+
+The APK is generated under `app/build/outputs/apk/release/`. The repository does not configure
+release signing. Sign a copy locally for installation; keep certificates, passwords and signed
+test artifacts outside Git. A locally signed test copy is not a published release.
+
+Run the installed release through cold launch, TMDB credential validation, Movie/TV Search and
+Details, library add/remove, Favorites, movie/episode progress, Your Bingee, Statistics and Settings.
+Verify notification detail intents on cold and warm launches. Exercise all three launcher shortcuts,
+including Watching/Watch Later → Statistics → Back. Place both widgets on a real launcher host;
+verify rendering, title navigation and the next-episode action. Change progress and theme while
+their Glance sessions are still active and check that both widgets update, then relaunch offline and confirm
+saved state. Use synthetic local provider fixtures for automated checks; debug fakes and
+`connectedDebugAndroidTest` do not establish minified runtime coverage.
+
+Check app logs for fatal exceptions, class-loading/verification errors and Gson parsing failures.
+Retain the tested APK hash, R8 mapping, device/API, observed results and limitations in ignored
+`.audit/` evidence. Add keep rules only for a reproduced release failure.
+
+For the widget regression, also probe the optimized DEX with the SDK's `apkanalyzer`:
+
+```bash
+apkanalyzer dex code --class com.cydoniancitizen.bingee.feature.widget.MarkNextEpisodeAction --method '<init>()V' app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+In PowerShell, the `.bat` launcher needs `--method '"<init>()V"'` to protect the angle brackets.
+The command must resolve a public no-argument constructor. Glance instantiates this callback by
+reflection; its constructor carries `@Keep` because R8 otherwise removes it. The DEX probe
+supplements the real widget tap and persisted episode-count check; it does not replace them.
+
+An active Glance composition collects the Room/date/theme snapshot; `updateAll` also wakes idle
+widgets. Poster loading follows URL changes, so progress/theme updates keep the existing bitmap.
+
 ## Run
 
 Open the repository in Android Studio, choose an emulator or connected device, and run the `app` configuration. From the command line, a configured device can install the debug build with:

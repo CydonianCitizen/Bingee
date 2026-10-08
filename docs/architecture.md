@@ -126,6 +126,10 @@ NotificationEvaluationWorker (no network) -> combined preferences (Room portable
 
 Notification and widget taps share `DetailRouteArgs` with in-app navigation: media type and a strictly positive TMDB ID. Legacy notification extras remain accepted; new intents carry only the parent identity into `MainActivity`. Cold-start and `onNewIntent` targets are held until startup/onboarding resolves, navigated through the existing `DetailRoute`, then consumed once.
 
+If Details is already open, a different media type or TMDB ID creates a new navigation entry and its own ViewModel; Back restores the previous title. Repeated delivery for the same title remains single-top, including after activity recreation.
+
+Glance widgets preload their local snapshot, then collect Room/date/theme changes inside the active composition. The application updater wakes idle widget sessions. Bitmap loading follows poster URL changes, keeping the existing bounded software bitmap when only progress or theme changes.
+
 Local Room data renders independently of the network on every screen. Home is the one startup exception: constructing `HomeViewModel` runs a local idempotent calendar backfill and one bounded featured-discovery pass, which issues at most one `discover` movie page and one `discover` TV page, keeps up to twenty results per media type in memory, persists nothing, and returns empty rows without a stored credential. A failed featured pass leaves the screen on its cached content. The calendar itself is refreshed only by the explicit refresh action or the periodic worker; Details and Search perform their own remote work on open, query, and manual retry as described below.
 
 - core/model and core/result are plain Kotlin. They do not import Android, Compose, Room, Retrofit, provider DTOs, DAOs, or HTTP types.

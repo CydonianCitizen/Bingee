@@ -2,7 +2,11 @@ package com.cydoniancitizen.bingee.feature.widget
 
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.annotation.Keep
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -74,6 +78,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 
 /** "System default" keeps both palettes so the launcher picks by the phone's mode; a fixed choice pins one. */
@@ -90,9 +95,15 @@ private val CheckTint = ColorProvider(Color.White)
 /** Small widget: the poster of the series being watched, with a button for its next episode. */
 internal class ContinueWatchingWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snapshot = loadWidgetSnapshot(context)
-        val poster = snapshot.watching?.posterUrl?.let { loadWidgetPoster(context, it) }
+        val snapshots = observeWidgetSnapshot(context)
+        val initial = snapshots.first()
+        val initialPoster = initial.watching?.posterUrl?.let { loadWidgetPoster(context, it) }
         provideContent {
+            // updateAll wakes idle widgets; a running Glance session needs to observe changes itself.
+            val snapshot by snapshots.collectAsState(initial)
+            val poster by produceState(initialPoster, snapshot.watching?.posterUrl) {
+                value = snapshot.watching?.posterUrl?.let { loadWidgetPoster(context, it) }
+            }
             GlanceTheme(colors = widgetColors(snapshot.theme)) { PosterContent(snapshot.watching, poster) }
         }
     }
@@ -104,10 +115,20 @@ internal class UpNextWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snapshot = loadWidgetSnapshot(context)
-        val seriesPoster = snapshot.watching?.posterUrl?.let { loadWidgetPoster(context, it) }
-        val releasePosters = snapshot.upcoming.map { event -> event.posterUrl?.let { loadWidgetPoster(context, it) } }
+        val snapshots = observeWidgetSnapshot(context)
+        val initial = snapshots.first()
+        val initialSeriesPoster = initial.watching?.posterUrl?.let { loadWidgetPoster(context, it) }
+        val initialReleasePosters = initial.upcoming.map { event ->
+            event.posterUrl?.let { loadWidgetPoster(context, it) }
+        }
         provideContent {
+            val snapshot by snapshots.collectAsState(initial)
+            val seriesPoster by produceState(initialSeriesPoster, snapshot.watching?.posterUrl) {
+                value = snapshot.watching?.posterUrl?.let { loadWidgetPoster(context, it) }
+            }
+            val releasePosters by produceState(initialReleasePosters, snapshot.upcoming.map { it.posterUrl }) {
+                value = snapshot.upcoming.map { event -> event.posterUrl?.let { loadWidgetPoster(context, it) } }
+            }
             GlanceTheme(colors = widgetColors(snapshot.theme)) { UpNextContent(snapshot, seriesPoster, releasePosters) }
         }
     }
@@ -128,8 +149,8 @@ internal suspend fun updateBingeeWidgets(context: Context) {
 
 /**
  * Re-renders the widgets whenever what they show changes, whichever screen, worker or restore wrote it,
- * when the date rolls over, and when the in-app theme changes. Widgets cannot observe these themselves:
- * they only redraw when asked.
+ * when the date rolls over, and when the in-app theme changes. This wakes idle widgets; active Glance
+ * compositions also collect their snapshot so updates do not retain the previous session's data.
  */
 @Singleton
 internal class BingeeWidgetUpdater @Inject constructor(
@@ -153,7 +174,8 @@ internal class BingeeWidgetUpdater @Inject constructor(
     }
 }
 
-internal class MarkNextEpisodeAction : ActionCallback {
+// Glance instantiates callbacks through reflection; R8 must retain the public no-argument constructor.
+internal class MarkNextEpisodeAction @Keep constructor() : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val source = parameters[EpisodeSourceKey]?.let { name -> MediaSource.entries.firstOrNull { it.name == name } }
         val externalId = parameters[EpisodeIdKey]

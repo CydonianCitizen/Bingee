@@ -25,7 +25,11 @@ import dagger.hilt.components.SingletonComponent
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 
 internal const val WIDGET_UPCOMING_LIMIT = 2
 
@@ -71,18 +75,32 @@ internal interface WidgetEntryPoint {
 internal fun Context.widgetEntryPoint(): WidgetEntryPoint =
     EntryPointAccessors.fromApplication(applicationContext, WidgetEntryPoint::class.java)
 
-internal suspend fun loadWidgetSnapshot(context: Context): WidgetSnapshot {
+internal fun observeWidgetSnapshot(context: Context): Flow<WidgetSnapshot> {
     val entryPoint = context.widgetEntryPoint()
-    val today = entryPoint.calendarDateSource().currentDate()
-    val watching = entryPoint.libraryRepository().observeContinueWatching().first()
-    val events = entryPoint.releaseCalendarRepository().observeEvents(today).first()
-    return WidgetSnapshot(
-        watching = (watching as? AppResult.Success)?.value?.firstOrNull(),
-        upcoming = selectUpcoming((events as? AppResult.Success)?.value.orEmpty(), today),
-        today = today,
-        theme = entryPoint.appearancePreferences().observeTheme().first()
+    return observeWidgetSnapshot(
+        watching = entryPoint.libraryRepository().observeContinueWatching(),
+        events = entryPoint.releaseCalendarRepository()::observeEvents,
+        dates = entryPoint.calendarDateSource().observeDate(),
+        themes = entryPoint.appearancePreferences().observeTheme()
     )
 }
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun observeWidgetSnapshot(
+    watching: Flow<AppResult<List<ContinueWatchingItem>>>,
+    events: (LocalDate) -> Flow<AppResult<List<ReleaseEvent>>>,
+    dates: Flow<LocalDate>,
+    themes: Flow<AppTheme>
+): Flow<WidgetSnapshot> = dates.flatMapLatest { today ->
+    combine(watching, events(today), themes) { progress, releases, theme ->
+        WidgetSnapshot(
+            watching = (progress as? AppResult.Success)?.value?.firstOrNull(),
+            upcoming = selectUpcoming((releases as? AppResult.Success)?.value.orEmpty(), today),
+            today = today,
+            theme = theme
+        )
+    }
+}.distinctUntilChanged()
 
 /**
  * Widgets draw through RemoteViews, which cannot take a hardware bitmap or load a URL, so the poster is

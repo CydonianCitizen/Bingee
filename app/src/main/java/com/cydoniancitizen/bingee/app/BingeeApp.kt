@@ -32,6 +32,7 @@ import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.component.LoadingState
 import com.cydoniancitizen.bingee.core.navigation.AppRoute
 import com.cydoniancitizen.bingee.core.navigation.BingeeNavHost
+import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.navigation.TopLevelDestination
 import com.cydoniancitizen.bingee.core.navigation.topLevelDestinationForRoute
 import kotlinx.coroutines.flow.StateFlow
@@ -76,7 +77,15 @@ private fun BingeeNavigation(
     LaunchedEffect(startDestination, pendingRoute) {
         val route = pendingRoute ?: return@LaunchedEffect
         if (startDestination == AppRoute.ONBOARDING) return@LaunchedEffect
-        navController.navigate(route) { launchSingleTop = true }
+        val currentEntry = navController.currentBackStackEntry
+        val currentDetailsRoute = DetailRoute.parse(
+            currentEntry?.arguments?.getString(DetailRoute.MEDIA_TYPE_ARG),
+            currentEntry?.arguments?.getString(DetailRoute.TMDB_ID_ARG)
+        )?.let { DetailRoute.create(it.mediaType, it.tmdbId) }
+        // A different title needs its own entry and ViewModel; same-title delivery remains single-top.
+        navController.navigate(route) {
+            launchSingleTop = currentEntry?.destination?.route != DetailRoute.TEMPLATE || currentDetailsRoute == route
+        }
         onPendingRouteConsumed()
     }
 
