@@ -1,5 +1,7 @@
 package com.cydoniancitizen.bingee.feature.home
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +62,106 @@ class HomeScreenTest {
     @get:Rule(order = 1)
     val composeRule = createComposeRule()
     private val today = LocalDate.of(2026, 8, 3)
+
+    @Test
+    fun localReadErrorsKeepSavedContentAndRetryUntilAllReadsRecover() {
+        val featured = MediaSearchResult(ExternalMediaRef(MediaSource.TMDB, "42"), MediaType.MOVIE, "Saved movie")
+        val release = event("movie", ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE, MediaType.MOVIE)
+        var retries = 0
+        var state by mutableStateOf(
+            HomeUiState(
+                today = today,
+                content = HomeContentState.Events(
+                    listOf(ReleaseDateGroup(today, ReleaseDateCategory.TODAY, listOf(release)))
+                ),
+                featuredMovies = listOf(featured),
+                libraryMemberships = setOf(featured.externalRef to featured.mediaType),
+                continueWatching = listOf(continueItem()),
+                calendarObservationError = AppError.LocalStorageFailure,
+                libraryMembershipsError = AppError.LocalStorageFailure,
+                continueWatchingError = AppError.LocalStorageFailure
+            )
+        )
+        setHomeState(
+            state = { state },
+            onRetryLocal = {
+                retries++
+                state = state.copy(
+                    calendarObservationError = null,
+                    libraryMembershipsError = null,
+                    continueWatchingError = AppError.LocalStorageFailure.takeIf { retries == 1 }
+                )
+            }
+        )
+        composeRule.onNodeWithText("Title movie").assertIsDisplayed()
+        composeRule.scrollListTo(hasText(context.getString(R.string.home_cached_calendar_error_title)))
+            .assertIsDisplayed()
+        composeRule.scrollListTo(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ContentDescription,
+                listOf(context.getString(R.string.collection_state_in))
+            )
+        ).assertIsDisplayed().assertIsNotEnabled()
+        composeRule.scrollListTo(hasText(context.getString(R.string.home_continue_watching))).assertIsDisplayed()
+        repeat(2) {
+            composeRule.scrollListTo(hasText(context.getString(R.string.action_retry))).performClick()
+            if (it == 0) {
+                composeRule.onNodeWithText(context.getString(R.string.home_library_error_title)).assertIsDisplayed()
+            }
+        }
+        assertEquals(2, retries)
+        composeRule.onNodeWithText(context.getString(R.string.home_library_error_title)).assertDoesNotExist()
+        composeRule.scrollListTo(hasText("Title movie")).assertIsDisplayed()
+        assertEquals(listOf(continueItem()), state.continueWatching)
+    }
+
+    @Test
+    fun initialContinuationFailureHasLocalizedAccessibleRetryInDarkLargeFont() {
+        val retried = AtomicBoolean()
+        var state by mutableStateOf(
+            HomeUiState(
+                today = today,
+                content = HomeContentState.Error(AppError.LocalStorageFailure),
+                continueWatchingError = AppError.LocalStorageFailure
+            )
+        )
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.5f)) {
+                BingeeTheme(darkTheme = true) {
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        HomeContent(
+                            state = state,
+                            onRefresh = {},
+                            onRetryLocal = { retried.set(true) },
+                            onDismissFeedback = {},
+                            onOpenSettings = {},
+                            onOpenDetails = { _, _ -> }
+                        )
+                    }
+                }
+            }
+        }
+        composeRule.onNodeWithText(context.getString(R.string.home_library_error_title)).assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.action_retry)).assertIsDisplayed()
+        composeRule.runOnIdle { state = state.copy(content = HomeContentState.Empty) }
+        composeRule.onNodeWithText(context.getString(R.string.home_library_error_title))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Heading, Unit))
+        composeRule.onNodeWithText(context.getString(R.string.error_local_storage)).assertIsDisplayed()
+        val retry = composeRule.onNodeWithText(context.getString(R.string.action_retry))
+            .assertIsDisplayed().assertIsEnabled()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+        val bounds = retry.fetchSemanticsNode().touchBoundsInRoot
+        with(composeRule.density) {
+            assertTrue(
+                "Retry touch target: $bounds",
+                bounds.width.toDp().value >= 48f && bounds.height.toDp().value >= 48f
+            )
+        }
+        retry.performClick()
+        assertTrue(retried.get())
+        composeRule.onNodeWithText(context.getString(R.string.home_continue_watching)).assertDoesNotExist()
+    }
 
     @Test
     fun featuredMembershipActionAndSavedStateDescribeCollectionForMoviesAndSeries() {
@@ -406,22 +508,25 @@ class HomeScreenTest {
         onOpenDetails: (ExternalMediaRef, MediaType) -> Unit = { _, _ -> },
         onMarkNextEpisode: (ContinueWatchingItem) -> Unit = {},
         onUndoMarkedEpisode: () -> Unit = {},
-        onAddToWatchlist: (MediaSearchResult) -> Unit = {}
+        onAddToWatchlist: (MediaSearchResult) -> Unit = {},
+        onRetryLocal: () -> Unit = {}
     ) {
         composeRule.setContent {
-            BingeeTheme {
-                HomeContent(
-                    state = state(),
-                    onRefresh = onRefresh,
-                    onRetryLocal = {},
-                    onDismissFeedback = {},
-                    onOpenNotifications = onOpenNotifications,
-                    onOpenSettings = onOpenSettings,
-                    onOpenDetails = onOpenDetails,
-                    onMarkNextEpisode = onMarkNextEpisode,
-                    onUndoMarkedEpisode = onUndoMarkedEpisode,
-                    onAddToWatchlist = onAddToWatchlist
-                )
+            BingeeTheme(darkTheme = false) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    HomeContent(
+                        state = state(),
+                        onRefresh = onRefresh,
+                        onRetryLocal = onRetryLocal,
+                        onDismissFeedback = {},
+                        onOpenNotifications = onOpenNotifications,
+                        onOpenSettings = onOpenSettings,
+                        onOpenDetails = onOpenDetails,
+                        onMarkNextEpisode = onMarkNextEpisode,
+                        onUndoMarkedEpisode = onUndoMarkedEpisode,
+                        onAddToWatchlist = onAddToWatchlist
+                    )
+                }
             }
         }
     }

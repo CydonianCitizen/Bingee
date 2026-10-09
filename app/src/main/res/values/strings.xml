@@ -286,6 +286,8 @@
     <string name="home_empty_title">No releases to show</string>
     <string name="home_empty_body">Follow movies and TV series, then refresh to cache their release calendar.</string>
     <string name="home_local_error_title">Saved calendar unavailable</string>
+    <string name="home_library_error_title">Could not read collection data</string>
+    <string name="home_cached_calendar_error_title">Could not update the saved calendar</string>
     <string name="home_last_updated">Last successful update: %1$s</string>
     <string name="home_refreshing">Refreshing metadata. Saved events remain available.</string>
     <string name="home_refresh_complete">Release calendar updated.</string>

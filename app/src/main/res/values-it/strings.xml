@@ -410,6 +410,8 @@
     <string name="home_empty_title">Nessuna uscita da mostrare</string>
     <string name="home_empty_body">Segui film e serie TV, poi aggiorna per memorizzare il calendario delle uscite.</string>
     <string name="home_local_error_title">Calendario salvato non disponibile</string>
+    <string name="home_library_error_title">Impossibile leggere i dati della raccolta</string>
+    <string name="home_cached_calendar_error_title">Impossibile aggiornare il calendario salvato</string>
     <string name="home_last_updated">Ultimo aggiornamento riuscito: %1$s</string>
     <string name="home_refreshing">Aggiornamento metadati in corso. Gli eventi salvati restano disponibili.</string>
     <string name="home_refresh_complete">Calendario delle uscite aggiornato.</string>

@@ -33,9 +33,11 @@ import java.time.LocalDate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -327,6 +329,151 @@ class HomeViewModelTest {
 
     private val nextEpisodeRef = ExternalMediaRef(MediaSource.TMDB, "episode-205")
 
+    @Test
+    fun localRetryRestartsFailedMembershipAndContinuationReadsWithoutLosingSavedContent() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val oldRef = ExternalMediaRef(MediaSource.TMDB, "1") to MediaType.MOVIE
+            val newRef = ExternalMediaRef(MediaSource.TMDB, "2") to MediaType.SERIES
+            val oldWatching = continueItem()
+            val newWatching = oldWatching.copy(title = "Recovered series")
+            var membershipReads = 0
+            var watchingReads = 0
+            var activeMembershipReads = 0
+            var activeWatchingReads = 0
+            val library = FakeLibraryRepo(
+                memberships = flow {
+                    activeMembershipReads++
+                    try {
+                        if (++membershipReads == 1) {
+                            emit(AppResult.Success(setOf(oldRef)))
+                            emit(AppResult.Failure(AppError.LocalStorageFailure))
+                        } else {
+                            emit(AppResult.Success(setOf(newRef)))
+                            awaitCancellation()
+                        }
+                    } finally {
+                        activeMembershipReads--
+                    }
+                },
+                watching = flow {
+                    activeWatchingReads++
+                    try {
+                        if (++watchingReads == 1) {
+                            emit(AppResult.Success(listOf(oldWatching)))
+                            emit(AppResult.Failure(AppError.LocalStorageFailure))
+                        } else {
+                            emit(AppResult.Success(listOf(newWatching)))
+                            awaitCancellation()
+                        }
+                    } finally {
+                        activeWatchingReads--
+                    }
+                }
+            )
+            val coordinator = FakeCoordinator(success())
+            val viewModel = viewModel(
+                FakeCalendarRepository(
+                    listOf(event("movie", ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE, today))
+                ),
+                coordinator,
+                libraryRepository = library
+            )
+            runCurrent()
+            assertEquals(setOf(oldRef), viewModel.uiState.value.libraryMemberships)
+            assertEquals(listOf(oldWatching), viewModel.uiState.value.continueWatching)
+            assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.libraryMembershipsError)
+            assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.continueWatchingError)
+            assertTrue(viewModel.uiState.value.content is HomeContentState.Events)
+
+            repeat(2) {
+                viewModel.retryLocal()
+                runCurrent()
+                assertEquals(setOf(newRef), viewModel.uiState.value.libraryMemberships)
+                assertEquals(listOf(newWatching), viewModel.uiState.value.continueWatching)
+                assertEquals(null, viewModel.uiState.value.libraryMembershipsError)
+                assertEquals(null, viewModel.uiState.value.continueWatchingError)
+                assertEquals(1, activeMembershipReads)
+                assertEquals(1, activeWatchingReads)
+            }
+            assertEquals(3, membershipReads)
+            assertEquals(3, watchingReads)
+            assertEquals(0, coordinator.calls)
+            viewModel.viewModelScope.cancel()
+            runCurrent()
+            assertEquals(0, activeMembershipReads)
+            assertEquals(0, activeWatchingReads)
+        }
+
+    @Test
+    fun initialReadFailuresClearOnlyWhenTheirOwnObservationSucceeds() = runTest(mainDispatcherRule.dispatcher) {
+        val memberships = MutableStateFlow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>>(
+            AppResult.Failure(AppError.LocalStorageFailure)
+        )
+        val watching = MutableStateFlow<AppResult<List<ContinueWatchingItem>>>(
+            AppResult.Failure(AppError.LocalStorageFailure)
+        )
+        val viewModel = viewModel(
+            FakeCalendarRepository(emptyList()),
+            FakeCoordinator(success()),
+            libraryRepository = FakeLibraryRepo(memberships = memberships, watching = watching)
+        )
+        runCurrent()
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.libraryMembershipsError)
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.continueWatchingError)
+
+        memberships.value = AppResult.Success(emptySet())
+        runCurrent()
+        assertEquals(null, viewModel.uiState.value.libraryMembershipsError)
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.continueWatchingError)
+
+        watching.value = AppResult.Success(emptyList())
+        runCurrent()
+        assertEquals(null, viewModel.uiState.value.continueWatchingError)
+        assertEquals(HomeContentState.Empty, viewModel.uiState.value.content)
+    }
+
+    @Test
+    fun optionalFeaturedFailureKeepsLocalCalendarAndContinuationAvailable() = runTest(mainDispatcherRule.dispatcher) {
+        val watching = continueItem()
+        val viewModel = viewModel(
+            FakeCalendarRepository(
+                listOf(event("movie", ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE, today))
+            ),
+            FakeCoordinator(success()),
+            featuredRepository = FakeFeaturedRepo(AppResult.Failure(AppError.NetworkUnavailable)),
+            libraryRepository = FakeLibraryRepo(watching = MutableStateFlow(AppResult.Success(listOf(watching))))
+        )
+        runCurrent()
+        assertTrue(viewModel.uiState.value.content is HomeContentState.Events)
+        assertEquals(listOf(watching), viewModel.uiState.value.continueWatching)
+        assertTrue(viewModel.uiState.value.featuredMovies.isEmpty())
+        assertTrue(viewModel.uiState.value.featuredSeries.isEmpty())
+        assertEquals(null, viewModel.uiState.value.continueWatchingError)
+        assertEquals(null, viewModel.uiState.value.snackbar)
+    }
+
+    @Test
+    fun failedCalendarReadKeepsEventsAndTimestampAndClearsWarningOnRecovery() = runTest(mainDispatcherRule.dispatcher) {
+        val events = listOf(event("movie", ReleaseSubjectType.MEDIA, ReleaseEventType.MOVIE_RELEASE, today))
+        val repository = FakeCalendarRepository(events)
+        repository.last.value = AppResult.Success(now)
+        val viewModel = viewModel(repository, FakeCoordinator(success()))
+        runCurrent()
+        val saved = viewModel.uiState.value.content
+
+        repository.events.value = AppResult.Failure(AppError.LocalStorageFailure)
+        repository.last.value = AppResult.Failure(AppError.LocalStorageFailure)
+        runCurrent()
+        assertEquals(saved, viewModel.uiState.value.content)
+        assertEquals(now, viewModel.uiState.value.lastSuccessfulRefreshAt)
+        assertEquals(AppError.LocalStorageFailure, viewModel.uiState.value.calendarObservationError)
+
+        repository.events.value = AppResult.Success(emptyList())
+        runCurrent()
+        assertEquals(HomeContentState.Empty, viewModel.uiState.value.content)
+        assertEquals(null, viewModel.uiState.value.calendarObservationError)
+    }
+
     private fun continueItem() = ContinueWatchingItem(
         mediaRef = ExternalMediaRef(MediaSource.TMDB, "series"),
         mediaType = MediaType.SERIES,
@@ -411,11 +558,18 @@ class HomeViewModelTest {
         watchProgressRepository
     ).also(createdViewModels::add)
 
-    private class FakeFeaturedRepo : FeaturedReleasesRepository {
-        override suspend fun getFeaturedReleases(): AppResult<FeaturedReleases> = AppResult.Success(FeaturedReleases())
+    private class FakeFeaturedRepo(
+        private val result: AppResult<FeaturedReleases> = AppResult.Success(FeaturedReleases())
+    ) : FeaturedReleasesRepository {
+        override suspend fun getFeaturedReleases(): AppResult<FeaturedReleases> = result
     }
 
-    private class FakeLibraryRepo(private val entries: List<LibraryEntry> = emptyList()) : LibraryRepository {
+    private class FakeLibraryRepo(
+        private val entries: List<LibraryEntry> = emptyList(),
+        private val memberships: Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
+            MutableStateFlow(AppResult.Success(emptySet())),
+        private val watching: Flow<AppResult<List<ContinueWatchingItem>>>? = null
+    ) : LibraryRepository {
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             MutableStateFlow(AppResult.Success(entries))
 
@@ -424,8 +578,10 @@ class HomeViewModelTest {
         override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             MutableStateFlow(AppResult.Success(null))
 
-        override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
-            MutableStateFlow(AppResult.Success(emptySet()))
+        override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> = memberships
+
+        override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
+            watching ?: super.observeContinueWatching()
         override fun observePersonalViewing() =
             MutableStateFlow<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
                 AppResult.Success(emptyList())

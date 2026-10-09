@@ -232,6 +232,29 @@ internal fun HomeContent(
                 }
             }
 
+            val localReadError = if (state.content is HomeContentState.Events &&
+                state.calendarObservationError != null
+            ) {
+                R.string.home_cached_calendar_error_title to state.calendarObservationError
+            } else if (state.content is HomeContentState.Error) {
+                null
+            } else {
+                (state.libraryMembershipsError ?: state.continueWatchingError)?.let {
+                    R.string.home_library_error_title to
+                        it
+                }
+            }
+            localReadError?.let { (titleRes, error) ->
+                item(key = "localReadError") {
+                    ErrorState(
+                        title = stringResource(titleRes),
+                        message = stringResource(error.toUiError().messageRes),
+                        retryLabel = stringResource(R.string.action_retry),
+                        onRetry = onRetryLocal
+                    )
+                }
+            }
+
             // General TMDB discovery content follows the personal calendar, and Continue Watching closes the
             // screen after it. Films and series get a row each: one merged row buried whichever type the
             // interleave happened to push right.

@@ -60,14 +60,17 @@ internal sealed interface HomeSnackbar {
 
 internal data class HomeUiState(
     val content: HomeContentState = HomeContentState.Loading,
+    val calendarObservationError: AppError? = null,
     val refresh: HomeRefreshState = HomeRefreshState.Idle,
     val lastSuccessfulRefreshAt: Instant? = null,
     val today: LocalDate,
     val featuredMovies: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
     val featuredSeries: List<com.cydoniancitizen.bingee.core.model.MediaSearchResult> = emptyList(),
     val continueWatching: List<ContinueWatchingItem> = emptyList(),
+    val continueWatchingError: AppError? = null,
     /** Keyed by (reference, type): TMDB reuses one ID for a movie and an unrelated series. */
     val libraryMemberships: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
+    val libraryMembershipsError: AppError? = null,
     val addingToWatchlist: Set<Pair<ExternalMediaRef, MediaType>> = emptySet(),
     /** Series whose next episode is being written, so a second tap cannot mark it twice. */
     val markingEpisodes: Set<ExternalMediaRef> = emptySet(),
@@ -233,6 +236,7 @@ internal class HomeViewModel @Inject constructor(
                     }
                     previous.copy(
                         content = content,
+                        calendarObservationError = (events as? AppResult.Failure)?.error,
                         today = today,
                         lastSuccessfulRefreshAt = (last as? AppResult.Success)?.value
                             ?: previous.lastSuccessfulRefreshAt
@@ -254,9 +258,15 @@ internal class HomeViewModel @Inject constructor(
 
     private fun observeLibraryMemberships() {
         viewModelScope.launch {
-            libraryRepository.observeMembershipRefs().collect { result ->
-                if (result is AppResult.Success) {
-                    mutableUiState.update { it.copy(libraryMemberships = result.value) }
+            localRetry.flatMapLatest { libraryRepository.observeMembershipRefs() }.collect { result ->
+                mutableUiState.update { previous ->
+                    when (result) {
+                        is AppResult.Success -> previous.copy(
+                            libraryMemberships = result.value,
+                            libraryMembershipsError = null
+                        )
+                        is AppResult.Failure -> previous.copy(libraryMembershipsError = result.error)
+                    }
                 }
             }
         }
@@ -264,9 +274,15 @@ internal class HomeViewModel @Inject constructor(
 
     private fun observeContinueWatching() {
         viewModelScope.launch {
-            libraryRepository.observeContinueWatching().collect { result ->
-                if (result is AppResult.Success) {
-                    mutableUiState.update { it.copy(continueWatching = result.value) }
+            localRetry.flatMapLatest { libraryRepository.observeContinueWatching() }.collect { result ->
+                mutableUiState.update { previous ->
+                    when (result) {
+                        is AppResult.Success -> previous.copy(
+                            continueWatching = result.value,
+                            continueWatchingError = null
+                        )
+                        is AppResult.Failure -> previous.copy(continueWatchingError = result.error)
+                    }
                 }
             }
         }
