@@ -280,6 +280,7 @@ Season expansion remains state within the existing detail route. There is no sea
 - `watched_date` remains an optional user-selected calendar date. Completion timestamps remain precise and separate; when no user date exists, history derives the local calendar date from the genuine timestamp. `added_at` never supplies history ordering or grouping.
 - Collection filtering still uses `LibraryEntry` and membership-dependent `SeriesTrackingState`; removed history does not reappear in current collection UI.
 - Statistics 2.0 renders that projection as a taste radar, a full genre ranking under an All/Movies/Series scope, exact viewing analytics, a monthly histogram for a selected year, and a personal ratings histogram whose selected bucket expands a shelf of the titles behind it. All of it is derived; no chart value is persisted.
+- The taste radar derives its height cap and label geometry from its actual container width, including a narrow pane inside a wider window. The existing 260dp base height, font-scale growth capped at 1.5, colors and relative Top 6 normalization remain unchanged; full-width phone sizing stays equivalent.
 
 ## TMDB credential security
 

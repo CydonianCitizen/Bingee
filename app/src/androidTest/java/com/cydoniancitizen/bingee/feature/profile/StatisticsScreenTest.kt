@@ -3,16 +3,26 @@ package com.cydoniancitizen.bingee.feature.profile
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.test.DeviceConfigurationOverride
+import androidx.compose.ui.test.FontScale
+import androidx.compose.ui.test.ForcedSize
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
@@ -22,6 +32,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.cydoniancitizen.bingee.R
 import com.cydoniancitizen.bingee.core.designsystem.theme.BingeeTheme
@@ -61,6 +73,129 @@ class StatisticsScreenTest {
 
     @get:Rule(order = 1)
     val composeRule = createComposeRule()
+
+    @Test
+    fun radarMatchesExistingHeightPolicyInTheNativePhoneWindow() {
+        val fontScale = mutableStateOf(1f)
+        var expectedHeight = 260.dp
+        var expectedWidth = 0.dp
+        composeRule.setContent {
+            val density = LocalDensity.current
+            expectedWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() } - 48.dp
+            expectedHeight = (260.dp * fontScale.value).coerceAtMost(expectedWidth.coerceAtLeast(260.dp))
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale.value)) {
+                BingeeTheme(darkTheme = false) {
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        StatisticsContent(
+                            tasteStatistics = TasteStatistics(rankedGenres = radarGenres()),
+                            onScopeChanged = {}
+                        )
+                    }
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(radarDescription())
+            .assertWidthIsEqualTo(expectedWidth)
+            .assertHeightIsEqualTo(expectedHeight)
+        composeRule.runOnIdle { fontScale.value = 1.5f }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(radarDescription())
+            .assertWidthIsEqualTo(expectedWidth)
+            .assertHeightIsEqualTo(expectedHeight)
+    }
+
+    @Test
+    fun radarFollowsItsContainerInsideA600DpWindow() {
+        val containerWidth = mutableStateOf(600.dp)
+        val genres = mutableStateOf(radarGenres())
+        composeRule.setContent {
+            DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(DpSize(600.dp, 900.dp))) {
+                DeviceConfigurationOverride(DeviceConfigurationOverride.FontScale(1.5f)) {
+                    BingeeTheme(darkTheme = true) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Box {
+                                StatisticsContent(
+                                    tasteStatistics = TasteStatistics(rankedGenres = genres.value),
+                                    onScopeChanged = {},
+                                    modifier = Modifier.width(containerWidth.value)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithContentDescription(radarDescription())
+            .assertWidthIsEqualTo(552.dp)
+            .assertHeightIsEqualTo(390.dp)
+        composeRule.runOnIdle { containerWidth.value = 320.dp }
+        composeRule.onNodeWithContentDescription(radarDescription())
+            .assertWidthIsEqualTo(272.dp)
+            .assertHeightIsEqualTo(272.dp)
+        composeRule.runOnIdle { genres.value = radarGenres().take(1) }
+        composeRule.onNodeWithContentDescription(context.getString(R.string.statistics_radar_empty_description))
+            .assertHeightIsEqualTo(272.dp)
+            .assertIsDisplayed()
+        composeRule.runOnIdle {
+            genres.value = radarGenres()
+            containerWidth.value = 600.dp
+        }
+        composeRule.onNodeWithContentDescription(radarDescription()).assertHeightIsEqualTo(390.dp)
+    }
+
+    @Test
+    fun radarFitsPhoneContainersAtNormalAndLargeFonts() {
+        val windowWidth = mutableStateOf(411.dp)
+        val fontScale = mutableStateOf(1f)
+        composeRule.setContent {
+            DeviceConfigurationOverride(
+                DeviceConfigurationOverride.ForcedSize(DpSize(windowWidth.value, 900.dp))
+            ) {
+                DeviceConfigurationOverride(DeviceConfigurationOverride.FontScale(fontScale.value)) {
+                    BingeeTheme(darkTheme = false) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            StatisticsContent(
+                                tasteStatistics = TasteStatistics(rankedGenres = radarGenres()),
+                                onScopeChanged = {}
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithContentDescription(radarDescription()).assertHeightIsEqualTo(260.dp)
+        composeRule.runOnIdle { fontScale.value = 1.5f }
+        composeRule.onNodeWithContentDescription(radarDescription()).assertHeightIsEqualTo(363.dp)
+        composeRule.runOnIdle {
+            windowWidth.value = 360.dp
+            fontScale.value = 1.3f
+        }
+        composeRule.onNodeWithContentDescription(radarDescription()).assertHeightIsEqualTo(312.dp)
+        composeRule.runOnIdle {
+            windowWidth.value = 320.dp
+            fontScale.value = 1.5f
+        }
+        composeRule.onNodeWithContentDescription(radarDescription()).assertHeightIsEqualTo(272.dp)
+            .assertIsDisplayed()
+    }
+
+    private fun radarGenres() = listOf(
+        GenreStatistic(MediaSource.TMDB, 18, "Drama", 18),
+        GenreStatistic(MediaSource.TMDB, 35, "Comedy", 10),
+        GenreStatistic(MediaSource.TMDB, 53, "Thriller", 8),
+        GenreStatistic(MediaSource.TMDB, 878, "Science Fiction", 6),
+        GenreStatistic(MediaSource.TMDB, 27, "Horror", 4),
+        GenreStatistic(MediaSource.TMDB, 10749, "Romance", 2)
+    )
+
+    private fun radarDescription() = context.getString(
+        R.string.statistics_radar_description,
+        radarGenres().joinToString { it.name }
+    )
 
     @Test
     fun tasteAndCompleteGenreRankingAreVisible() {

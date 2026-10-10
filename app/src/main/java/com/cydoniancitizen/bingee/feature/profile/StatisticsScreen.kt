@@ -58,7 +58,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -1044,16 +1043,13 @@ private fun TasteRadarChart(
     val accentColor = MaterialTheme.colorScheme.primary
 
     // Labels are sp-sized, so the frame has to grow with the font scale or they collide with the web.
-    // On a compact screen the width binds the chart first, so the extra height is capped to it rather
-    // than left as dead space above the web.
+    // The chart's own width caps the extra height, including inside a narrower adaptive pane.
     val density = LocalDensity.current
     val fontScale = density.fontScale.coerceIn(1f, RADAR_MAX_FONT_SCALE)
-    val availableWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() } -
-        BingeeDimensions.screenPadding * 2
-    val chartHeight = (RADAR_BASE_HEIGHT * fontScale).coerceAtMost(
-        availableWidth.coerceAtLeast(RADAR_BASE_HEIGHT)
-    )
-    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(chartHeight)) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val chartHeight = (RADAR_BASE_HEIGHT * fontScale).coerceAtMost(
+            maxWidth.coerceAtLeast(RADAR_BASE_HEIGHT)
+        )
         // A compact screen still owes long genre names a readable gutter, so the fraction has a floor.
         val labelWidthPx = with(density) {
             min(
@@ -1076,7 +1072,8 @@ private fun TasteRadarChart(
         }
         Canvas(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(chartHeight)
                 .semantics { contentDescription = chartDescription }
         ) {
             drawRadar(
