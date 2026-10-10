@@ -1,8 +1,8 @@
 # Architecture conventions
 
-Bingee v1.2.0 is a package-structured modular monolith in one Android application module. Packages provide lightweight boundaries; a future Gradle-module split requires measured value and a superseding ADR.
+Bingee is a package-structured modular monolith in one Android application module. Packages provide lightweight boundaries; a future Gradle-module split requires measured value and a superseding ADR.
 
-## Current v1.2.0 surface
+## Current application surface
 
 - TMDB is the only runtime media provider. No Jikan or cross-provider deduplication runs in the app.
 - Top-level navigation is Home, Search, and Your Bingee. The personal destination keeps the internal `profile` route and `PROFILE` identifier; only its label and icon present it as Your Bingee / Il tuo Bingee, a personal collection rather than an account.
@@ -58,7 +58,7 @@ SearchScreen/ProfileScreen -> feature ViewModel -> LibraryRepository
                                       DefaultLibraryRepository
                                                    |
                                                    v
-                           LibraryDao -> Room bingee.db (v7)
+                           LibraryDao -> Room bingee.db (v9)
 ~~~
 
 Your Bingee keeps current collection rendering and personal statistics on separate Room paths:

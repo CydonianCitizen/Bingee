@@ -2,6 +2,15 @@
 
 This document retains earlier delivery summaries. The [canonical development roadmap and checklist](../BINGEE_DEVELOPMENT_ROADMAP_AND_CHECKLIST.md) defines the active implementation order and release gates.
 
+## Implemented in `v1.2.4`
+
+- UI instrumentation uses resources and existing semantics for ordinary controls, with representative Italian execution and production Notification Center content.
+- Optimized release fixes preserve the Glance episode callback, give changed-title detail intents their own navigation entry, and keep active widgets observing local changes.
+- Home retains cached content and offers local Retry when calendar, membership or Continue Watching reads fail. Shared progress consumers stay subscribed through transient errors and receive recovery.
+- Statistics derives radar sizing from the actual container, preserving full-width phone rendering.
+
+See [v1.2.4 implementation notes](release-notes-1.2.4.md). Items #1–#6 are implemented; the hardware-efficiency audit (#7), final global audit and release gate remain open in the canonical checklist.
+
 ## Implemented in `v1.2.3`
 
 - Date actions wrap rather than lose the clear-date label at narrow widths and larger fonts.
