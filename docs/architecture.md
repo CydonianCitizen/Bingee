@@ -222,6 +222,8 @@ TV Time review counts, filtering, grouping, sorting and review edits run on the 
 
 Debug fakes live in app/src/debug; debug-variant JVM tests in app/src/test reuse them. Release compilation excludes this source set. Fixtures use fixed IDs, titles, dates, and immediate results, with configurable failures and no real sleeps. No fixture reads current time, so no clock is currently needed; any future time-dependent fake must accept a Clock.
 
+In-memory title search and fake repository observation fallbacks also live in `debug`. The production Library and calendar contracts require explicit implementations: production keeps its dedicated Continue Watching and bounded calendar Room queries, while fakes reuse debug-only helpers for the canonical continuation policy and inclusive calendar upper bound. The shared search normalization and state/sort rules remain in the main model because production uses them too.
+
 ## TMDB search
 
 - MediaSearchQuery trims only leading and trailing whitespace, requires one non-space character, preserves capitalization and internal spaces, and validates page 1–500.

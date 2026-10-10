@@ -3,22 +3,16 @@ package com.cydoniancitizen.bingee.domain.repository
 import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
-import com.cydoniancitizen.bingee.core.model.LibraryMediaFilter
 import com.cydoniancitizen.bingee.core.model.LibraryQuery
 import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
-import com.cydoniancitizen.bingee.core.model.toContinueWatchingItem
 import com.cydoniancitizen.bingee.core.result.AppResult
-import com.cydoniancitizen.bingee.domain.policy.ContinueWatchingPolicy
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
 interface LibraryRepository {
     fun observeEntries(query: LibraryQuery = LibraryQuery()): Flow<AppResult<List<LibraryEntry>>>
-
-    fun observeEntryCount(): Flow<AppResult<Int>>
 
     fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>>
 
@@ -27,15 +21,7 @@ interface LibraryRepository {
 
     fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>>
 
-    fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
-        observeEntries(LibraryQuery(mediaFilter = LibraryMediaFilter.TV_SERIES)).map { result ->
-            when (result) {
-                is AppResult.Success -> AppResult.Success(
-                    ContinueWatchingPolicy.select(result.value.mapNotNull(LibraryEntry::toContinueWatchingItem))
-                )
-                is AppResult.Failure -> result
-            }
-        }
+    fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>>
 
     suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry>
 
@@ -43,14 +29,11 @@ interface LibraryRepository {
 
     suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit>
 
-    suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean>
-
     suspend fun setFavorite(ref: ExternalMediaRef, mediaType: MediaType, isFavorite: Boolean): AppResult<Unit>
 
     suspend fun setFavorite(result: MediaSearchResult, isFavorite: Boolean): AppResult<Unit>
 
     suspend fun setWatchedDate(ref: ExternalMediaRef, mediaType: MediaType, watchedDate: LocalDate?): AppResult<Unit>
 
-    suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
-        AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.UnsupportedData)
+    suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit>
 }

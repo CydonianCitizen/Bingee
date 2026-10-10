@@ -17,9 +17,6 @@ import com.cydoniancitizen.bingee.data.library.local.ExternalRefEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaDetailsEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaEntity
 import com.cydoniancitizen.bingee.data.library.local.MediaGenreEntity
-import com.cydoniancitizen.bingee.data.library.local.SeasonEntity
-import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
-import com.cydoniancitizen.bingee.data.series.toEntity
 import com.cydoniancitizen.bingee.data.settings.AppLanguage
 import com.cydoniancitizen.bingee.data.settings.AppTheme
 import com.cydoniancitizen.bingee.data.settings.AppearancePreferences
@@ -231,7 +228,7 @@ class DefaultMediaDetailsRepositoryTest {
         client = remote,
         freshnessPolicy = CacheFreshnessPolicy(clock),
         clock = clock,
-        metadataStore = FakeMetadataStore(dao, FakeSeasonSummaryStore()),
+        metadataStore = FakeMetadataStore(dao),
         appearancePreferences = appearance
     )
 
@@ -303,16 +300,7 @@ class DefaultMediaDetailsRepositoryTest {
         }
     }
 
-    private class FakeSeasonSummaryStore : SeasonSummaryStore {
-        override suspend fun upsertSeasonSummaries(
-            source: MediaSource,
-            seriesExternalId: String,
-            summaries: List<SeasonEntity>
-        ) = Unit
-    }
-
-    private class FakeMetadataStore(private val dao: FakeDetailsDao, private val seasons: SeasonSummaryStore) :
-        MetadataCalendarStore {
+    private class FakeMetadataStore(private val dao: FakeDetailsDao) : MetadataCalendarStore {
         override suspend fun storeDetails(
             reference: ExternalMediaRef,
             details: MediaDetails,
@@ -322,11 +310,6 @@ class DefaultMediaDetailsRepositoryTest {
         ) {
             val write = details.toCacheWrite(fetchedAt, language)
             dao.storeDetails(write.media, reference.source, reference.externalId, write.details, write.genres)
-            this.seasons.upsertSeasonSummaries(
-                reference.source,
-                reference.externalId,
-                seasons.map { it.toEntity(fetchedAt) }
-            )
         }
 
         override suspend fun storeSeason(seriesRef: ExternalMediaRef, payload: TmdbSeasonPayload, fetchedAt: Instant) =

@@ -22,6 +22,7 @@ import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.calendar.rotateSeasonBatch
 import com.cydoniancitizen.bingee.debug.FakeLibraryRepository
+import com.cydoniancitizen.bingee.debug.observeFakeEvents
 import com.cydoniancitizen.bingee.domain.repository.BackgroundRefreshPlanner
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.ReleaseCalendarRepository
@@ -427,6 +428,8 @@ class DefaultCalendarRefreshCoordinatorTest {
         override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
             flowOf(AppResult.Success(emptyList()))
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = flowOf(AppResult.Success(lastMarked))
+        override fun observeEvents(fromDate: LocalDate, throughDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
+            observeFakeEvents(fromDate, throughDate)
         override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> =
             AppResult.Success(emptyList())
         override suspend fun backfill(): AppResult<Unit> {

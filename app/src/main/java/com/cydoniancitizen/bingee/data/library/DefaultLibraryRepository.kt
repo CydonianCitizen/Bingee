@@ -108,9 +108,6 @@ internal class DefaultLibraryRepository @Inject constructor(
         }
     }.asPersistenceResult { it.getOrThrow() }.flowOn(projectionDispatcher)
 
-    override fun observeEntryCount(): Flow<AppResult<Int>> =
-        libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
-
     override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> {
         val normalized = ref.normalized()
         return combine(
@@ -210,11 +207,6 @@ internal class DefaultLibraryRepository @Inject constructor(
                 libraryDao.removeMembership(ref.source, mediaType, externalId)
                 Unit
             }
-        }
-
-    override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
-        withNormalizedExternalId(ref) { externalId ->
-            persistenceRead { libraryDao.isInLibrary(ref.source, mediaType, externalId) }
         }
 
     override suspend fun setFavorite(

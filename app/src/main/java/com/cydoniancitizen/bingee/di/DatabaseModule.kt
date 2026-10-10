@@ -12,7 +12,6 @@ import com.cydoniancitizen.bingee.data.library.local.NotificationDeliveryDao
 import com.cydoniancitizen.bingee.data.library.local.PortableSnapshotDao
 import com.cydoniancitizen.bingee.data.library.local.RatingDao
 import com.cydoniancitizen.bingee.data.library.local.ReleaseEventDao
-import com.cydoniancitizen.bingee.data.library.local.SeasonSummaryStore
 import com.cydoniancitizen.bingee.data.library.local.SeriesDao
 import com.cydoniancitizen.bingee.data.library.local.WatchProgressDao
 import dagger.Module
@@ -41,9 +40,6 @@ internal object DatabaseModule {
 
     @Provides
     fun provideSeriesDao(database: BingeeDatabase): SeriesDao = database.seriesDao()
-
-    @Provides
-    fun provideSeasonSummaryStore(seriesDao: SeriesDao): SeasonSummaryStore = seriesDao
 
     @Provides
     fun provideWatchProgressDao(database: BingeeDatabase): WatchProgressDao = database.watchProgressDao()

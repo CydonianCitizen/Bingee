@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.debug
 
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
@@ -8,7 +9,6 @@ import com.cydoniancitizen.bingee.core.model.MediaSearchResult
 import com.cydoniancitizen.bingee.core.model.MediaType
 import com.cydoniancitizen.bingee.core.model.MovieWatchState
 import com.cydoniancitizen.bingee.core.model.PersonalViewingEntry
-import com.cydoniancitizen.bingee.core.model.organizeLibraryEntries
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
@@ -29,8 +29,6 @@ class FakeLibraryRepository(
         AppResult.Success(organizeLibraryEntries(current, query))
     }
 
-    override fun observeEntryCount(): Flow<AppResult<Int>> = entries.map { AppResult.Success(it.size) }
-
     override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
         entries.map { current -> AppResult.Success(current.firstOrNull { it.isFor(ref, mediaType) }) }
 
@@ -40,6 +38,11 @@ class FakeLibraryRepository(
     override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> = entries.map { current ->
         AppResult.Success(current.mapNotNull(::toPersonalViewingEntry))
     }
+
+    override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> = observeFakeContinueWatching()
+
+    override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+        AppResult.Failure(AppError.UnsupportedData)
 
     override suspend fun add(result: MediaSearchResult): AppResult<LibraryEntry> {
         writeFailure?.let { return AppResult.Failure(it) }
@@ -72,9 +75,6 @@ class FakeLibraryRepository(
         entries.value = entries.value.filterNot { it.isFor(ref, mediaType) }
         return AppResult.Success(Unit)
     }
-
-    override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
-        AppResult.Success(entries.value.any { it.isFor(ref, mediaType) })
 
     override suspend fun setFavorite(
         ref: ExternalMediaRef,

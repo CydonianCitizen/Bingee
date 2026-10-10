@@ -2,6 +2,7 @@ package com.cydoniancitizen.bingee.feature.notifications
 
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshOutcome
 import com.cydoniancitizen.bingee.core.model.CalendarRefreshSummary
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
 import com.cydoniancitizen.bingee.core.model.LibraryProgress
@@ -16,6 +17,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.debug.observeFakeContinueWatching
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
@@ -347,8 +349,10 @@ class NotificationsViewModelTest {
         }
 
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> = entriesFlow
-        override fun observeEntryCount(): Flow<AppResult<Int>> =
-            MutableStateFlow(AppResult.Success((entriesFlow.value as? AppResult.Success)?.value?.size ?: 0))
+        override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
+            observeFakeContinueWatching()
+        override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+            AppResult.Failure(AppError.UnsupportedData)
         override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             MutableStateFlow(AppResult.Success(null))
         override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
@@ -361,8 +365,6 @@ class NotificationsViewModelTest {
         override suspend fun add(ref: ExternalMediaRef, mediaType: MediaType): AppResult<LibraryEntry> = error("Unused")
         override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
             AppResult.Success(Unit)
-        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
-            AppResult.Success(true)
         override suspend fun setFavorite(
             ref: ExternalMediaRef,
             mediaType: MediaType,

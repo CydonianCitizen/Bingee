@@ -20,6 +20,8 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import com.cydoniancitizen.bingee.core.model.SeriesProgress
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.debug.observeFakeContinueWatching
+import com.cydoniancitizen.bingee.debug.observeFakeEvents
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.repository.CalendarRefreshCoordinator
 import com.cydoniancitizen.bingee.domain.repository.FeaturedReleases
@@ -573,15 +575,16 @@ class HomeViewModelTest {
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             MutableStateFlow(AppResult.Success(entries))
 
-        override fun observeEntryCount(): Flow<AppResult<Int>> = MutableStateFlow(AppResult.Success(0))
-
         override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             MutableStateFlow(AppResult.Success(null))
 
         override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> = memberships
 
         override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
-            watching ?: super.observeContinueWatching()
+            watching ?: observeFakeContinueWatching()
+
+        override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+            AppResult.Failure(AppError.UnsupportedData)
         override fun observePersonalViewing() =
             MutableStateFlow<AppResult<List<com.cydoniancitizen.bingee.core.model.PersonalViewingEntry>>>(
                 AppResult.Success(emptyList())
@@ -595,9 +598,6 @@ class HomeViewModelTest {
 
         override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
             AppResult.Success(Unit)
-
-        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
-            AppResult.Success(false)
 
         override suspend fun setFavorite(
             ref: ExternalMediaRef,
@@ -646,6 +646,8 @@ class HomeViewModelTest {
         }
 
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = last
+        override fun observeEvents(fromDate: LocalDate, throughDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
+            observeFakeEvents(fromDate, throughDate)
         override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> =
             AppResult.Success(emptyList())
         override suspend fun backfill(): AppResult<Unit> {

@@ -14,6 +14,7 @@ import com.cydoniancitizen.bingee.core.model.ReleaseSubjectIdentity
 import com.cydoniancitizen.bingee.core.model.ReleaseSubjectType
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
+import com.cydoniancitizen.bingee.debug.observeFakeEvents
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationCapability
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationContent
 import com.cydoniancitizen.bingee.domain.notification.ReleaseNotificationContentMapper
@@ -319,6 +320,8 @@ class DefaultNotificationDispatchCoordinatorTest {
         override fun observeEvents(fromDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
             flowOf(AppResult.Success(events))
         override fun observeLastSuccessfulRefresh(): Flow<AppResult<Instant?>> = flowOf(AppResult.Success(null))
+        override fun observeEvents(fromDate: LocalDate, throughDate: LocalDate): Flow<AppResult<List<ReleaseEvent>>> =
+            observeFakeEvents(fromDate, throughDate)
         override suspend fun getEvents(fromDate: LocalDate, throughDate: LocalDate): AppResult<List<ReleaseEvent>> {
             calls++
             return AppResult.Success(events)

@@ -188,7 +188,8 @@ class WatchedStatisticsTest {
         val entry = movie("movie", watchedAt = completion, watchedDate = explicit)
 
         assertEquals(explicit, entry.watchedDate)
-        assertEquals(completion, entry.completionTimestamp)
+        assertEquals(completion, entry.movieWatchedAt)
+        assertNull(entry.seriesCompletedAt)
     }
 
     @Test

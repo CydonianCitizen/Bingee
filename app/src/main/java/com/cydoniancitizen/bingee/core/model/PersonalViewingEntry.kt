@@ -49,12 +49,6 @@ data class PersonalViewingEntry(
         }
     }
 
-    val completionTimestamp: Instant?
-        get() = when (mediaType) {
-            MediaType.MOVIE -> movieWatchedAt
-            MediaType.SERIES -> seriesCompletedAt
-        }
-
     val isCompletedTitle: Boolean
         get() = when (mediaType) {
             MediaType.MOVIE -> movieWatchedAt != null

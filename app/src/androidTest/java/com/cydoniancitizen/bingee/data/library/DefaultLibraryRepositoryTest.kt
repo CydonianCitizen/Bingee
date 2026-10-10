@@ -106,7 +106,8 @@ class DefaultLibraryRepositoryTest {
         assertEquals(result.externalRef, entry.mediaRef)
         assertEquals("Arrival", entry.title)
         assertEquals(now, entry.addedAt)
-        assertEquals(AppResult.Success(true), repository.isInLibrary(result.externalRef, result.mediaType))
+        val observed = repository.observeEntry(result.externalRef, result.mediaType).first() as AppResult.Success
+        assertEquals(true, observed.value?.inLibrary)
         assertEquals(
             AppResult.Success(setOf(result.externalRef to result.mediaType)),
             repository.observeMembershipRefs().first()
@@ -170,7 +171,8 @@ class DefaultLibraryRepositoryTest {
 
         assertEquals(AppResult.Success(Unit), repository.remove(result.externalRef, result.mediaType))
         assertEquals(AppResult.Success(Unit), repository.remove(result.externalRef, result.mediaType))
-        assertEquals(AppResult.Success(false), repository.isInLibrary(result.externalRef, result.mediaType))
+        val observed = repository.observeEntry(result.externalRef, result.mediaType).first() as AppResult.Success
+        assertEquals(false, observed.value?.inLibrary)
         assertEquals(AppResult.Success(emptyList<LibraryEntry>()), repository.observeEntries().first())
         assertTrue(database.libraryDao().getMediaByExternalRef(MediaSource.TMDB, MediaType.MOVIE, "42") != null)
     }
@@ -193,9 +195,10 @@ class DefaultLibraryRepositoryTest {
         assertEquals(false, movieEntry.value?.isFavorite)
 
         assertEquals(AppResult.Success(Unit), repository.remove(movie.externalRef, MediaType.MOVIE))
-        assertEquals(AppResult.Success(false), repository.isInLibrary(movie.externalRef, MediaType.MOVIE))
-        assertEquals(AppResult.Success(true), repository.isInLibrary(series.externalRef, MediaType.SERIES))
+        val removedMovieEntry = repository.observeEntry(movie.externalRef, MediaType.MOVIE).first() as AppResult.Success
+        assertEquals(false, removedMovieEntry.value?.inLibrary)
         val seriesEntry = (repository.observeEntry(series.externalRef, MediaType.SERIES).first() as AppResult.Success)
+        assertEquals(true, seriesEntry.value?.inLibrary)
         assertEquals("Same ID Series", seriesEntry.value?.title)
         assertEquals(true, seriesEntry.value?.isFavorite)
     }
@@ -425,7 +428,7 @@ class DefaultLibraryRepositoryTest {
         val history = (repository.observePersonalViewing().first() as AppResult.Success).value.single()
         assertEquals(result.externalRef, history.mediaRef)
         assertEquals(now, history.movieWatchedAt)
-        assertEquals(now, history.completionTimestamp)
+        assertNull(history.seriesCompletedAt)
         assertEquals(watchedDate, history.watchedDate)
         assertEquals(PersonalRating(9), history.personalRating)
         assertEquals(now, history.personalRatingUpdatedAt)

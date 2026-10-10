@@ -127,9 +127,6 @@ internal abstract class LibraryDao {
         searchPattern: String = "%"
     ): Flow<List<LibraryItemWithRefs>>
 
-    @Query("SELECT COUNT(*) FROM library_entries")
-    abstract fun observeLibraryEntryCount(): Flow<Int>
-
     @Transaction
     @Query(
         """

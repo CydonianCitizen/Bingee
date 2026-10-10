@@ -70,7 +70,7 @@ Pre-existing low-priority debt must not automatically expand the current scope.
 |---|---:|---|---|
 | **v1.2.3** | **7** | Small correctness / clarity fixes | Close low-risk UI/UX and semantics defects already proven by audits |
 | **v1.2.4** | **8** | Technical / test / release polish | Remove small current technical risks without changing product architecture |
-| **v1.2.5** | **9** | Dead-code cleanup + documentation sync | Dedicated repo-wide cleanup before the large UI cycle |
+| **v1.2.5** | **9** | Dead-code cleanup + targeted performance improvements + documentation sync | Lean, resource-efficient baseline before the large UI cycle |
 | **v1.3.0** | **10** | Major UI/UX #1 | Rebuild Details around a clear personal-tracker hierarchy |
 | **v1.3.1** | **11** | Major UI/UX #2 | Reorganize Home around current personal activity |
 | **v1.3.2** | **12** | Major UI/UX #3 | Make Collection a coherent personal-management surface |
@@ -382,13 +382,15 @@ This audit complements the mandatory per-modification and final global audits; i
 
 ---
 
-# v1.2.5 — Dedicated global dead-code cleanup + canonical documentation sync
+# v1.2.5 — Dead-code cleanup, targeted performance improvements and canonical documentation sync
 
 ## Goal
 
 Enter the major UI cycle with a deliberately lean, documented baseline.
 
-This version is the dedicated cleanup release.
+This version combines the dedicated cleanup with the targeted performance follow-up selected from
+the v1.2.4 hardware-efficiency audit. Preserve existing product behavior and use measurements to
+decide conditional or structural optimizations.
 
 ## 1. Run a fresh GLOBAL dead-code / over-engineering audit
 
@@ -462,7 +464,26 @@ Historical ADR content must remain historical; do not rewrite old decisions to m
 - Confirm `.audit/` remains ignored.
 - Confirm canonical docs remain tracked.
 
-## 6. Establish v1.3.0 clean baseline
+## 6. Follow up on the hardware-efficiency audit
+
+Use the [v1.2.5 performance checklist](docs/checklist-1.2.5-performance.md) for implementation order,
+regression coverage and acceptance criteria:
+
+- avoid widget observations without installed instances and irrelevant visual updates;
+- tie expensive UI observations/calculations to active consumers;
+- reduce repeated Room aggregates and Continue Watching projections;
+- virtualize individual episodes and release events within the existing single scrolling lists;
+- move Collection filtering/sorting off Main;
+- remove quadratic episode-map reconciliation scans;
+- simplify monthly aggregation and make expensive CPU work cooperatively cancellable;
+- measure backup memory before selecting any pipeline change.
+
+These are source-supported opportunities, not established Android runtime regressions. Preserve
+data integrity, portability, local-first behavior and existing v1.2.4 recovery/release fixes.
+Keep raw audit/profiling artifacts outside canonical documentation. Manual-refresh batching and
+app-owned Baseline Profiles remain conditional on evidence, not automatic scope additions.
+
+## 7. Establish v1.3.0 clean baseline
 
 Before closing v1.2.5:
 
@@ -1381,7 +1402,8 @@ Acceptance review of #1–#5 confirms the required implementations, permanent re
 
 # v1.2.5 checklist
 
-- [ ] Bump to v1.2.5 / code 9.
+- [x] Bump to v1.2.5 / code 9.
+- [ ] Complete the [performance checklist](docs/checklist-1.2.5-performance.md), recording evidence and decisions for conditional items.
 - [ ] Run fresh repo-wide Ponytail dead-code audit.
 - [ ] Re-evaluate every known historical dead-code candidate.
 - [ ] Remove only proven dead production code.
@@ -1394,6 +1416,24 @@ Acceptance review of #1–#5 confirms the required implementations, permanent re
 - [ ] Run final v1.2.5 global audit.
 - [ ] Establish clean v1.3.0 baseline.
 - [ ] Pass release gate.
+
+## C01–C03 cleanup batch — 2026-10-10
+
+The first v1.2.5 cleanup batch removes the unused Library entry-count API and DAO query (C01), the repository-only one-shot membership API (C02), and the obsolete season-summary interface, Hilt binding and no-op test fake (C03). Existing observable membership, the DAO checks consumed by TV Time and the concrete transactional season writes remain intact. Three existing instrumented membership regressions now assert through `observeEntry`. No tests were removed or disabled. The Kotlin diff is +11/-78, net -67 lines; production main is +2/-25, net -23 lines. Room stays at 9 and backup at 3.
+
+The same 70 focused JVM tests passed before and after the cleanup. The full JVM suite passed all 466 tests in 80 suites with zero failures, errors or skipped tests. The host gate passed `spotlessCheck`, `testDebugUnitTest`, `lintDebug`, `assembleDebug`, `assembleDebugAndroidTest` and `assembleRelease` in 6m07s (44 tasks executed, 106 up-to-date). Lint reports zero errors and 51 existing warnings. Per owner direction, physical-device verification replaces the planned emulator pass: all 70 selected instrumented tests in seven suites passed on HONOR CMA-LX1 / Android 13, including Room transactions, imports and migrations. A locally signed, non-debuggable optimized release passed a bounded Home/Your Bingee/carousel smoke. Initial startup, frame and memory measurements are recorded under `.audit/v1.2.5-device/`; remaining performance coverage, widget checks and the full release gate remain pending.
+
+A subsequent partial synthetic baseline uses an isolated optimized-release package on the same device, without changing the main app's data. Three fixtures cover 100/1,000/10,000 titles and 1,000/25,000/100,000 watched episodes. Search and statistics checks pass; 30 process-cold/cache-warm launches and nine season expansion/collapse cycles establish comparison data. Expansion at 300 episodes has repeatable frame stalls, supporting the existing lazy-episode item in the performance checklist. No performance fix or cleanup regression is claimed. Evidence stays ignored under `.audit/v1.2.5-synthetic/`; observers, widgets, refresh and backup heap scenarios remain pending.
+
+A scoped global source audit covered all eleven A5 categories using Safe Refactor, Ponytail Audit, Impeccable native guidance and the existing Android testing strategy. No introduced unresolved P0/P1, dead code or unjustified abstraction was found. Local Markdown file targets and the diff check passed. Temporary evidence remains ignored under `.audit/v1.2.5-c01-c03/`. C04–C07, performance, full documentation sync, final global audit and release gate remain open. No staging or commit was performed.
+
+## C04–C07 cleanup batch — 2026-10-10
+
+The remaining four candidates are reconfirmed and implemented. C04 moves fake-only in-memory search into debug, retaining the production normalization/state/sort helpers. C05 removes fake-only default bodies from Library/calendar contracts and reuses the same algorithms through two debug-only observation helpers; existing Room implementations and the Notifications fake's custom bounded observation are unchanged. C06 removes the unconsumed completion getter and preserves assertions on precise movie/series timestamp fields and the explicit watched date. C07 removes only the unused import timestamp flag, retaining original text, instant, fractional precision and real approximation warnings. No test is removed or disabled. This batch reduces main source by another 46 net lines; C01–C07 reduce main by 69 net lines. App 1.2.5/code 9, Room 9 and backup 3 remain unchanged.
+
+The 154 targeted JVM tests in 17 suites pass, including three new regressions for fake continuation eligibility/order, error recovery/cancellation, and the inclusive calendar bound. The full host gate passes: global Spotless, 469 JVM tests in 81 suites with zero failures/errors/skips, lint with zero errors and 51 pre-existing warnings, debug build, AndroidTest APK build and optimized release build. Compiled release classes exclude the debug helpers. A scoped global source audit covers all eleven A5 categories and finds no introduced unresolved P0/P1, dead code or unjustified abstraction; local file links and the diff check pass.
+
+The widget performance item was initially mistaken for this cleanup scope: its prepared patch is parked only under ignored `.audit/` and is not included in the source tree. New device/emulator verification is deferred at the owner's request. Temporary evidence remains ignored under `.audit/v1.2.5-c04-c07/`. This batch does not complete performance work, full documentation sync, final milestone audit or the release gate. No staging or commit is performed.
 
 # v1.3.0 checklist — Details
 

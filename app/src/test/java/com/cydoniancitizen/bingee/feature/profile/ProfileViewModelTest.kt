@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.feature.profile
 
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
 import com.cydoniancitizen.bingee.core.model.Genre
 import com.cydoniancitizen.bingee.core.model.LibraryEntry
@@ -20,6 +21,7 @@ import com.cydoniancitizen.bingee.data.settings.ProfileCollection
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModePreferences
 import com.cydoniancitizen.bingee.data.settings.ProfileDisplayModes
 import com.cydoniancitizen.bingee.data.settings.ProfileViewMode
+import com.cydoniancitizen.bingee.debug.observeFakeContinueWatching
 import com.cydoniancitizen.bingee.domain.calendar.CalendarDateSource
 import com.cydoniancitizen.bingee.domain.model.StatisticsMediaScope
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
@@ -513,13 +515,16 @@ class ProfileViewModelTest {
 
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             observedEntries.also { observeEntriesCalls++ }
-        override fun observeEntryCount(): Flow<AppResult<Int>> = flowOf(AppResult.Success(0))
         override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             flowOf(AppResult.Success(null))
         override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
             flowOf(AppResult.Success(emptySet()))
         override fun observePersonalViewing(): Flow<AppResult<List<PersonalViewingEntry>>> =
             observedViewing.also { observePersonalViewingCalls++ }
+        override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
+            observeFakeContinueWatching()
+        override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+            AppResult.Failure(AppError.UnsupportedData)
         override suspend fun add(
             result: com.cydoniancitizen.bingee.core.model.MediaSearchResult
         ): AppResult<LibraryEntry> = AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.Unknown)
@@ -527,8 +532,6 @@ class ProfileViewModelTest {
             AppResult.Failure(com.cydoniancitizen.bingee.core.result.AppError.Unknown)
         override suspend fun remove(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Unit> =
             AppResult.Success(Unit)
-        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
-            AppResult.Success(true)
         override suspend fun setFavorite(
             ref: ExternalMediaRef,
             mediaType: MediaType,

@@ -26,12 +26,7 @@ internal data class ImportSourceLocation(val entryIndex: Int, val recordIndex: I
     }
 }
 
-internal data class ImportedTimestamp(
-    val original: String,
-    val instant: Instant,
-    val fractionalDigits: Int,
-    val approximate: Boolean = false
-)
+internal data class ImportedTimestamp(val original: String, val instant: Instant, val fractionalDigits: Int)
 
 internal enum class ImportWarningCode {
     UNKNOWN_FIELD,

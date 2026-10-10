@@ -4,21 +4,6 @@ import java.util.Locale
 
 fun normalizeLibrarySearch(query: String): String = query.trim().lowercase(Locale.ROOT)
 
-fun LibraryEntry.matchesLibrarySearch(query: String): Boolean {
-    val normalized = normalizeLibrarySearch(query)
-    if (normalized.isEmpty()) return true
-    return title.lowercase(Locale.ROOT).contains(normalized) ||
-        originalTitle?.lowercase(Locale.ROOT)?.contains(normalized) == true
-}
-
-fun organizeLibraryEntries(entries: List<LibraryEntry>, query: LibraryQuery): List<LibraryEntry> {
-    val locallyMatched = entries.filter {
-        (query.mediaFilter.mediaType == null || it.mediaType == query.mediaFilter.mediaType) &&
-            it.matchesLibrarySearch(query.searchQuery)
-    }
-    return applyLibraryStateAndSort(locallyMatched, query)
-}
-
 fun applyLibraryStateAndSort(entries: List<LibraryEntry>, query: LibraryQuery): List<LibraryEntry> = entries
     .filter { it.matchesStateFilter(query.stateFilter) }
     .sortedWith(libraryComparator(query.sort))

@@ -2,6 +2,13 @@
 
 This document retains earlier delivery summaries. The [canonical development roadmap and checklist](../BINGEE_DEVELOPMENT_ROADMAP_AND_CHECKLIST.md) defines the active implementation order and release gates.
 
+## In progress in `v1.2.5`
+
+- The first cleanup batch removes the unused Library entry-count and one-shot membership APIs, plus the obsolete season-summary interface and DI binding. Existing repository observation, DAO membership checks used by TV Time, and transactional season writes remain in place.
+- C04–C07 move fake-only search and observation fallbacks into the debug source set, require explicit repository implementations, and remove the unused completion getter and import timestamp flag. Production Room reads, timestamp precision and import warnings remain intact; targeted regressions cover the relocated fake behavior.
+- Instrumented membership regressions now use the existing observable entry API. All 70 selected instrumented tests passed on a physical HONOR CMA-LX1 running Android 13; a bounded optimized-release smoke also passed. The remaining performance scenarios and the rest of the v1.2.5 checklist remain pending.
+- A partial synthetic baseline on the same device covers 100/1,000/10,000 titles, 1,000/25,000/100,000 watched episodes, 30 process-cold launches and nine season expansion/collapse cycles in an isolated optimized release. Search and statistics checks pass; expansion cost grows markedly at 300 episodes, supporting the existing lazy-episode work item. Full performance coverage and implementation remain pending; temporary evidence stays in `.audit/`.
+
 ## Implemented in `v1.2.4`
 
 - UI instrumentation uses resources and existing semantics for ordinary controls, with representative Italian execution and production Notification Center content.

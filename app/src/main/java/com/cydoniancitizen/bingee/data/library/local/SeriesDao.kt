@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.Flow
 internal data class StoredSeasonEpisodes(val season: SeasonEntity, val episodes: List<EpisodeEntity>)
 
 @Dao
-internal abstract class SeriesDao : SeasonSummaryStore {
+internal abstract class SeriesDao {
     @Transaction
     @Query(
         """
@@ -133,7 +133,7 @@ internal abstract class SeriesDao : SeasonSummaryStore {
     protected abstract suspend fun updateEpisodesFetchedAt(localSeasonId: Long, fetchedAt: Instant, language: String?)
 
     @Transaction
-    open override suspend fun upsertSeasonSummaries(
+    open suspend fun upsertSeasonSummaries(
         source: MediaSource,
         seriesExternalId: String,
         summaries: List<SeasonEntity>
@@ -261,8 +261,4 @@ internal abstract class SeriesDao : SeasonSummaryStore {
             updated
         }
     }
-}
-
-internal interface SeasonSummaryStore {
-    suspend fun upsertSeasonSummaries(source: MediaSource, seriesExternalId: String, summaries: List<SeasonEntity>)
 }

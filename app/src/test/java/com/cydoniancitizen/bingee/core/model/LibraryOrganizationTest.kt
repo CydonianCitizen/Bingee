@@ -1,5 +1,6 @@
 package com.cydoniancitizen.bingee.core.model
 
+import com.cydoniancitizen.bingee.debug.organizeLibraryEntries
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Test

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.cydoniancitizen.bingee.core.model.CacheFreshness
 import com.cydoniancitizen.bingee.core.model.CachedMediaDetails
 import com.cydoniancitizen.bingee.core.model.CachedSeason
+import com.cydoniancitizen.bingee.core.model.ContinueWatchingItem
 import com.cydoniancitizen.bingee.core.model.Episode
 import com.cydoniancitizen.bingee.core.model.EpisodeWatchState
 import com.cydoniancitizen.bingee.core.model.ExternalMediaRef
@@ -22,6 +23,7 @@ import com.cydoniancitizen.bingee.core.navigation.DetailRoute
 import com.cydoniancitizen.bingee.core.result.AppError
 import com.cydoniancitizen.bingee.core.result.AppResult
 import com.cydoniancitizen.bingee.data.settings.SpoilerPreferences
+import com.cydoniancitizen.bingee.debug.observeFakeContinueWatching
 import com.cydoniancitizen.bingee.domain.repository.LibraryRepository
 import com.cydoniancitizen.bingee.domain.repository.MediaDetailsRepository
 import com.cydoniancitizen.bingee.domain.repository.RatingRepository
@@ -512,19 +514,12 @@ class MediaDetailsViewModelTest {
             }
         )
         val actions = mutableListOf<String>()
+        override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
+            observeFakeContinueWatching()
+        override suspend fun setSeriesAbandoned(ref: ExternalMediaRef, isAbandoned: Boolean): AppResult<Unit> =
+            AppResult.Failure(AppError.UnsupportedData)
         override fun observeEntries(query: LibraryQuery): Flow<AppResult<List<LibraryEntry>>> =
             entry.map { AppResult.Success(listOfNotNull(it)) }
-        override fun observeEntryCount(): Flow<AppResult<Int>> = entry.map {
-            AppResult.Success(
-                if (it ==
-                    null
-                ) {
-                    0
-                } else {
-                    1
-                }
-            )
-        }
         override fun observeEntry(ref: ExternalMediaRef, mediaType: MediaType): Flow<AppResult<LibraryEntry?>> =
             entry.map { AppResult.Success(it) }
         override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
@@ -545,8 +540,6 @@ class MediaDetailsViewModelTest {
             entry.value = null
             return AppResult.Success(Unit)
         }
-        override suspend fun isInLibrary(ref: ExternalMediaRef, mediaType: MediaType): AppResult<Boolean> =
-            AppResult.Success(entry.value != null)
         override suspend fun setFavorite(
             ref: ExternalMediaRef,
             mediaType: MediaType,
