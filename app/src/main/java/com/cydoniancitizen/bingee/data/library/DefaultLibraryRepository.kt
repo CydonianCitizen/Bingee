@@ -68,7 +68,7 @@ internal class DefaultLibraryRepository @Inject constructor(
      *
      * Failures travel as values because a shared flow cannot deliver an upstream throwable to its
      * subscribers; each caller unwraps with [Result.getOrThrow] so [asPersistenceResult] maps the error
-     * exactly as an unshared query would.
+     * per emission without ending the observation when the shared read retries.
      */
     private val libraryProgress: Flow<Result<List<LibraryDao.LibraryProgressRow>>> =
         dateSource.observeDate()
@@ -94,17 +94,19 @@ internal class DefaultLibraryRepository @Inject constructor(
         libraryProgress,
         ratingDao.observeActiveLibraryRatings()
     ) { rows, progressResult, ratings ->
-        val progressByMedia = progressResult.getOrThrow().associateBy { it.localMediaId }
-        val ratingsByMedia = ratings.associateBy { it.localMediaId }
-        val entries = rows.map { row ->
-            val localMediaId = row.media.localMediaId
-            row.toDomain(
-                progressRow = progressByMedia[localMediaId],
-                rating = ratingsByMedia[localMediaId]
-            )
+        progressResult.map { progressRows ->
+            val progressByMedia = progressRows.associateBy { it.localMediaId }
+            val ratingsByMedia = ratings.associateBy { it.localMediaId }
+            val entries = rows.map { row ->
+                val localMediaId = row.media.localMediaId
+                row.toDomain(
+                    progressRow = progressByMedia[localMediaId],
+                    rating = ratingsByMedia[localMediaId]
+                )
+            }
+            applyLibraryStateAndSort(entries, query)
         }
-        applyLibraryStateAndSort(entries, query)
-    }.asPersistenceResult { it }.flowOn(projectionDispatcher)
+    }.asPersistenceResult { it.getOrThrow() }.flowOn(projectionDispatcher)
 
     override fun observeEntryCount(): Flow<AppResult<Int>> =
         libraryDao.observeLibraryEntryCount().asPersistenceResult { it }
@@ -115,12 +117,13 @@ internal class DefaultLibraryRepository @Inject constructor(
             libraryDao.observeLibraryItem(normalized.source, mediaType, normalized.externalId),
             libraryProgress
         ) { row, progressResult ->
-            row?.toDomain(
-                preferredRef = normalized,
-                progressRow = progressResult.getOrThrow()
-                    .firstOrNull { it.localMediaId == row.media.localMediaId }
-            )
-        }.asPersistenceResult { it }
+            progressResult.map { progressRows ->
+                row?.toDomain(
+                    preferredRef = normalized,
+                    progressRow = progressRows.firstOrNull { it.localMediaId == row.media.localMediaId }
+                )
+            }
+        }.asPersistenceResult { it.getOrThrow() }
     }
 
     override fun observeMembershipRefs(): Flow<AppResult<Set<Pair<ExternalMediaRef, MediaType>>>> =
@@ -134,22 +137,24 @@ internal class DefaultLibraryRepository @Inject constructor(
         libraryDao.observePersonalViewingGenres(),
         libraryDao.observePersonalViewingActivities()
     ) { rows, progressResult, genreRows, activityRows ->
-        val progressByMedia = progressResult.getOrThrow().associateBy { it.localMediaId }
-        val genresByMedia = genreRows.mapNotNull { row ->
-            row.toDomainOrNull()?.let { row.localMediaId to it }
-        }.groupBy({ it.first }, { it.second })
-            .mapValues { (_, genres) -> genres.distinctByCanonicalIdentity() }
-        val activitiesByMedia = activityRows.groupBy { it.localMediaId }
-        rows.map { row ->
-            row.toDomain(
-                currentProgress = progressByMedia[row.media.localMediaId],
-                genres = genresByMedia[row.media.localMediaId].orEmpty(),
-                watchedRegularEpisodeActivities = activitiesByMedia[row.media.localMediaId]
-                    .orEmpty()
-                    .map { it.toDomain() }
-            )
+        progressResult.map { progressRows ->
+            val progressByMedia = progressRows.associateBy { it.localMediaId }
+            val genresByMedia = genreRows.mapNotNull { row ->
+                row.toDomainOrNull()?.let { row.localMediaId to it }
+            }.groupBy({ it.first }, { it.second })
+                .mapValues { (_, genres) -> genres.distinctByCanonicalIdentity() }
+            val activitiesByMedia = activityRows.groupBy { it.localMediaId }
+            rows.map { row ->
+                row.toDomain(
+                    currentProgress = progressByMedia[row.media.localMediaId],
+                    genres = genresByMedia[row.media.localMediaId].orEmpty(),
+                    watchedRegularEpisodeActivities = activitiesByMedia[row.media.localMediaId]
+                        .orEmpty()
+                        .map { it.toDomain() }
+                )
+            }
         }
-    }.asPersistenceResult { it }
+    }.asPersistenceResult { it.getOrThrow() }
 
     override fun observeContinueWatching(): Flow<AppResult<List<ContinueWatchingItem>>> =
         dateSource.observeDate().flatMapLatest { today ->
@@ -333,7 +338,8 @@ private fun ExternalMediaRef.normalizedExternalId(): String =
     externalId.trim().also { require(it.isNotEmpty()) { "External media ID must not be blank" } }
 
 private fun <T, R> Flow<T>.asPersistenceResult(transform: (T) -> R): Flow<AppResult<R>> =
-    map<T, AppResult<R>> { value -> AppResult.Success(transform(value)) }
+    // Shared progress failures are values: a failed projection must not close its consumer before recovery.
+    map { value -> persistenceRead { transform(value) } }
         .catch { throwable ->
             if (throwable is CancellationException) throw throwable
             emit(AppResult.Failure(throwable.toPersistenceError()))
